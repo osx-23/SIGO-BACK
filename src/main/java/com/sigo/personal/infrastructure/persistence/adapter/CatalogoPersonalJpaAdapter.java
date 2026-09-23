@@ -42,7 +42,7 @@ public class CatalogoPersonalJpaAdapter
                         new CatalogoPersonalUseCase.TurnoItem(
                                 turno.getId(),
                                 turno.getCodigo(),
-                                turno.getDescripcion()
+                                turno.getNombre()
                         )
                 )
                 .toList();
