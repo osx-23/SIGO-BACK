@@ -3,7 +3,7 @@ package com.sigo.inventario.api.controller;
 import com.sigo.inventario.api.dto.response.StockActualResponse;
 import com.sigo.inventario.application.port.in.InventarioStockUseCase;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
-import com.sigo.inventario.application.security.InventarioUsuarioContextService;
+import com.sigo.inventario.application.port.in.ObtenerInventarioUsuarioUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -17,7 +17,7 @@ import java.util.List;
 public class InventarioStockController {
 
     private final InventarioStockUseCase useCase;
-    private final InventarioUsuarioContextService usuarios;
+    private final ObtenerInventarioUsuarioUseCase usuarios;
 
     @GetMapping
     public List<StockActualResponse> consultar(
