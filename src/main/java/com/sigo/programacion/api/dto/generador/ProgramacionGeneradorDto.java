@@ -1,7 +1,7 @@
 package com.sigo.programacion.api.dto.generador;
 
-import com.sigo.programacion.infrastructure.persistence.entity.EstadoProgramacion;
-import com.sigo.programacion.infrastructure.persistence.entity.GrupoProgramacion;
+import com.sigo.programacion.domain.ProgramacionEstado;
+import com.sigo.programacion.domain.ProgramacionGrupo;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -38,7 +38,7 @@ public final class ProgramacionGeneradorDto {
 
     public record NovedadProgramacionRequest(
             @NotNull Long trabajadorId,
-            @NotNull EstadoProgramacion estado,
+            @NotNull ProgramacionEstado estado,
             @NotNull LocalDate desde,
             @NotNull LocalDate hasta
     ) {
@@ -79,7 +79,7 @@ public final class ProgramacionGeneradorDto {
              * Estado FINAL:
              * A / B / C / D / V / COM / DM / LIC
              */
-            EstadoProgramacion estado,
+            ProgramacionEstado estado,
 
             /*
              * Referencia estructural.
@@ -94,7 +94,7 @@ public final class ProgramacionGeneradorDto {
              *
              * Para PT se mantiene D porque no utiliza 6x2.
              */
-            EstadoProgramacion estadoCiclo,
+            ProgramacionEstado estadoCiclo,
 
             /*
              * ASIGNACION_COBERTURA
@@ -120,7 +120,7 @@ public final class ProgramacionGeneradorDto {
             Integer codigo,
             String nombre,
 
-            GrupoProgramacion grupo,
+            ProgramacionGrupo grupo,
             Integer orden,
 
             boolean partTime,
