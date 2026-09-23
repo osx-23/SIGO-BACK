@@ -30,6 +30,11 @@ public class GlobalExceptionHandler {
   return build(HttpStatus.FORBIDDEN, e.getMessage());
  }
 
+ @ExceptionHandler(ConflictException.class)
+ ResponseEntity<Map<String, Object>> conflict(ConflictException e) {
+  return build(HttpStatus.CONFLICT, e.getMessage());
+ }
+
  @ExceptionHandler(TooManyRequestsException.class)
  ResponseEntity<Map<String, Object>> tooMany(TooManyRequestsException e) {
   return build(HttpStatus.TOO_MANY_REQUESTS, e.getMessage());
