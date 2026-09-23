@@ -19,7 +19,7 @@ public interface CatalogoPersonalUseCase {
     record TurnoItem(
             Long id,
             String codigo,
-            String descripcion
+            String nombre
     ) {
     }
 }
