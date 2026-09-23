@@ -7,6 +7,8 @@ import com.sigo.asistencia.application.port.in.GestionarEvidenciaAsistenciaUseCa
 import com.sigo.asistencia.application.port.in.ObtenerProgramadosAsistenciaUseCase;
 import com.sigo.asistencia.application.port.in.RegistrarAsistenciaExcepcionUseCase;
 import com.sigo.security.infrastructure.config.SecurityConfig;
+import com.sigo.shared.exception.ConflictException;
+import com.sigo.shared.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -26,6 +28,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(
@@ -117,6 +120,59 @@ class AsistenciaApiAuthorizationIT {
                                 .content("{}")
                 )
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void asistenciaInexistenteDevuelveNotFound() throws Exception {
+        when(consultaUseCase.obtenerPorId(999L))
+                .thenThrow(
+                        new ResourceNotFoundException(
+                                "Asistencia no encontrada"
+                        )
+                );
+
+        mockMvc.perform(
+                        get("/api/asistencias/999")
+                                .with(jwtRol("CONTROLADOR"))
+                )
+                .andExpect(status().isNotFound())
+                .andExpect(
+                        jsonPath("$.message")
+                                .value("Asistencia no encontrada")
+                );
+    }
+
+    @Test
+    void conflictoDeNegocioDevuelveConflict() throws Exception {
+        when(gestionarUseCase.registrar(any()))
+                .thenThrow(
+                        new ConflictException(
+                                "Ya existe una asistencia para la fecha"
+                        )
+                );
+
+        mockMvc.perform(
+                        post("/api/asistencias")
+                                .with(jwtRol("CONTROLADOR"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "plazaId": 4,
+                                          "turnoId": 1,
+                                          "controladorId": 201,
+                                          "fecha": "2026-09-23",
+                                          "programados": 7,
+                                          "presentes": 7
+                                        }
+                                        """)
+                )
+                .andExpect(status().isConflict())
+                .andExpect(
+                        jsonPath("$.message")
+                                .value(
+                                        "Ya existe una asistencia para la fecha"
+                                )
+                );
     }
 
     private RequestPostProcessor jwtRol(String rol) {
