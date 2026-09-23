@@ -11,6 +11,14 @@ import java.util.Optional;
 public interface TrabajadorRepository
         extends JpaRepository<Trabajador, Long> {
 
+    interface HorarioTrabajadorResumen {
+        Long getId();
+        Integer getCodigo();
+        String getNombreCompleto();
+        Long getPlazaId();
+        String getPlazaCodigo();
+    }
+
     /*
      * ============================================================
      * CONSULTAS GENERALES
@@ -18,6 +26,21 @@ public interface TrabajadorRepository
      */
 
     Optional<Trabajador> findByCodigo(Integer codigo);
+
+    @Query("""
+        SELECT
+            t.id as id,
+            t.codigo as codigo,
+            t.nombreCompleto as nombreCompleto,
+            p.id as plazaId,
+            p.codigo as plazaCodigo
+        FROM Trabajador t
+        LEFT JOIN t.plaza p
+        WHERE t.id = :trabajadorId
+    """)
+    Optional<HorarioTrabajadorResumen> findHorarioResumen(
+            @Param("trabajadorId") Long trabajadorId
+    );
 
     List<Trabajador> findByActivoTrueOrderByNombreCompletoAsc();
 
