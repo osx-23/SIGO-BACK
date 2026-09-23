@@ -1,5 +1,6 @@
 package com.sigo.inventario.infrastructure.persistence.entity;
-import com.sigo.personal.infrastructure.persistence.entity.*; import com.sigo.asistencia.infrastructure.persistence.entity.*; import com.sigo.relevo.infrastructure.persistence.entity.*;
+import com.sigo.personal.infrastructure.persistence.entity.Plaza;
+import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.OffsetDateTime;
