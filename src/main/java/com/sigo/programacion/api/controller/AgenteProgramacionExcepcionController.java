@@ -2,7 +2,7 @@ package com.sigo.programacion.api.controller;
 
 import com.sigo.programacion.api.dto.AgenteProgramacionExcepcionRequest;
 import com.sigo.programacion.api.dto.AgenteProgramacionExcepcionResponse;
-import com.sigo.programacion.application.service.AgenteProgramacionExcepcionService;
+import com.sigo.programacion.application.port.in.AgenteProgramacionExcepcionUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -15,11 +15,17 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AgenteProgramacionExcepcionController {
 
-    private final AgenteProgramacionExcepcionService service;
+    private final AgenteProgramacionExcepcionUseCase useCase;
 
     @GetMapping
-    public List<AgenteProgramacionExcepcionResponse> listar(@RequestParam Long plazaId) {
-        return service.listarPorPlaza(plazaId);
+    public List<AgenteProgramacionExcepcionResponse> listar(
+            @RequestParam Long plazaId
+    ) {
+        return useCase
+                .listarPorPlaza(plazaId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @GetMapping("/agente/{trabajadorId}")
@@ -27,14 +33,33 @@ public class AgenteProgramacionExcepcionController {
             @PathVariable Long trabajadorId,
             @RequestParam Long plazaId
     ) {
-        return service.obtener(trabajadorId, plazaId);
+        return toResponse(
+                useCase.obtener(
+                        trabajadorId,
+                        plazaId
+                )
+        );
     }
 
     @PutMapping
     public AgenteProgramacionExcepcionResponse guardar(
-            @Valid @RequestBody AgenteProgramacionExcepcionRequest request
+            @Valid
+            @RequestBody AgenteProgramacionExcepcionRequest request
     ) {
-        return service.guardar(request);
+        return toResponse(
+                useCase.guardar(
+                        new AgenteProgramacionExcepcionUseCase.Command(
+                                request.trabajadorId(),
+                                request.plazaId(),
+                                request.permiteA(),
+                                request.permiteB(),
+                                request.permiteC(),
+                                request.motivo(),
+                                request.color(),
+                                request.activo()
+                        )
+                )
+        );
     }
 
     @DeleteMapping("/agente/{trabajadorId}")
@@ -43,6 +68,30 @@ public class AgenteProgramacionExcepcionController {
             @PathVariable Long trabajadorId,
             @RequestParam Long plazaId
     ) {
-        service.desactivar(trabajadorId, plazaId);
+        useCase.desactivar(
+                trabajadorId,
+                plazaId
+        );
+    }
+
+    private AgenteProgramacionExcepcionResponse toResponse(
+            AgenteProgramacionExcepcionUseCase.Excepcion excepcion
+    ) {
+        return new AgenteProgramacionExcepcionResponse(
+                excepcion.id(),
+                excepcion.trabajadorId(),
+                excepcion.codigoTrabajador(),
+                excepcion.nombreTrabajador(),
+                excepcion.plazaId(),
+                excepcion.plazaCodigo(),
+                excepcion.permiteA(),
+                excepcion.permiteB(),
+                excepcion.permiteC(),
+                excepcion.motivo(),
+                excepcion.color(),
+                excepcion.activo(),
+                excepcion.createdAt(),
+                excepcion.updatedAt()
+        );
     }
 }
