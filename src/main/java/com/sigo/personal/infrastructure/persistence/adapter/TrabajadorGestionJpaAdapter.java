@@ -7,14 +7,11 @@ import com.sigo.personal.infrastructure.persistence.entity.Puesto;
 import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
 import com.sigo.personal.infrastructure.persistence.repository.PlazaRepository;
 import com.sigo.personal.infrastructure.persistence.repository.TrabajadorRepository;
-import com.sigo.programacion.infrastructure.persistence.repository.AgenteControladorLiderRepository;
-import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionSecuenciaAgenteRepository;
 import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 
@@ -25,8 +22,6 @@ public class TrabajadorGestionJpaAdapter
 
     private final TrabajadorRepository trabajadorRepository;
     private final PlazaRepository plazaRepository;
-    private final ProgramacionSecuenciaAgenteRepository secuenciaRepository;
-    private final AgenteControladorLiderRepository liderRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -71,21 +66,62 @@ public class TrabajadorGestionJpaAdapter
     }
 
     @Override
-    @Transactional
-    public TrabajadorUseCase.TrabajadorData actualizarAdministracion(
+    @Transactional(readOnly = true)
+    public PreparacionActualizacion prepararActualizacion(
             Long trabajadorId,
-            Long plazaId,
+            Long nuevaPlazaId,
             Boolean activo
     ) {
-        Trabajador trabajador = trabajadorRepository
+        Trabajador trabajador = requireTrabajador(trabajadorId);
+        Plaza nuevaPlaza = requirePlazaActiva(nuevaPlazaId);
+
+        Long plazaAnteriorId =
+                trabajador.getPlaza() == null
+                        ? null
+                        : trabajador.getPlaza().getId();
+
+        return new PreparacionActualizacion(
+                trabajador.getId(),
+                plazaAnteriorId,
+                nuevaPlaza.getId(),
+                !Objects.equals(
+                        plazaAnteriorId,
+                        nuevaPlaza.getId()
+                ),
+                !Boolean.TRUE.equals(activo)
+        );
+    }
+
+    @Override
+    @Transactional
+    public TrabajadorUseCase.TrabajadorData aplicarActualizacion(
+            Long trabajadorId,
+            Long nuevaPlazaId,
+            Boolean activo
+    ) {
+        Trabajador trabajador = requireTrabajador(trabajadorId);
+        Plaza nuevaPlaza = requirePlazaActiva(nuevaPlazaId);
+
+        trabajador.setPlaza(nuevaPlaza);
+        trabajador.setActivo(activo);
+
+        return toData(
+                trabajadorRepository.saveAndFlush(trabajador)
+        );
+    }
+
+    private Trabajador requireTrabajador(Long trabajadorId) {
+        return trabajadorRepository
                 .findById(trabajadorId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Trabajador no encontrado"
                         )
                 );
+    }
 
-        Plaza nuevaPlaza = plazaRepository
+    private Plaza requirePlazaActiva(Long plazaId) {
+        return plazaRepository
                 .findById(plazaId)
                 .filter(plaza ->
                         Boolean.TRUE.equals(plaza.getActivo())
@@ -95,68 +131,6 @@ public class TrabajadorGestionJpaAdapter
                                 "Plaza activa no encontrada"
                         )
                 );
-
-        Long plazaAnteriorId =
-                trabajador.getPlaza() == null
-                        ? null
-                        : trabajador.getPlaza().getId();
-
-        boolean cambioPlaza =
-                !Objects.equals(
-                        plazaAnteriorId,
-                        nuevaPlaza.getId()
-                );
-
-        boolean quedaraInactivo =
-                !Boolean.TRUE.equals(activo);
-
-        /*
-         * Las relaciones se cierran antes de tocar plaza/activo.
-         * Esto conserva el orden requerido por los triggers de PostgreSQL.
-         */
-        if (cambioPlaza || quedaraInactivo) {
-            liderRepository
-                    .findByAgenteIdAndActivoTrue(trabajadorId)
-                    .ifPresent(relacion -> {
-                        relacion.setActivo(false);
-                        relacion.setFechaFin(LocalDate.now());
-                        liderRepository.save(relacion);
-                    });
-
-            var relacionesComoControlador =
-                    liderRepository
-                            .findByControladorIdAndActivoTrue(
-                                    trabajadorId
-                            );
-
-            for (var relacion : relacionesComoControlador) {
-                relacion.setActivo(false);
-                relacion.setFechaFin(LocalDate.now());
-            }
-
-            if (!relacionesComoControlador.isEmpty()) {
-                liderRepository.saveAll(relacionesComoControlador);
-            }
-
-            liderRepository.flush();
-        }
-
-        trabajador.setPlaza(nuevaPlaza);
-        trabajador.setActivo(activo);
-        trabajadorRepository.saveAndFlush(trabajador);
-
-        if (cambioPlaza) {
-            secuenciaRepository
-                    .findByAgenteId(trabajadorId)
-                    .ifPresent(secuencia -> {
-                        secuencia.setPlaza(nuevaPlaza);
-                        secuencia.setGrupo(null);
-                        secuencia.setOrden(null);
-                        secuenciaRepository.save(secuencia);
-                    });
-        }
-
-        return toData(trabajador);
     }
 
     private TrabajadorUseCase.TrabajadorData toData(
