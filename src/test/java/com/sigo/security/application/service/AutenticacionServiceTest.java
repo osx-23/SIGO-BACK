@@ -138,6 +138,181 @@ class AutenticacionServiceTest {
         );
     }
 
+    @Test
+    void cambiarPasswordActualizaHashYQuitaCambioObligatorio() {
+        StubUsuarioPort usuarios = new StubUsuarioPort();
+
+        usuarios.add(
+                new UsuarioSeguridad(
+                        1L,
+                        287,
+                        "Usuario 287",
+                        RolSeguridad.CONTROLADOR,
+                        4L,
+                        "P4",
+                        "hash",
+                        true,
+                        true
+                )
+        );
+
+        AutenticacionService service =
+                new AutenticacionService(
+                        usuarios,
+                        new StubPasswordPort(),
+                        new StubTokenPort(),
+                        () -> 287
+                );
+
+        service.cambiarPassword(
+                new AutenticacionUseCase.ChangePasswordCommand(
+                        "correcta",
+                        "nueva123"
+                )
+        );
+
+        UsuarioSeguridad actualizado =
+                usuarios.buscarPorCodigo(287).orElseThrow();
+
+        assertEquals(
+                "encoded-nueva123",
+                actualizado.passwordHash()
+        );
+        assertEquals(
+                false,
+                actualizado.requiereCambioPassword()
+        );
+    }
+
+    @Test
+    void cambiarPasswordRechazaPasswordActualIncorrecta() {
+        StubUsuarioPort usuarios = new StubUsuarioPort();
+
+        usuarios.add(usuario(
+                1L,
+                287,
+                RolSeguridad.CONTROLADOR,
+                true,
+                "hash"
+        ));
+
+        AutenticacionService service =
+                new AutenticacionService(
+                        usuarios,
+                        new StubPasswordPort(),
+                        new StubTokenPort(),
+                        () -> 287
+                );
+
+        AutenticacionException exception =
+                assertThrows(
+                        AutenticacionException.class,
+                        () -> service.cambiarPassword(
+                                new AutenticacionUseCase.ChangePasswordCommand(
+                                        "incorrecta",
+                                        "nueva123"
+                                )
+                        )
+                );
+
+        assertEquals(
+                AutenticacionException.Tipo.BAD_REQUEST,
+                exception.tipo()
+        );
+    }
+
+    @Test
+    void supervisorReseteaPasswordYPuedeExigirCambioAlIngresar() {
+        StubUsuarioPort usuarios = new StubUsuarioPort();
+
+        usuarios.add(usuario(
+                1L,
+                100,
+                RolSeguridad.SUPERVISOR,
+                true,
+                "hash"
+        ));
+
+        usuarios.add(usuario(
+                2L,
+                200,
+                RolSeguridad.OPERADOR,
+                true,
+                "hash"
+        ));
+
+        AutenticacionService service =
+                new AutenticacionService(
+                        usuarios,
+                        new StubPasswordPort(),
+                        new StubTokenPort(),
+                        () -> 100
+                );
+
+        service.resetPasswordSupervisor(
+                2L,
+                new AutenticacionUseCase.ResetPasswordCommand(
+                        "temporal123",
+                        true
+                )
+        );
+
+        UsuarioSeguridad actualizado =
+                usuarios.buscarPorId(2L).orElseThrow();
+
+        assertEquals(
+                "encoded-temporal123",
+                actualizado.passwordHash()
+        );
+        assertTrue(actualizado.requiereCambioPassword());
+    }
+
+    @Test
+    void supervisorNoPuedeResetearUsuarioInactivo() {
+        StubUsuarioPort usuarios = new StubUsuarioPort();
+
+        usuarios.add(usuario(
+                1L,
+                100,
+                RolSeguridad.SUPERVISOR,
+                true,
+                "hash"
+        ));
+
+        usuarios.add(usuario(
+                2L,
+                200,
+                RolSeguridad.OPERADOR,
+                false,
+                "hash"
+        ));
+
+        AutenticacionService service =
+                new AutenticacionService(
+                        usuarios,
+                        new StubPasswordPort(),
+                        new StubTokenPort(),
+                        () -> 100
+                );
+
+        AutenticacionException exception =
+                assertThrows(
+                        AutenticacionException.class,
+                        () -> service.resetPasswordSupervisor(
+                                2L,
+                                new AutenticacionUseCase.ResetPasswordCommand(
+                                        "temporal123",
+                                        true
+                                )
+                        )
+                );
+
+        assertEquals(
+                AutenticacionException.Tipo.BAD_REQUEST,
+                exception.tipo()
+        );
+    }
+
     private UsuarioSeguridad usuario(
             Long id,
             Integer codigo,
