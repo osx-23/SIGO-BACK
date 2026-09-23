@@ -1,7 +1,6 @@
 package com.sigo.programacion.infrastructure.persistence.entity;
 
 import com.sigo.personal.infrastructure.persistence.entity.Plaza;
-import com.sigo.relevo.infrastructure.persistence.entity.Via;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.OffsetDateTime;
@@ -27,9 +26,8 @@ public class ProgramacionUbicacion {
     @Column(nullable=false, length=20)
     private TipoUbicacion tipo;
 
-    @ManyToOne(fetch=FetchType.EAGER)
-    @JoinColumn(name="via_id")
-    private Via via;
+    @Column(name="via_id")
+    private Long viaId;
 
     @Column(nullable=false)
     private Boolean activo=true;
