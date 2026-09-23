@@ -18,6 +18,7 @@ import com.sigo.relevo.infrastructure.persistence.repository.ElementoRelevoRepos
 import com.sigo.relevo.infrastructure.persistence.repository.RelevoChecklistRepository;
 import com.sigo.relevo.infrastructure.persistence.repository.RelevoRepository;
 import com.sigo.relevo.infrastructure.persistence.repository.RelevoViaRepository;
+import com.sigo.relevo.infrastructure.persistence.repository.RelevoViaEvidenciaRepository;
 import com.sigo.relevo.infrastructure.persistence.repository.ViaRepository;
 import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class RelevoGestionJpaAdapter
     private final RelevoRepository relevoRepository;
     private final RelevoChecklistRepository checklistRepository;
     private final RelevoViaRepository relevoViaRepository;
+    private final RelevoViaEvidenciaRepository viaEvidenciaRepository;
     private final ElementoRelevoRepository elementoRepository;
     private final ViaRepository viaRepository;
     private final PlazaRepository plazaRepository;
@@ -220,6 +222,12 @@ public class RelevoGestionJpaAdapter
                                 )
                         );
 
+        java.util.Set<Long> viaIdsSolicitadas =
+                command.vias()
+                        .stream()
+                        .map(GestionarRelevoUseCase.ViaItem::viaId)
+                        .collect(java.util.stream.Collectors.toSet());
+
         for (GestionarRelevoUseCase.ViaItem item
                 : command.vias()) {
             RelevoVia relevoVia =
@@ -247,6 +255,17 @@ public class RelevoGestionJpaAdapter
             relevoVia.setDetalle(item.detalle());
 
             relevoViaRepository.save(relevoVia);
+        }
+
+        for (Map.Entry<Long, RelevoVia> entry
+                : viasActual.entrySet()) {
+            if (!viaIdsSolicitadas.contains(entry.getKey())) {
+                RelevoVia sobrante = entry.getValue();
+                viaEvidenciaRepository.deleteByRelevoViaId(
+                        sobrante.getId()
+                );
+                relevoViaRepository.delete(sobrante);
+            }
         }
 
         return relevo.getId();
