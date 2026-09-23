@@ -1,0 +1,22 @@
+name: Export corrected backend
+
+on:
+  push:
+    branches:
+      - chatgpt/programacion-distribucion-local
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create source ZIP
+        run: |
+          rm -rf target
+          zip -r SIGO-BACK-PROD-CORREGIDO-SIGO-TEST.zip .             -x ".git/*" ".github/workflows/export-backend.yml" "target/*"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SIGO-BACK-PROD-CORREGIDO-SIGO-TEST
+          path: SIGO-BACK-PROD-CORREGIDO-SIGO-TEST.zip
+          retention-days: 1

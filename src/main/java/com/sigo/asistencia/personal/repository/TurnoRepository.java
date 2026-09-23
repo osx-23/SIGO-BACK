@@ -1,0 +1,1 @@
+package com.sigo.asistencia.personal.repository; import com.sigo.asistencia.personal.entity.Turno; import org.springframework.data.jpa.repository.JpaRepository; public interface TurnoRepository extends JpaRepository<Turno,Long>{}

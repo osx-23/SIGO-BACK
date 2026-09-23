@@ -1,0 +1,50 @@
+{
+  "info": {
+    "name": "SIGO-TEST - Auth JWT",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8080"},
+    {"key": "token", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "Login Operador 2396",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"codigo\": 2396,\n  \"password\": \"TestOp2026!\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"]}
+      },
+      "event": [{"listen": "test", "script": {"exec": ["const json = pm.response.json();", "if (json.token) pm.collectionVariables.set('token', json.token);"]}}]
+    },
+    {
+      "name": "Login Controlador 287",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"codigo\": 287,\n  \"password\": \"TestCtrl2026!\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"]}
+      },
+      "event": [{"listen": "test", "script": {"exec": ["const json = pm.response.json();", "if (json.token) pm.collectionVariables.set('token', json.token);"]}}]
+    },
+    {
+      "name": "Login Supervisor 550",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"codigo\": 550,\n  \"password\": \"TestSup2026!\"\n}"},
+        "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"]}
+      },
+      "event": [{"listen": "test", "script": {"exec": ["const json = pm.response.json();", "if (json.token) pm.collectionVariables.set('token', json.token);"]}}]
+    },
+    {
+      "name": "Auth Me",
+      "request": {
+        "method": "GET",
+        "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+        "url": {"raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"]}
+      }
+    }
+  ]
+}
