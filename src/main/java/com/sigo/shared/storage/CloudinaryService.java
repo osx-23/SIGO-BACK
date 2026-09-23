@@ -27,11 +27,27 @@ public class CloudinaryService {
             throw new IllegalArgumentException("Debe seleccionar una imagen");
         }
 
-        if (archivo.getContentType() == null || !archivo.getContentType().startsWith("image/")) {
+        return subirImagen(
+                archivo.getBytes(),
+                archivo.getContentType(),
+                folder
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> subirImagen(
+            byte[] contenido,
+            String contentType,
+            String folder
+    ) throws IOException {
+        if (contenido == null || contenido.length == 0) {
+            throw new IllegalArgumentException("Debe seleccionar una imagen");
+        }
+
+        if (contentType == null || !contentType.startsWith("image/")) {
             throw new IllegalArgumentException("El archivo debe ser una imagen");
         }
 
-        byte[] contenido = archivo.getBytes();
         if (!esImagenReal(contenido)) {
             throw new IllegalArgumentException("El contenido del archivo no corresponde a una imagen permitida");
         }
