@@ -4,7 +4,7 @@ import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
 import com.sigo.inventario.application.port.out.InventarioConsultaPort;
 import com.sigo.inventario.domain.InventarioEstado;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.server.ResponseStatusException;
+import com.sigo.shared.exception.ForbiddenException;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -44,7 +44,7 @@ class InventarioConsultaServiceTest {
                 );
 
         assertThrows(
-                ResponseStatusException.class,
+                ForbiddenException.class,
                 () -> service.productosPermitidos(
                         new InventarioConsultaUseCase.Usuario(
                                 99L,
