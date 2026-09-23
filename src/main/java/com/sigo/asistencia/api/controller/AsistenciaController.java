@@ -135,7 +135,15 @@ public class AsistenciaController {
             @RequestParam("tipo") String tipo
     ) throws IOException {
         exigirRolAsistencia();
-        var evidencia = evidenciaUseCase.guardar(id, file, tipo);
+        var evidencia = evidenciaUseCase.guardar(
+                id,
+                new GestionarEvidenciaAsistenciaUseCase.ArchivoEntrada(
+                        file.getOriginalFilename(),
+                        file.getContentType(),
+                        file.getBytes()
+                ),
+                tipo
+        );
         return ResponseEntity.ok(
                 new EvidenciaResponse(
                         evidencia.id(),
