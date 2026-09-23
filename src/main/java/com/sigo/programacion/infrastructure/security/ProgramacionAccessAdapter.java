@@ -1,9 +1,7 @@
 package com.sigo.programacion.infrastructure.security;
 
-import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
-import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
 import com.sigo.programacion.application.port.out.ProgramacionAccessPort;
-import com.sigo.security.application.service.CurrentUserService;
+import com.sigo.security.application.port.in.UsuarioActualUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -16,39 +14,40 @@ import java.util.Objects;
 public class ProgramacionAccessAdapter
         implements ProgramacionAccessPort {
 
-    private final CurrentUserService currentUserService;
+    private final UsuarioActualUseCase usuarioActualUseCase;
 
     @Override
     public Long requireSupervisorId() {
-        Trabajador actual = currentUserService.requireCurrent();
+        UsuarioActualUseCase.UsuarioActual actual =
+                usuarioActualUseCase.requireActual();
 
-        if (actual.getRolSistema() != RolSistema.SUPERVISOR) {
+        if (!"SUPERVISOR".equals(actual.rol())) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Solo el Supervisor puede realizar esta operación"
             );
         }
 
-        return actual.getId();
+        return actual.id();
     }
 
     @Override
     public void validarLecturaPlaza(Long plazaId) {
-        Trabajador actual = currentUserService.requireCurrent();
+        UsuarioActualUseCase.UsuarioActual actual =
+                usuarioActualUseCase.requireActual();
 
-        if (actual.getRolSistema() == RolSistema.SUPERVISOR) {
+        if ("SUPERVISOR".equals(actual.rol())) {
             return;
         }
 
-        if (actual.getRolSistema() != RolSistema.CONTROLADOR) {
+        if (!"CONTROLADOR".equals(actual.rol())) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "No tienes acceso a la programación mensual"
             );
         }
 
-        if (actual.getPlaza() == null
-                || !Objects.equals(actual.getPlaza().getId(), plazaId)) {
+        if (!Objects.equals(actual.plazaId(), plazaId)) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Solo puedes consultar tu propia plaza"
@@ -58,36 +57,36 @@ public class ProgramacionAccessAdapter
 
     @Override
     public void validarGestionPlaza(Long plazaId) {
-        Trabajador actual = currentUserService.requireCurrent();
+        UsuarioActualUseCase.UsuarioActual actual =
+                usuarioActualUseCase.requireActual();
 
-        if (actual.getRolSistema() == RolSistema.SUPERVISOR) {
+        if ("SUPERVISOR".equals(actual.rol())) {
             return;
         }
 
-        if (actual.getRolSistema() != RolSistema.CONTROLADOR) {
+        if (!"CONTROLADOR".equals(actual.rol())) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Solo Supervisor o Controlador puede gestionar la distribución"
             );
         }
 
-        if (actual.getPlaza() == null
-                || !Objects.equals(actual.getPlaza().getId(), plazaId)) {
+        if (!Objects.equals(actual.plazaId(), plazaId)) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "El controlador solo puede gestionar su propia plaza"
             );
         }
     }
+
     @Override
     public Long requireGestionPlazaUsuarioId(Long plazaId) {
         validarGestionPlaza(plazaId);
-        return currentUserService.requireCurrent().getId();
+        return usuarioActualUseCase.requireActual().id();
     }
 
     @Override
     public Long currentUserId() {
-        return currentUserService.requireCurrent().getId();
+        return usuarioActualUseCase.requireActual().id();
     }
-
 }
