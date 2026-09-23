@@ -2,11 +2,11 @@ package com.sigo.inventario.application.service;
 
 import com.sigo.inventario.application.port.in.InventarioProductoUseCase;
 import com.sigo.inventario.application.port.out.InventarioProductoGestionPort;
+import com.sigo.shared.exception.BusinessException;
+import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -183,9 +183,7 @@ public class InventarioProductoApplicationService
 
             if (usuario.esControlador()
                     && "SUPERVISOR".equals(normalizado)) {
-                throw new ResponseStatusException(
-                        HttpStatus.FORBIDDEN,
-                        "El controlador no puede asignar el rol SUPERVISOR"
+                throw new ForbiddenException("El controlador no puede asignar el rol SUPERVISOR"
                 );
             }
 
@@ -211,9 +209,7 @@ public class InventarioProductoApplicationService
 
         if (usuario.esControlador()
                 && usuario.plazaId() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Trabajador sin plaza asignada"
+            throw new ForbiddenException("Trabajador sin plaza asignada"
             );
         }
 
@@ -236,17 +232,13 @@ public class InventarioProductoApplicationService
         if (usuario == null
                 || (!usuario.esSupervisor()
                 && !usuario.esControlador())) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "No tiene permisos para administrar productos"
+            throw new ForbiddenException("No tiene permisos para administrar productos"
             );
         }
 
         if (usuario.esControlador()
                 && usuario.plazaId() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Trabajador sin plaza asignada"
+            throw new ForbiddenException("Trabajador sin plaza asignada"
             );
         }
     }
@@ -260,10 +252,7 @@ public class InventarioProductoApplicationService
         return limpio.isEmpty() ? null : limpio;
     }
 
-    private ResponseStatusException bad(String mensaje) {
-        return new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                mensaje
-        );
+    private BusinessException bad(String mensaje) {
+        return new BusinessException(mensaje);
     }
 }
