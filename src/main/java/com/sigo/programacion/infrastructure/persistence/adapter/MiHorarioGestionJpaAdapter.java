@@ -1,11 +1,8 @@
 package com.sigo.programacion.infrastructure.persistence.adapter;
 
-import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
 import com.sigo.personal.infrastructure.persistence.repository.TrabajadorRepository;
 import com.sigo.programacion.application.port.in.MiHorarioUseCase;
 import com.sigo.programacion.application.port.out.MiHorarioGestionPort;
-import com.sigo.programacion.infrastructure.persistence.entity.DistribucionPersonal;
-import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionTurno;
 import com.sigo.programacion.infrastructure.persistence.repository.AgenteControladorLiderRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.DistribucionPersonalRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionTurnoRepository;
@@ -34,19 +31,23 @@ public class MiHorarioGestionJpaAdapter
             LocalDate desde,
             LocalDate hasta
     ) {
-        Trabajador trabajador = trabajadorRepository
-                .findById(trabajadorId)
+        var trabajador = trabajadorRepository
+                .findHorarioResumen(trabajadorId)
                 .orElseThrow(() ->
                         new IllegalStateException(
                                 "Usuario actual no encontrado"
                         )
                 );
 
-        Map<LocalDate, ProgramacionTurno> turnos =
+        Map<LocalDate, ProgramacionTurnoRepository.TurnoResumen> turnos =
                 new HashMap<>();
 
         programacionRepository
-                .findHorario(trabajadorId, desde, hasta)
+                .findHorarioResumen(
+                        trabajadorId,
+                        desde,
+                        hasta
+                )
                 .forEach(programacion ->
                         turnos.put(
                                 programacion.getFecha(),
@@ -54,20 +55,19 @@ public class MiHorarioGestionJpaAdapter
                         )
                 );
 
-        Map<Long, DistribucionPersonal> distribuciones =
+        Map<Long, DistribucionPersonalRepository.DistribucionHorarioResumen>
+                distribuciones =
                 new HashMap<>();
 
         distribucionRepository
-                .findByTrabajadorMes(
+                .findHorarioResumen(
                         trabajadorId,
                         desde,
                         hasta
                 )
                 .forEach(distribucion ->
                         distribuciones.put(
-                                distribucion
-                                        .getProgramacionTurno()
-                                        .getId(),
+                                distribucion.getProgramacionTurnoId(),
                                 distribucion
                         )
                 );
@@ -75,11 +75,12 @@ public class MiHorarioGestionJpaAdapter
         List<MiHorarioUseCase.Dia> dias =
                 new ArrayList<>();
 
-        for (LocalDate fecha = desde;
-             !fecha.isAfter(hasta);
-             fecha = fecha.plusDays(1)) {
-
-            ProgramacionTurno programacion =
+        for (
+                LocalDate fecha = desde;
+                !fecha.isAfter(hasta);
+                fecha = fecha.plusDays(1)
+        ) {
+            var programacion =
                     turnos.get(fecha);
 
             if (programacion == null) {
@@ -94,8 +95,10 @@ public class MiHorarioGestionJpaAdapter
                 continue;
             }
 
-            DistribucionPersonal distribucion =
-                    distribuciones.get(programacion.getId());
+            var distribucion =
+                    distribuciones.get(
+                            programacion.getProgramacionId()
+                    );
 
             dias.add(
                     new MiHorarioUseCase.Dia(
@@ -103,24 +106,19 @@ public class MiHorarioGestionJpaAdapter
                             programacion.getEstado().name(),
                             distribucion == null
                                     ? null
-                                    : distribucion
-                                            .getUbicacion()
-                                            .getCodigo(),
+                                    : distribucion.getUbicacionCodigo(),
                             distribucion == null
                                     ? null
-                                    : distribucion
-                                            .getUbicacion()
-                                            .getNombre()
+                                    : distribucion.getUbicacionNombre()
                     )
             );
         }
 
         String lider = liderRepository
-                .findByAgenteIdAndActivoTrue(trabajadorId)
-                .map(relacion ->
-                        relacion
-                                .getControlador()
-                                .getNombreCompleto()
+                .findNombreLiderActivo(trabajadorId)
+                .map(
+                        AgenteControladorLiderRepository
+                                .LiderNombreResumen::getNombreCompleto
                 )
                 .orElse(null);
 
@@ -128,12 +126,8 @@ public class MiHorarioGestionJpaAdapter
                 trabajador.getId(),
                 trabajador.getCodigo(),
                 trabajador.getNombreCompleto(),
-                trabajador.getPlaza() == null
-                        ? null
-                        : trabajador.getPlaza().getId(),
-                trabajador.getPlaza() == null
-                        ? null
-                        : trabajador.getPlaza().getCodigo(),
+                trabajador.getPlazaId(),
+                trabajador.getPlazaCodigo(),
                 lider,
                 dias
         );
