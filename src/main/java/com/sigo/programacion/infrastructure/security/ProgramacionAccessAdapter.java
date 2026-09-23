@@ -79,4 +79,10 @@ public class ProgramacionAccessAdapter
             );
         }
     }
+    @Override
+    public Long requireGestionPlazaUsuarioId(Long plazaId) {
+        validarGestionPlaza(plazaId);
+        return currentUserService.requireCurrent().getId();
+    }
+
 }
