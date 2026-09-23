@@ -5,11 +5,12 @@ import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
 import com.sigo.inventario.application.port.out.InventarioCierrePort;
 import com.sigo.inventario.application.port.out.InventarioConsultaPort;
 import com.sigo.inventario.domain.InventarioEstado;
+import com.sigo.shared.exception.BusinessException;
+import com.sigo.shared.exception.ConflictException;
+import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -39,16 +40,14 @@ public class CerrarInventarioService
         if (!inventario.responsableId().equals(
                 usuario.trabajadorId()
         )) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new ForbiddenException(
                     "El inventario pertenece a otro trabajador"
             );
         }
 
         if (inventario.estado()
                 != InventarioEstado.EN_PROCESO) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
+            throw new ConflictException(
                     "Inventario ya cerrado"
             );
         }
@@ -80,8 +79,7 @@ public class CerrarInventarioService
                         .toList();
 
         if (!faltantes.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BusinessException(
                     "Faltan productos por contar: "
                             + String.join(", ", faltantes)
             );
@@ -99,8 +97,7 @@ public class CerrarInventarioService
                         );
 
         if (cantidadInvalida) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BusinessException(
                     "Existe una cantidad inválida"
             );
         }
@@ -143,24 +140,21 @@ public class CerrarInventarioService
 
         if (!usuario.esSupervisor()
                 && !propietarioEnProceso) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new ForbiddenException(
                     "No puede anular este inventario"
             );
         }
 
         if (inventario.estado()
                 == InventarioEstado.ANULADO) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
+            throw new ConflictException(
                     "El inventario ya está anulado"
             );
         }
 
         if (motivo == null
                 || motivo.trim().isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new BusinessException(
                     "El motivo de anulación es obligatorio"
             );
         }
