@@ -3,6 +3,7 @@ package com.sigo.inventario.application.service;
 import com.sigo.inventario.application.port.in.GuardarConteoInventarioUseCase;
 import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
 import com.sigo.inventario.application.port.out.InventarioConsultaPort;
+import com.sigo.inventario.application.port.out.InventarioAuditoriaPort;
 import com.sigo.inventario.application.port.out.InventarioDetalleGestionPort;
 import com.sigo.inventario.application.port.out.InventarioProductoVisibilidadPort;
 import com.sigo.inventario.domain.InventarioEstado;
@@ -28,7 +29,7 @@ public class GuardarConteoInventarioService
     private final InventarioDetalleGestionPort detalleGestionPort;
     private final InventarioProductoVisibilidadPort visibilidadPort;
     private final InventarioConsultaUseCase consultaUseCase;
-    private final InventarioAuditoriaService auditoria;
+    private final InventarioAuditoriaPort auditoria;
 
     @Override
     @Transactional
