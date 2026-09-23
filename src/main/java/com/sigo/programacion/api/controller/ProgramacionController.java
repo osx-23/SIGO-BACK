@@ -15,7 +15,7 @@ import com.sigo.programacion.api.dto.GuardarOrdenSecuenciaRequest;
 import com.sigo.programacion.api.dto.GuardarProgramacionRequest;
 import com.sigo.programacion.api.dto.ProgramacionDiaResponse;
 import com.sigo.programacion.api.dto.SecuenciaAgenteResponse;
-import com.sigo.programacion.application.service.ProgramacionService.MiHorarioResponse;
+import com.sigo.programacion.api.dto.MiHorarioResponse;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,8 +32,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ProgramacionController {
 
-    private final ProgramacionService programacionService;
-
     private final GuardarOrdenSecuenciaUseCase guardarOrdenSecuenciaUseCase;
 
     private final ListarSecuenciasUseCase listarSecuenciasUseCase;
@@ -47,6 +45,8 @@ public class ProgramacionController {
     private final ListarTurnosUseCase listarTurnosUseCase;
 
     private final GuardarTurnosUseCase guardarTurnosUseCase;
+
+    private final MiHorarioUseCase miHorarioUseCase;
 
 
     /*
@@ -107,9 +107,11 @@ public class ProgramacionController {
             @RequestParam LocalDate desde,
             @RequestParam LocalDate hasta
     ) {
-        return programacionService.miHorario(
-                desde,
-                hasta
+        return toMiHorarioResponse(
+                miHorarioUseCase.obtener(
+                        desde,
+                        hasta
+                )
         );
     }
 
@@ -205,6 +207,31 @@ public class ProgramacionController {
                                 )
                                 .toList()
                 )
+        );
+    }
+
+
+    private MiHorarioResponse toMiHorarioResponse(
+            MiHorarioUseCase.Horario horario
+    ) {
+        return new MiHorarioResponse(
+                horario.trabajadorId(),
+                horario.codigo(),
+                horario.nombre(),
+                horario.plazaId(),
+                horario.plazaCodigo(),
+                horario.lider(),
+                horario.dias()
+                        .stream()
+                        .map(dia ->
+                                new MiHorarioResponse.HorarioDiaResponse(
+                                        dia.fecha(),
+                                        dia.estado(),
+                                        dia.ubicacionCodigo(),
+                                        dia.ubicacionNombre()
+                                )
+                        )
+                        .toList()
         );
     }
 
