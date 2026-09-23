@@ -5,7 +5,7 @@ import com.sigo.inventario.application.port.out.IniciarInventarioPort;
 import com.sigo.inventario.application.port.out.InventarioAuditoriaPort;
 import com.sigo.inventario.domain.InventarioEstado;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.server.ResponseStatusException;
+import com.sigo.shared.exception.ConflictException;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -57,7 +57,7 @@ class IniciarInventarioServiceTest {
                 );
 
         assertThrows(
-                ResponseStatusException.class,
+                ConflictException.class,
                 () -> service.iniciar(
                         new IniciarInventarioUseCase.Usuario(
                                 10L,
