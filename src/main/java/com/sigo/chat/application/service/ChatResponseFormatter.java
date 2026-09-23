@@ -1,6 +1,6 @@
 package com.sigo.chat.application.service;
 
-import com.sigo.chat.api.dto.SigoToolResult;
+import com.sigo.chat.domain.SigoToolResult;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
