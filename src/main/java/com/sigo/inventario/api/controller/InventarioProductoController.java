@@ -4,7 +4,7 @@ import com.sigo.inventario.api.dto.request.ProductoGuardarRequest;
 import com.sigo.inventario.api.dto.response.ProductoAdminResponse;
 import com.sigo.inventario.application.port.in.InventarioProductoUseCase;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
-import com.sigo.inventario.application.security.InventarioUsuarioContextService;
+import com.sigo.inventario.application.port.in.ObtenerInventarioUsuarioUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -17,7 +17,7 @@ import java.util.List;
 public class InventarioProductoController {
 
     private final InventarioProductoUseCase useCase;
-    private final InventarioUsuarioContextService usuarios;
+    private final ObtenerInventarioUsuarioUseCase usuarios;
 
     @GetMapping
     public List<ProductoAdminResponse> listar() {
