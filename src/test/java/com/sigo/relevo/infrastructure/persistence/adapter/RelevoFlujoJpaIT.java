@@ -345,6 +345,41 @@ class RelevoFlujoJpaIT {
     }
 
     @Test
+    void actualizarSinViasEliminaReporteDeViaAnterior() {
+        var inicial = gestionarService.registrar(
+                command(
+                        checklistOperativo(),
+                        List.of(
+                                new GestionarRelevoUseCase.ViaItem(
+                                        via1.getId(),
+                                        EstadoRelevo.OPERATIVO,
+                                        null
+                                )
+                        )
+                )
+        );
+
+        assertEquals(1, inicial.vias().size());
+
+        var actualizado = gestionarService.actualizar(
+                inicial.id(),
+                command(
+                        checklistOperativo(),
+                        List.of()
+                )
+        );
+
+        assertTrue(actualizado.vias().isEmpty());
+        assertTrue(
+                relevoViaRepository
+                        .findByRelevoIdOrderByViaNumeroAsc(
+                                inicial.id()
+                        )
+                        .isEmpty()
+        );
+    }
+
+    @Test
     void rechazaChecklistIncompletoSinPersistirRelevo() {
         var incompleto = command(
                 List.of(
