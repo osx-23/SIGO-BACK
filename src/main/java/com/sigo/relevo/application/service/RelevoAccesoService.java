@@ -4,10 +4,9 @@ import com.sigo.relevo.application.port.in.GestionarRelevoUseCase;
 import com.sigo.relevo.application.port.in.RelevoAccesoUseCase;
 import com.sigo.relevo.application.port.in.RelevoHistorialUseCase;
 import com.sigo.relevo.application.port.out.RelevoUsuarioActualPort;
+import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -28,8 +27,7 @@ public class RelevoAccesoService
         }
 
         if (actual.plazaId() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new ForbiddenException(
                     "El operador no tiene una plaza asignada"
             );
         }
@@ -54,8 +52,7 @@ public class RelevoAccesoService
                 .rol();
 
         if ("OPERADOR".equals(rol)) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new ForbiddenException(
                     "Los operadores solo pueden consultar el historial de relevos"
             );
         }
