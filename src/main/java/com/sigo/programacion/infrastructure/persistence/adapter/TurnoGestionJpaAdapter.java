@@ -10,10 +10,9 @@ import com.sigo.programacion.application.port.out.TurnoGestionPort;
 import com.sigo.programacion.infrastructure.persistence.entity.EstadoProgramacion;
 import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionTurno;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionTurnoRepository;
+import com.sigo.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -188,10 +187,7 @@ public class TurnoGestionJpaAdapter
         );
     }
 
-    private ResponseStatusException bad(String message) {
-        return new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                message
-        );
+    private BusinessException bad(String message) {
+        return new BusinessException(message);
     }
 }
