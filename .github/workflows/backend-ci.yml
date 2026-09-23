@@ -25,3 +25,23 @@ jobs:
 
       - name: Compile
         run: mvn -B -DskipTests compile
+
+      - name: Verify programacion architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep -R --line-number --include='*.java' -E '^import com\.sigo\..*\.infrastructure\.' src/main/java/com/sigo/programacion/application; then
+            echo "programacion/application must not depend on infrastructure"
+            exit 1
+          fi
+
+          if grep -R --line-number --include='*.java' -E '^import com\.sigo\.programacion\.api\.' src/main/java/com/sigo/programacion/application; then
+            echo "programacion/application must not depend on api"
+            exit 1
+          fi
+
+          if grep -R --line-number --include='*.java' -E '^import (org\.springframework|jakarta\.persistence|com\.sigo\..*\.infrastructure\.|com\.sigo\.programacion\.api\.)' src/main/java/com/sigo/programacion/domain; then
+            echo "programacion/domain must remain framework and adapter independent"
+            exit 1
+          fi
