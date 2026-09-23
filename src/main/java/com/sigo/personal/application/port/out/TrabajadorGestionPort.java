@@ -18,9 +18,24 @@ public interface TrabajadorGestionPort {
             Long plazaId
     );
 
-    TrabajadorUseCase.TrabajadorData actualizarAdministracion(
+    PreparacionActualizacion prepararActualizacion(
             Long trabajadorId,
-            Long plazaId,
+            Long nuevaPlazaId,
             Boolean activo
     );
+
+    TrabajadorUseCase.TrabajadorData aplicarActualizacion(
+            Long trabajadorId,
+            Long nuevaPlazaId,
+            Boolean activo
+    );
+
+    record PreparacionActualizacion(
+            Long trabajadorId,
+            Long plazaAnteriorId,
+            Long nuevaPlazaId,
+            boolean cambioPlaza,
+            boolean quedaraInactivo
+    ) {
+    }
 }
