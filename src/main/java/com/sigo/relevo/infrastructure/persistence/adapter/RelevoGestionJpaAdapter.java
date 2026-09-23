@@ -16,6 +16,7 @@ import com.sigo.relevo.infrastructure.persistence.entity.RelevoVia;
 import com.sigo.relevo.infrastructure.persistence.entity.Via;
 import com.sigo.relevo.infrastructure.persistence.repository.ElementoRelevoRepository;
 import com.sigo.relevo.infrastructure.persistence.repository.RelevoChecklistRepository;
+import com.sigo.relevo.infrastructure.persistence.repository.RelevoChecklistEvidenciaRepository;
 import com.sigo.relevo.infrastructure.persistence.repository.RelevoRepository;
 import com.sigo.relevo.infrastructure.persistence.repository.RelevoViaRepository;
 import com.sigo.relevo.infrastructure.persistence.repository.RelevoViaEvidenciaRepository;
@@ -35,6 +36,7 @@ public class RelevoGestionJpaAdapter
 
     private final RelevoRepository relevoRepository;
     private final RelevoChecklistRepository checklistRepository;
+    private final RelevoChecklistEvidenciaRepository checklistEvidenciaRepository;
     private final RelevoViaRepository relevoViaRepository;
     private final RelevoViaEvidenciaRepository viaEvidenciaRepository;
     private final ElementoRelevoRepository elementoRepository;
@@ -187,6 +189,12 @@ public class RelevoGestionJpaAdapter
                                 )
                         );
 
+        java.util.Set<Long> checklistIdsSolicitados =
+                command.checklist()
+                        .stream()
+                        .map(GestionarRelevoUseCase.ChecklistItem::elementoId)
+                        .collect(java.util.stream.Collectors.toSet());
+
         for (GestionarRelevoUseCase.ChecklistItem item
                 : command.checklist()) {
             RelevoChecklist checklist =
@@ -209,6 +217,17 @@ public class RelevoGestionJpaAdapter
             checklist.setCantidad(item.cantidad());
 
             checklistRepository.save(checklist);
+        }
+
+        for (Map.Entry<Long, RelevoChecklist> entry
+                : checklistActual.entrySet()) {
+            if (!checklistIdsSolicitados.contains(entry.getKey())) {
+                RelevoChecklist sobrante = entry.getValue();
+                checklistEvidenciaRepository.deleteByChecklistId(
+                        sobrante.getId()
+                );
+                checklistRepository.delete(sobrante);
+            }
         }
 
         Map<Long, RelevoVia> viasActual =
