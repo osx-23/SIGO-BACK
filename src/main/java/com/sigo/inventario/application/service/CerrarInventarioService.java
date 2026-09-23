@@ -3,6 +3,7 @@ package com.sigo.inventario.application.service;
 import com.sigo.inventario.application.port.in.CerrarInventarioUseCase;
 import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
 import com.sigo.inventario.application.port.out.InventarioCierrePort;
+import com.sigo.inventario.application.port.out.InventarioAuditoriaPort;
 import com.sigo.inventario.application.port.out.InventarioConsultaPort;
 import com.sigo.inventario.domain.InventarioEstado;
 import com.sigo.shared.exception.BusinessException;
@@ -26,7 +27,7 @@ public class CerrarInventarioService
     private final InventarioConsultaPort consultaPort;
     private final InventarioCierrePort cierrePort;
     private final InventarioConsultaUseCase consultaUseCase;
-    private final InventarioAuditoriaService auditoria;
+    private final InventarioAuditoriaPort auditoria;
 
     @Override
     @Transactional
