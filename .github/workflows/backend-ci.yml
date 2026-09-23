@@ -80,3 +80,15 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Verify migrated api boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for dir in asistencia relevo; do
+            if grep -R --line-number --include='*.java' -E '^import com\.sigo\.(personal\.infrastructure|security\.application\.service)\.' "src/main/java/com/sigo/$dir/api"; then
+              echo "$dir/api must not depend directly on persistence entities or CurrentUserService"
+              exit 1
+            fi
+          done
