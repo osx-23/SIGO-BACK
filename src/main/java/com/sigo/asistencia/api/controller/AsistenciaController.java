@@ -5,6 +5,7 @@ import com.sigo.asistencia.api.dto.AsistenciaResponse;
 import com.sigo.asistencia.api.dto.AsistenciaUpdateRequest;
 import com.sigo.asistencia.api.dto.EvidenciaResponse;
 import com.sigo.asistencia.application.service.AsistenciaExcepcionService;
+import com.sigo.asistencia.application.port.in.ConsultarAsistenciasUseCase;
 import com.sigo.asistencia.application.port.in.ObtenerProgramadosAsistenciaUseCase;
 import com.sigo.asistencia.application.service.AsistenciaService;
 import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
@@ -31,6 +32,7 @@ import java.util.Map;
 public class AsistenciaController {
 
     private final AsistenciaService asistenciaService;
+    private final ConsultarAsistenciasUseCase consultaUseCase;
     private final AsistenciaExcepcionService asistenciaExcepcionService;
     private final ObtenerProgramadosAsistenciaUseCase programacionService;
     private final CurrentUserService currentUserService;
@@ -82,16 +84,33 @@ public class AsistenciaController {
 
     @GetMapping
     public ResponseEntity<List<AsistenciaResponse>> listar(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin,
-            @RequestParam(required = false) Long plazaId
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate inicio,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate fin,
+            @RequestParam(required = false)
+            Long plazaId
     ) {
-        return ResponseEntity.ok(asistenciaService.listar(inicio, fin, plazaId));
+        return ResponseEntity.ok(
+                consultaUseCase
+                        .listar(inicio, fin, plazaId)
+                        .stream()
+                        .map(this::toResponse)
+                        .toList()
+        );
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<AsistenciaResponse> obtenerPorId(@PathVariable Long id) {
-        return ResponseEntity.ok(asistenciaService.obtenerPorId(id));
+    public ResponseEntity<AsistenciaResponse> obtenerPorId(
+            @PathVariable Long id
+    ) {
+        return ResponseEntity.ok(
+                toResponse(
+                        consultaUseCase.obtenerPorId(id)
+                )
+        );
     }
 
     @PostMapping(value = "/{id}/evidencias", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -112,6 +131,52 @@ public class AsistenciaController {
         exigirRolAsistencia();
         asistenciaService.eliminarEvidencia(asistenciaId, evidenciaId);
         return ResponseEntity.noContent().build();
+    }
+
+    private AsistenciaResponse toResponse(
+            ConsultarAsistenciasUseCase.Asistencia asistencia
+    ) {
+        return new AsistenciaResponse(
+                asistencia.id(),
+                asistencia.plazaId(),
+                asistencia.plaza(),
+                asistencia.turnoId(),
+                asistencia.turno(),
+                asistencia.controladorId(),
+                asistencia.controlador(),
+                asistencia.fecha(),
+                asistencia.programados(),
+                asistencia.presentes(),
+                asistencia.ausentes(),
+                asistencia.apoyoSolicitado(),
+                asistencia.detalleApoyo(),
+                asistencia.porcentaje(),
+                asistencia.notas(),
+                asistencia.ausencias()
+                        .stream()
+                        .map(ausencia ->
+                                new com.sigo.asistencia.api.dto.AusenciaResponse(
+                                        ausencia.id(),
+                                        ausencia.trabajadorId(),
+                                        ausencia.codigoTrabajador(),
+                                        ausencia.nombreTrabajador(),
+                                        ausencia.motivoId(),
+                                        ausencia.motivo(),
+                                        ausencia.observacion()
+                                )
+                        )
+                        .toList(),
+                asistencia.evidencias()
+                        .stream()
+                        .map(evidencia ->
+                                new EvidenciaResponse(
+                                        evidencia.id(),
+                                        evidencia.urlArchivo(),
+                                        evidencia.tipo()
+                                )
+                        )
+                        .toList()
+        );
     }
 
     private AsistenciaRequest asegurarIdentidad(AsistenciaRequest request) {
