@@ -16,6 +16,11 @@ import com.sigo.programacion.api.dto.GuardarProgramacionRequest;
 import com.sigo.programacion.api.dto.ProgramacionDiaResponse;
 import com.sigo.programacion.api.dto.SecuenciaAgenteResponse;
 import com.sigo.programacion.api.dto.MiHorarioResponse;
+import com.sigo.programacion.api.dto.ProgramacionContextoResponse;
+import com.sigo.programacion.api.dto.AgenteProgramacionExcepcionResponse;
+import com.sigo.personal.api.dto.TrabajadorPublicResponse;
+import com.sigo.personal.application.port.in.TrabajadorUseCase;
+import com.sigo.programacion.application.port.in.AgenteProgramacionExcepcionUseCase;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +30,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+
+import org.springframework.security.concurrent.DelegatingSecurityContextExecutor;
 
 
 @RestController
@@ -47,6 +56,94 @@ public class ProgramacionController {
     private final GuardarTurnosUseCase guardarTurnosUseCase;
 
     private final MiHorarioUseCase miHorarioUseCase;
+
+    private final TrabajadorUseCase trabajadorUseCase;
+
+    private final AgenteProgramacionExcepcionUseCase excepcionUseCase;
+
+
+    /*
+     * ============================================================
+     * CONTEXTO MENSUAL
+     * ============================================================
+     */
+
+    @GetMapping("/contexto")
+    public ProgramacionContextoResponse contexto(
+            @RequestParam Long plazaId,
+            @RequestParam int anio,
+            @RequestParam int mes
+    ) {
+        /*
+         * Cada use case conserva sus validaciones de seguridad.
+         * DelegatingSecurityContextExecutor propaga el JWT/roles
+         * al ejecutar las cuatro lecturas en virtual threads.
+         */
+        try (var virtualExecutor =
+                     Executors.newVirtualThreadPerTaskExecutor()) {
+
+            var executor =
+                    new DelegatingSecurityContextExecutor(
+                            virtualExecutor
+                    );
+
+            var agentesFuture =
+                    CompletableFuture.supplyAsync(
+                            () -> trabajadorUseCase
+                                    .listarAgentesPorPlaza(plazaId),
+                            executor
+                    );
+
+            var turnosFuture =
+                    CompletableFuture.supplyAsync(
+                            () -> listarTurnosUseCase
+                                    .listar(plazaId, anio, mes),
+                            executor
+                    );
+
+            var secuenciasFuture =
+                    CompletableFuture.supplyAsync(
+                            () -> listarSecuenciasUseCase
+                                    .listar(plazaId),
+                            executor
+                    );
+
+            var excepcionesFuture =
+                    CompletableFuture.supplyAsync(
+                            () -> excepcionUseCase
+                                    .listarPorPlaza(plazaId),
+                            executor
+                    );
+
+            CompletableFuture
+                    .allOf(
+                            agentesFuture,
+                            turnosFuture,
+                            secuenciasFuture,
+                            excepcionesFuture
+                    )
+                    .join();
+
+            return new ProgramacionContextoResponse(
+                    agentesFuture.join()
+                            .stream()
+                            .map(this::toTrabajadorResponse)
+                            .toList(),
+                    turnosFuture.join()
+                            .stream()
+                            .map(this::toProgramacionResponse)
+                            .toList(),
+                    secuenciasFuture.join()
+                            .stream()
+                            .map(this::toSecuenciaResponse)
+                            .toList(),
+                    excepcionesFuture.join()
+                            .stream()
+                            .map(this::toExcepcionResponse)
+                            .toList()
+            );
+        }
+    }
 
 
     /*
@@ -284,6 +381,56 @@ public class ProgramacionController {
                 secuencia.plazaCodigo(),
                 secuencia.grupo(),
                 secuencia.orden()
+        );
+    }
+
+
+    private TrabajadorPublicResponse toTrabajadorResponse(
+            TrabajadorUseCase.TrabajadorData trabajador
+    ) {
+        return new TrabajadorPublicResponse(
+                trabajador.id(),
+                trabajador.codigo(),
+                trabajador.nombreCompleto(),
+                trabajador.puesto() == null
+                        ? null
+                        : new TrabajadorPublicResponse.PuestoResponse(
+                                trabajador.puesto().id(),
+                                trabajador.puesto().nombre()
+                        ),
+                trabajador.plaza() == null
+                        ? null
+                        : new TrabajadorPublicResponse.PlazaResponse(
+                                trabajador.plaza().id(),
+                                trabajador.plaza().codigo(),
+                                trabajador.plaza().descripcion(),
+                                trabajador.plaza().activo()
+                        ),
+                trabajador.rolSistema(),
+                trabajador.requiereCambioPassword(),
+                trabajador.activo()
+        );
+    }
+
+
+    private AgenteProgramacionExcepcionResponse toExcepcionResponse(
+            AgenteProgramacionExcepcionUseCase.Excepcion excepcion
+    ) {
+        return new AgenteProgramacionExcepcionResponse(
+                excepcion.id(),
+                excepcion.trabajadorId(),
+                excepcion.codigoTrabajador(),
+                excepcion.nombreTrabajador(),
+                excepcion.plazaId(),
+                excepcion.plazaCodigo(),
+                excepcion.permiteA(),
+                excepcion.permiteB(),
+                excepcion.permiteC(),
+                excepcion.motivo(),
+                excepcion.color(),
+                excepcion.activo(),
+                excepcion.createdAt(),
+                excepcion.updatedAt()
         );
     }
 
