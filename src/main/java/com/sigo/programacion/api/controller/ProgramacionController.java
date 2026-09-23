@@ -3,17 +3,19 @@ package com.sigo.programacion.api.controller;
 import com.sigo.programacion.application.port.in.AsignarLiderUseCase;
 import com.sigo.programacion.application.port.in.AsignarSecuenciaUseCase;
 import com.sigo.programacion.application.port.in.GuardarOrdenSecuenciaUseCase;
+import com.sigo.programacion.application.port.in.GuardarTurnosUseCase;
 import com.sigo.programacion.application.port.in.ListarLideresUseCase;
+import com.sigo.programacion.application.port.in.ListarTurnosUseCase;
 import com.sigo.programacion.application.port.in.ListarSecuenciasUseCase;
 import com.sigo.programacion.application.service.ProgramacionService;
 import com.sigo.programacion.api.dto.AsignarSecuenciaRequest;
 import com.sigo.programacion.api.dto.GrupoLiderRequest;
 import com.sigo.programacion.api.dto.GrupoLiderResponse;
 import com.sigo.programacion.api.dto.GuardarOrdenSecuenciaRequest;
+import com.sigo.programacion.api.dto.GuardarProgramacionRequest;
+import com.sigo.programacion.api.dto.ProgramacionDiaResponse;
 import com.sigo.programacion.api.dto.SecuenciaAgenteResponse;
-import com.sigo.programacion.application.service.ProgramacionService.GuardarProgramacionRequest;
 import com.sigo.programacion.application.service.ProgramacionService.MiHorarioResponse;
-import com.sigo.programacion.application.service.ProgramacionService.ProgramacionDiaResponse;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +44,10 @@ public class ProgramacionController {
 
     private final AsignarLiderUseCase asignarLiderUseCase;
 
+    private final ListarTurnosUseCase listarTurnosUseCase;
+
+    private final GuardarTurnosUseCase guardarTurnosUseCase;
+
 
     /*
      * ============================================================
@@ -55,11 +61,11 @@ public class ProgramacionController {
             @RequestParam int anio,
             @RequestParam int mes
     ) {
-        return programacionService.listarTurnos(
-                plazaId,
-                anio,
-                mes
-        );
+        return listarTurnosUseCase
+                .listar(plazaId, anio, mes)
+                .stream()
+                .map(this::toProgramacionResponse)
+                .toList();
     }
 
 
@@ -68,9 +74,25 @@ public class ProgramacionController {
             @Valid
             @RequestBody GuardarProgramacionRequest request
     ) {
-        return programacionService.guardarTurnos(
-                request
+        var command = new GuardarTurnosUseCase.Command(
+                request.plazaId(),
+                request.programaciones()
+                        .stream()
+                        .map(item ->
+                                new GuardarTurnosUseCase.Item(
+                                        item.trabajadorId(),
+                                        item.fecha(),
+                                        item.estado()
+                                )
+                        )
+                        .toList()
         );
+
+        return guardarTurnosUseCase
+                .guardar(command)
+                .stream()
+                .map(this::toProgramacionResponse)
+                .toList();
     }
 
 
@@ -183,6 +205,22 @@ public class ProgramacionController {
                                 )
                                 .toList()
                 )
+        );
+    }
+
+
+    private ProgramacionDiaResponse toProgramacionResponse(
+            ListarTurnosUseCase.Turno turno
+    ) {
+        return new ProgramacionDiaResponse(
+                turno.programacionId(),
+                turno.trabajadorId(),
+                turno.codigoTrabajador(),
+                turno.nombreTrabajador(),
+                turno.plazaId(),
+                turno.plazaCodigo(),
+                turno.fecha(),
+                turno.estado()
         );
     }
 
