@@ -2,7 +2,7 @@ package com.sigo.asistencia.application.service;
 
 import com.sigo.asistencia.application.port.out.AsistenciaUsuarioActualPort;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.server.ResponseStatusException;
+import com.sigo.shared.exception.ForbiddenException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -49,7 +49,7 @@ class AsistenciaAccesoServiceTest {
                 );
 
         assertThrows(
-                ResponseStatusException.class,
+                ForbiddenException.class,
                 service::exigirGestion
         );
     }
