@@ -1,13 +1,13 @@
 package com.sigo.asistencia.application.port.out;
 
-import org.springframework.web.multipart.MultipartFile;
+import com.sigo.asistencia.application.port.in.GestionarEvidenciaAsistenciaUseCase;
 
 import java.io.IOException;
 
 public interface AsistenciaStoragePort {
 
     ArchivoSubido subir(
-            MultipartFile archivo,
+            GestionarEvidenciaAsistenciaUseCase.ArchivoEntrada archivo,
             String folder
     ) throws IOException;
 
