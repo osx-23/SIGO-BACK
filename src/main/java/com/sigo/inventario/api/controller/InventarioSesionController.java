@@ -20,16 +20,12 @@ public class InventarioSesionController {
         InventarioUsuarioActual usuario = usuarios.obtenerActual();
 
         return new InventarioUsuarioResponse(
-                usuario.trabajador().getId(),
-                usuario.trabajador().getCodigo(),
-                usuario.trabajador().getNombreCompleto(),
+                usuario.trabajadorId(),
+                usuario.codigo(),
+                usuario.nombre(),
                 usuario.rolCodigo(),
-                usuario.trabajador().getPlaza() != null
-                        ? usuario.trabajador().getPlaza().getId()
-                        : null,
-                usuario.trabajador().getPlaza() != null
-                        ? usuario.trabajador().getPlaza().getCodigo()
-                        : null
+                usuario.plazaId(),
+                usuario.plazaCodigo()
         );
     }
 }
