@@ -76,7 +76,7 @@ public class UbicacionGestionJpaAdapter
         ubicacion.setCodigo(codigo);
         ubicacion.setNombre(nombre);
         ubicacion.setTipo(parseTipo(tipo));
-        ubicacion.setVia(null);
+        ubicacion.setViaId(null);
         ubicacion.setActivo(true);
         ubicacion.setOrden(
                 orden != null && orden > 0
@@ -191,9 +191,7 @@ public class UbicacionGestionJpaAdapter
                 ubicacion.getCodigo(),
                 ubicacion.getNombre(),
                 ubicacion.getTipo().name(),
-                ubicacion.getVia() == null
-                        ? null
-                        : ubicacion.getVia().getId(),
+                ubicacion.getViaId(),
                 ubicacion.getActivo(),
                 ubicacion.getOrden()
         );
