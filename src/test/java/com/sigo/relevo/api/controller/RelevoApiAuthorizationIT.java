@@ -7,6 +7,8 @@ import com.sigo.relevo.application.port.in.ListarViasUseCase;
 import com.sigo.relevo.application.port.in.RelevoAccesoUseCase;
 import com.sigo.relevo.application.port.in.RelevoHistorialUseCase;
 import com.sigo.security.infrastructure.config.SecurityConfig;
+import com.sigo.shared.exception.ConflictException;
+import com.sigo.shared.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -20,12 +22,15 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(
@@ -129,6 +134,68 @@ class RelevoApiAuthorizationIT {
                                 .content("{}")
                 )
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void relevoInexistenteDevuelveNotFound() throws Exception {
+        when(historialUseCase.obtenerPara(
+                isNull(),
+                eq(999L)
+        )).thenThrow(
+                new ResourceNotFoundException(
+                        "Relevo no encontrado"
+                )
+        );
+
+        mockMvc.perform(
+                        get("/api/relevos/999")
+                                .with(jwtRol("CONTROLADOR"))
+                )
+                .andExpect(status().isNotFound())
+                .andExpect(
+                        jsonPath("$.message")
+                                .value("Relevo no encontrado")
+                );
+    }
+
+    @Test
+    void conflictoAlRegistrarDevuelveConflict() throws Exception {
+        when(gestionarUseCase.registrar(isNull()))
+                .thenThrow(
+                        new ConflictException(
+                                "Ya existe un relevo para el turno"
+                        )
+                );
+
+        mockMvc.perform(
+                        post("/api/relevos")
+                                .with(jwtRol("OPERADOR"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "plazaId": 4,
+                                          "turnoId": 1,
+                                          "operadorId": 101,
+                                          "fecha": "2026-09-23",
+                                          "hora": "08:00:00",
+                                          "checklist": [
+                                            {
+                                              "elementoId": 1,
+                                              "estado": "OPERATIVO",
+                                              "cantidad": 1
+                                            }
+                                          ],
+                                          "vias": []
+                                        }
+                                        """)
+                )
+                .andExpect(status().isConflict())
+                .andExpect(
+                        jsonPath("$.message")
+                                .value(
+                                        "Ya existe un relevo para el turno"
+                                )
+                );
     }
 
     private RequestPostProcessor jwtRol(String rol) {
