@@ -438,8 +438,7 @@ class InventarioFlujoJpaIT {
                 iniciado.id()
         );
 
-        assertEquals(
-                new BigDecimal("8.00"),
+        BigDecimal cantidadActualizada =
                 detalle.productos()
                         .stream()
                         .filter(item ->
@@ -448,7 +447,13 @@ class InventarioFlujoJpaIT {
                         )
                         .findFirst()
                         .orElseThrow()
-                        .cantidad()
+                        .cantidad();
+
+        assertEquals(
+                0,
+                cantidadActualizada.compareTo(
+                        new BigDecimal("8.00")
+                )
         );
     }
 
