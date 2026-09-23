@@ -6,6 +6,7 @@ import com.sigo.inventario.api.dto.response.InventarioDetalleItemResponse;
 import com.sigo.inventario.api.dto.response.InventarioDetalleResponse;
 import com.sigo.inventario.api.dto.response.InventarioResumenResponse;
 import com.sigo.inventario.api.dto.response.ProductoInventarioResponse;
+import com.sigo.inventario.application.port.in.IniciarInventarioUseCase;
 import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
 import com.sigo.inventario.application.security.InventarioUsuarioContextService;
@@ -31,13 +32,37 @@ import java.util.List;
 public class InventarioController {
 
     private final InventarioService service;
+    private final IniciarInventarioUseCase iniciarUseCase;
     private final InventarioConsultaUseCase consultaUseCase;
     private final InventarioUsuarioContextService usuarios;
 
     @PostMapping
     public InventarioResumenResponse iniciar() {
-        return service.iniciar(
-                usuarios.obtenerActual()
+        InventarioUsuarioActual actual =
+                usuarios.obtenerActual();
+
+        IniciarInventarioUseCase.Resumen resumen =
+                iniciarUseCase.iniciar(
+                        new IniciarInventarioUseCase.Usuario(
+                                actual.trabajadorId(),
+                                actual.plazaId(),
+                                actual.rolId(),
+                                actual.rolCodigo()
+                        )
+                );
+
+        return new InventarioResumenResponse(
+                resumen.id(),
+                resumen.plazaId(),
+                resumen.plaza(),
+                resumen.responsableId(),
+                resumen.codigoResponsable(),
+                resumen.responsable(),
+                resumen.rol(),
+                resumen.fechaInicio(),
+                resumen.fechaFinalizacion(),
+                resumen.estado(),
+                resumen.productosRegistrados()
         );
     }
 
