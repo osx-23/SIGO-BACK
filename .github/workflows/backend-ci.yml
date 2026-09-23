@@ -127,3 +127,23 @@ jobs:
             echo "chat/domain must remain framework and adapter independent"
             exit 1
           fi
+
+      - name: Verify global clean architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep -R --line-number --include='*.java' -E '^import com\.sigo\..*\.(api|infrastructure)\.' src/main/java/com/sigo/*/application; then
+            echo "application layers must not depend on api or infrastructure"
+            exit 1
+          fi
+
+          if grep -R --line-number --include='*.java' -E '^import (org\.springframework|jakarta\.|com\.sigo\..*\.(api|infrastructure)\.)' src/main/java/com/sigo/*/domain; then
+            echo "domain layers must remain framework and adapter independent"
+            exit 1
+          fi
+
+          if grep -R --line-number --include='*.java' -E '^import com\.sigo\..*\.infrastructure\.persistence\.entity\.' src/main/java/com/sigo/*/api; then
+            echo "api layers must not expose persistence entities"
+            exit 1
+          fi
