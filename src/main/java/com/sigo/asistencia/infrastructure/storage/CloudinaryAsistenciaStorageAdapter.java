@@ -5,7 +5,6 @@ import com.sigo.shared.exception.BusinessException;
 import com.sigo.shared.storage.CloudinaryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Map;
@@ -19,12 +18,13 @@ public class CloudinaryAsistenciaStorageAdapter
 
     @Override
     public ArchivoSubido subir(
-            MultipartFile archivo,
+            GestionarEvidenciaAsistenciaUseCase.ArchivoEntrada archivo,
             String folder
     ) throws IOException {
         Map<String, Object> resultado =
                 cloudinaryService.subirImagen(
-                        archivo,
+                        archivo.contenido(),
+                        archivo.contentType(),
                         folder
                 );
 
