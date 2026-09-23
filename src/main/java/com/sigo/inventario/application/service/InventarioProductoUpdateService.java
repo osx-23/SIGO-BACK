@@ -120,7 +120,7 @@ public class InventarioProductoUpdateService {
         """, plazaBatch);
 
     auditoria.registrar(
-        usuario.trabajador(),
+        usuario.trabajadorId(),
         "PRODUCTO_ACTUALIZADO",
         "INVENTARIO_PRODUCTO",
         id,
