@@ -81,13 +81,13 @@ public class AsistenciaConsultaJpaAdapter
             LocalDate fin,
             Long plazaId
     ) {
-        List<AsistenciaRegistro> registros =
+        List<AsistenciaRepository.HistorialResumen> registros =
                 plazaId == null
-                        ? asistenciaRepository.listarHistorial(
+                        ? asistenciaRepository.listarHistorialResumen(
                                 inicio,
                                 fin
                         )
-                        : asistenciaRepository.listarHistorialPorPlaza(
+                        : asistenciaRepository.listarHistorialPorPlazaResumen(
                                 inicio,
                                 fin,
                                 plazaId
@@ -99,7 +99,7 @@ public class AsistenciaConsultaJpaAdapter
 
         List<Long> ids = registros
                 .stream()
-                .map(AsistenciaRegistro::getId)
+                .map(AsistenciaRepository.HistorialResumen::getId)
                 .toList();
 
         Map<Long, List<ConsultarAsistenciasUseCase.Ausencia>>
@@ -188,6 +188,32 @@ public class AsistenciaConsultaJpaAdapter
                 asistencia.getTurno().getCodigo(),
                 asistencia.getControlador().getId(),
                 asistencia.getControlador().getNombreCompleto(),
+                asistencia.getFecha(),
+                asistencia.getProgramados(),
+                asistencia.getPresentes(),
+                asistencia.getProgramados() - asistencia.getPresentes(),
+                asistencia.getApoyoSolicitado(),
+                asistencia.getDetalleApoyo(),
+                asistencia.getPorcentaje(),
+                asistencia.getNotas(),
+                ausencias,
+                evidencias
+        );
+    }
+
+    private ConsultarAsistenciasUseCase.Asistencia toData(
+            AsistenciaRepository.HistorialResumen asistencia,
+            List<ConsultarAsistenciasUseCase.Ausencia> ausencias,
+            List<ConsultarAsistenciasUseCase.Evidencia> evidencias
+    ) {
+        return new ConsultarAsistenciasUseCase.Asistencia(
+                asistencia.getId(),
+                asistencia.getPlazaId(),
+                asistencia.getPlazaCodigo(),
+                asistencia.getTurnoId(),
+                asistencia.getTurnoCodigo(),
+                asistencia.getControladorId(),
+                asistencia.getControladorNombre(),
                 asistencia.getFecha(),
                 asistencia.getProgramados(),
                 asistencia.getPresentes(),
