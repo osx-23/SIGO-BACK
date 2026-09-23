@@ -2,7 +2,7 @@ package com.sigo.inventario.api.controller;
 
 import com.sigo.inventario.api.dto.response.InventarioUsuarioResponse;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
-import com.sigo.inventario.application.security.InventarioUsuarioContextService;
+import com.sigo.inventario.application.port.in.ObtenerInventarioUsuarioUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class InventarioSesionController {
 
-    private final InventarioUsuarioContextService usuarios;
+    private final ObtenerInventarioUsuarioUseCase usuarios;
 
     @GetMapping("/me")
     public InventarioUsuarioResponse me(
