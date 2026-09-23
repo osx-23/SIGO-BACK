@@ -11,8 +11,23 @@ import java.util.Optional;
 public interface AgenteControladorLiderRepository
         extends JpaRepository<AgenteControladorLider, Long> {
 
+    interface LiderNombreResumen {
+        String getNombreCompleto();
+    }
+
     Optional<AgenteControladorLider>
     findByAgenteIdAndActivoTrue(Long agenteId);
+
+    @Query("""
+        SELECT c.nombreCompleto as nombreCompleto
+        FROM AgenteControladorLider l
+        JOIN l.controlador c
+        WHERE l.agente.id = :agenteId
+          AND l.activo = true
+    """)
+    Optional<LiderNombreResumen> findNombreLiderActivo(
+            @Param("agenteId") Long agenteId
+    );
 
     List<AgenteControladorLider>
     findByControladorIdAndActivoTrue(Long controladorId);
