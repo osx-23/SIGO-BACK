@@ -24,9 +24,7 @@ class IniciarInventarioServiceTest {
         IniciarInventarioService service =
                 new IniciarInventarioService(
                         iniciarPort,
-                        new InventarioAuditoriaService(
-                                auditoriaPort
-                        )
+                        auditoriaPort
                 );
 
         var resumen = service.iniciar(
@@ -51,9 +49,7 @@ class IniciarInventarioServiceTest {
         IniciarInventarioService service =
                 new IniciarInventarioService(
                         iniciarPort,
-                        new InventarioAuditoriaService(
-                                new StubAuditoriaPort()
-                        )
+                        new StubAuditoriaPort()
                 );
 
         assertThrows(
