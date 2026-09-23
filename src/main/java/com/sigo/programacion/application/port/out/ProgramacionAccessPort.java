@@ -9,4 +9,6 @@ public interface ProgramacionAccessPort {
     void validarGestionPlaza(Long plazaId);
 
     Long requireGestionPlazaUsuarioId(Long plazaId);
+
+    Long currentUserId();
 }
