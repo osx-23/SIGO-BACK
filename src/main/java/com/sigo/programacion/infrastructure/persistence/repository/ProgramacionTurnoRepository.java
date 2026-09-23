@@ -25,6 +25,20 @@ public interface ProgramacionTurnoRepository
         EstadoProgramacion getEstado();
     }
 
+    interface HorarioCompletoResumen {
+        Long getTrabajadorId();
+        Integer getCodigoTrabajador();
+        String getNombreTrabajador();
+        Long getPlazaId();
+        String getPlazaCodigo();
+        Long getProgramacionId();
+        LocalDate getFecha();
+        EstadoProgramacion getEstado();
+        String getUbicacionCodigo();
+        String getUbicacionNombre();
+        String getLiderNombre();
+    }
+
     Optional<ProgramacionTurno>
     findByTrabajadorIdAndFecha(
             Long trabajadorId,
@@ -55,6 +69,46 @@ public interface ProgramacionTurnoRepository
     """)
     List<TurnoResumen> findMesResumen(
             @Param("plazaId") Long plazaId,
+            @Param("desde") LocalDate desde,
+            @Param("hasta") LocalDate hasta
+    );
+
+    /*
+     * Lectura completa de "Mi horario" en una sola consulta.
+     *
+     * La consulta parte del trabajador para conservar sus datos incluso
+     * cuando no tenga programación dentro del rango solicitado.
+     */
+    @Query("""
+        select
+            t.id as trabajadorId,
+            t.codigo as codigoTrabajador,
+            t.nombreCompleto as nombreTrabajador,
+            pl.id as plazaId,
+            pl.codigo as plazaCodigo,
+            p.id as programacionId,
+            p.fecha as fecha,
+            p.estado as estado,
+            u.codigo as ubicacionCodigo,
+            u.nombre as ubicacionNombre,
+            c.nombreCompleto as liderNombre
+        from Trabajador t
+        left join t.plaza pl
+        left join ProgramacionTurno p
+            on p.trabajador = t
+           and p.fecha between :desde and :hasta
+        left join DistribucionPersonal d
+            on d.programacionTurno = p
+        left join d.ubicacion u
+        left join AgenteControladorLider l
+            on l.agente = t
+           and l.activo = true
+        left join l.controlador c
+        where t.id = :trabajadorId
+        order by p.fecha asc
+    """)
+    List<HorarioCompletoResumen> findHorarioCompleto(
+            @Param("trabajadorId") Long trabajadorId,
             @Param("desde") LocalDate desde,
             @Param("hasta") LocalDate hasta
     );
