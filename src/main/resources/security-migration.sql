@@ -23,6 +23,6 @@ alter table public.trabajadores
     alter column rol_sistema set not null;
 
 -- password_hash queda NULL mientras se habilitan cuentas gradualmente.
--- AuthService rechaza el login de cualquier trabajador sin password_hash.
+-- El flujo de autenticación rechaza el login de cualquier trabajador sin password_hash.
 -- Cuando TODOS los usuarios tengan contraseña:
 -- alter table public.trabajadores alter column password_hash set not null;
