@@ -10,10 +10,10 @@ import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionUbica
 import com.sigo.programacion.infrastructure.persistence.repository.DistribucionPersonalRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionTurnoRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionUbicacionRepository;
+import com.sigo.shared.exception.BusinessException;
+import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -304,17 +304,11 @@ public class DistribucionGestionJpaAdapter
         );
     }
 
-    private ResponseStatusException bad(String message) {
-        return new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                message
-        );
+    private BusinessException bad(String message) {
+        return new BusinessException(message);
     }
 
-    private ResponseStatusException notFound(String message) {
-        return new ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                message
-        );
+    private ResourceNotFoundException notFound(String message) {
+        return new ResourceNotFoundException(message);
     }
 }
