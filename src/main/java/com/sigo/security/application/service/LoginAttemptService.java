@@ -1,8 +1,7 @@
 package com.sigo.security.application.service;
 
-import org.springframework.http.HttpStatus;
+import com.sigo.shared.exception.TooManyRequestsException;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -25,9 +24,10 @@ public class LoginAttemptService {
         synchronized (estado) {
             if (estado.bloqueadoHasta != null && ahora.isBefore(estado.bloqueadoHasta)) {
                 long segundos = Duration.between(ahora, estado.bloqueadoHasta).toSeconds();
-                throw new ResponseStatusException(
-                        HttpStatus.TOO_MANY_REQUESTS,
-                        "Demasiados intentos fallidos. Intenta nuevamente en " + Math.max(1, segundos / 60) + " minuto(s)."
+                throw new TooManyRequestsException(
+                        "Demasiados intentos fallidos. Intenta nuevamente en "
+                                + Math.max(1, segundos / 60)
+                                + " minuto(s)."
                 );
             }
 
