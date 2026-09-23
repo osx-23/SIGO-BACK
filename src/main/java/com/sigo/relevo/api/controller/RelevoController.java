@@ -2,9 +2,16 @@ package com.sigo.relevo.api.controller;
 
 import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
 import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
-import com.sigo.relevo.api.dto.*;
-import com.sigo.relevo.application.service.RelevoHistorialAccesoService;
-import com.sigo.relevo.application.service.RelevoService;
+import com.sigo.relevo.api.dto.ElementoRelevoResponse;
+import com.sigo.relevo.api.dto.EvidenciaRelevoResponse;
+import com.sigo.relevo.api.dto.RelevoChecklistResponse;
+import com.sigo.relevo.api.dto.RelevoRequest;
+import com.sigo.relevo.api.dto.RelevoResponse;
+import com.sigo.relevo.api.dto.RelevoViaResponse;
+import com.sigo.relevo.application.port.in.ConsultarRelevosUseCase;
+import com.sigo.relevo.application.port.in.GestionarEvidenciaRelevoUseCase;
+import com.sigo.relevo.application.port.in.GestionarRelevoUseCase;
+import com.sigo.relevo.application.port.in.RelevoHistorialUseCase;
 import com.sigo.security.application.service.CurrentUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,70 +30,309 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RelevoController {
 
-    private final RelevoService service;
-    private final RelevoHistorialAccesoService historialAccesoService;
+    private final ConsultarRelevosUseCase consultaUseCase;
+    private final GestionarRelevoUseCase gestionarUseCase;
+    private final GestionarEvidenciaRelevoUseCase evidenciaUseCase;
+    private final RelevoHistorialUseCase historialUseCase;
     private final CurrentUserService currentUserService;
 
     @GetMapping("/elementos")
     public List<ElementoRelevoResponse> elementos() {
-        return service.listarElementos();
+        return consultaUseCase
+                .listarElementos()
+                .stream()
+                .map(elemento ->
+                        new ElementoRelevoResponse(
+                                elemento.id(),
+                                elemento.codigo(),
+                                elemento.nombre(),
+                                elemento.categoria(),
+                                elemento.requiereCantidad(),
+                                elemento.orden()
+                        )
+                )
+                .toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public RelevoResponse registrar(@Valid @RequestBody RelevoRequest request) {
-        return service.registrar(asegurarIdentidadOperador(request));
+    public RelevoResponse registrar(
+            @Valid @RequestBody RelevoRequest request
+    ) {
+        RelevoRequest seguro =
+                asegurarIdentidadOperador(request);
+
+        return toResponse(
+                gestionarUseCase.registrar(
+                        toCommand(seguro)
+                )
+        );
     }
 
     @PutMapping("/{id}")
-    public RelevoResponse actualizar(@PathVariable Long id, @Valid @RequestBody RelevoRequest request) {
-        Trabajador actual = currentUserService.requireCurrent();
+    public RelevoResponse actualizar(
+            @PathVariable Long id,
+            @Valid @RequestBody RelevoRequest request
+    ) {
+        Trabajador actual =
+                currentUserService.requireCurrent();
+
         if (actual.getRolSistema() == RolSistema.OPERADOR) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Los operadores solo pueden consultar el historial de relevos");
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Los operadores solo pueden consultar el historial de relevos"
+            );
         }
-        return service.actualizar(id, request);
+
+        return toResponse(
+                gestionarUseCase.actualizar(
+                        id,
+                        toCommand(request)
+                )
+        );
     }
 
     @GetMapping("/{id}")
-    public RelevoResponse obtener(@PathVariable Long id) {
-        Trabajador actual = currentUserService.requireCurrent();
-        return historialAccesoService.obtenerPara(actual, id);
+    public RelevoResponse obtener(
+            @PathVariable Long id
+    ) {
+        return toResponse(
+                historialUseCase.obtenerPara(
+                        usuarioActual(),
+                        id
+                )
+        );
     }
 
     @GetMapping
     public List<RelevoResponse> listar(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
-        Trabajador actual = currentUserService.requireCurrent();
-        return historialAccesoService.listarPara(actual, inicio, fin);
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate inicio,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate fin
+    ) {
+        return historialUseCase
+                .listarPara(
+                        usuarioActual(),
+                        inicio,
+                        fin
+                )
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    @PostMapping(value = "/checklist/{checklistId}/evidencias", consumes = "multipart/form-data")
+    @PostMapping(
+            value = "/checklist/{checklistId}/evidencias",
+            consumes = "multipart/form-data"
+    )
     @ResponseStatus(HttpStatus.CREATED)
-    public EvidenciaRelevoResponse evidenciaChecklist(@PathVariable Long checklistId, @RequestParam("file") MultipartFile file) throws IOException {
-        return service.subirEvidenciaChecklist(checklistId, file);
+    public EvidenciaRelevoResponse evidenciaChecklist(
+            @PathVariable Long checklistId,
+            @RequestParam("file") MultipartFile file
+    ) throws IOException {
+        return toEvidenciaResponse(
+                evidenciaUseCase.guardarChecklist(
+                        checklistId,
+                        archivo(file)
+                )
+        );
     }
 
-    @DeleteMapping("/checklist/{checklistId}/evidencias/{evidenciaId}")
+    @DeleteMapping(
+            "/checklist/{checklistId}/evidencias/{evidenciaId}"
+    )
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void eliminarEvidenciaChecklist(@PathVariable Long checklistId, @PathVariable Long evidenciaId) throws IOException {
-        service.eliminarEvidenciaChecklist(checklistId, evidenciaId);
+    public void eliminarEvidenciaChecklist(
+            @PathVariable Long checklistId,
+            @PathVariable Long evidenciaId
+    ) throws IOException {
+        evidenciaUseCase.eliminarChecklist(
+                checklistId,
+                evidenciaId
+        );
     }
 
-    @PostMapping(value = "/vias/{relevoViaId}/evidencias", consumes = "multipart/form-data")
+    @PostMapping(
+            value = "/vias/{relevoViaId}/evidencias",
+            consumes = "multipart/form-data"
+    )
     @ResponseStatus(HttpStatus.CREATED)
-    public EvidenciaRelevoResponse evidenciaVia(@PathVariable Long relevoViaId, @RequestParam("file") MultipartFile file) throws IOException {
-        return service.subirEvidenciaVia(relevoViaId, file);
+    public EvidenciaRelevoResponse evidenciaVia(
+            @PathVariable Long relevoViaId,
+            @RequestParam("file") MultipartFile file
+    ) throws IOException {
+        return toEvidenciaResponse(
+                evidenciaUseCase.guardarVia(
+                        relevoViaId,
+                        archivo(file)
+                )
+        );
     }
 
-    @DeleteMapping("/vias/{relevoViaId}/evidencias/{evidenciaId}")
+    @DeleteMapping(
+            "/vias/{relevoViaId}/evidencias/{evidenciaId}"
+    )
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void eliminarEvidenciaVia(@PathVariable Long relevoViaId, @PathVariable Long evidenciaId) throws IOException {
-        service.eliminarEvidenciaVia(relevoViaId, evidenciaId);
+    public void eliminarEvidenciaVia(
+            @PathVariable Long relevoViaId,
+            @PathVariable Long evidenciaId
+    ) throws IOException {
+        evidenciaUseCase.eliminarVia(
+                relevoViaId,
+                evidenciaId
+        );
     }
 
-    private RelevoRequest asegurarIdentidadOperador(RelevoRequest request) {
-        Trabajador actual = currentUserService.requireCurrent();
+    private GestionarRelevoUseCase.Command toCommand(
+            RelevoRequest request
+    ) {
+        return new GestionarRelevoUseCase.Command(
+                request.plazaId(),
+                request.turnoId(),
+                request.operadorId(),
+                request.fecha(),
+                request.hora(),
+                request.observaciones(),
+                request.resumen(),
+                request.checklist()
+                        .stream()
+                        .map(item ->
+                                new GestionarRelevoUseCase.ChecklistItem(
+                                        item.elementoId(),
+                                        item.estado(),
+                                        item.detalle(),
+                                        item.cantidad()
+                                )
+                        )
+                        .toList(),
+                request.vias() == null
+                        ? List.of()
+                        : request.vias()
+                                .stream()
+                                .map(item ->
+                                        new GestionarRelevoUseCase.ViaItem(
+                                                item.viaId(),
+                                                item.estado(),
+                                                item.detalle()
+                                        )
+                                )
+                                .toList()
+        );
+    }
+
+    private RelevoResponse toResponse(
+            ConsultarRelevosUseCase.Relevo relevo
+    ) {
+        return new RelevoResponse(
+                relevo.id(),
+                relevo.plazaId(),
+                relevo.plazaCodigo(),
+                relevo.plazaDescripcion(),
+                relevo.turnoId(),
+                relevo.turnoCodigo(),
+                relevo.turnoNombre(),
+                relevo.operadorId(),
+                relevo.operadorCodigo(),
+                relevo.operadorNombre(),
+                relevo.fecha(),
+                relevo.hora(),
+                relevo.observaciones(),
+                relevo.resumen(),
+                relevo.createdAt(),
+                relevo.updatedAt(),
+                relevo.checklist()
+                        .stream()
+                        .map(item ->
+                                new RelevoChecklistResponse(
+                                        item.id(),
+                                        item.elementoId(),
+                                        item.codigo(),
+                                        item.nombre(),
+                                        item.categoria(),
+                                        item.estado(),
+                                        item.detalle(),
+                                        item.cantidad(),
+                                        item.evidencias()
+                                                .stream()
+                                                .map(this::toEvidenciaResponse)
+                                                .toList()
+                                )
+                        )
+                        .toList(),
+                relevo.vias()
+                        .stream()
+                        .map(item ->
+                                new RelevoViaResponse(
+                                        item.id(),
+                                        item.viaId(),
+                                        item.numero(),
+                                        item.nombre(),
+                                        item.estado(),
+                                        item.detalle(),
+                                        item.evidencias()
+                                                .stream()
+                                                .map(this::toEvidenciaResponse)
+                                                .toList()
+                                )
+                        )
+                        .toList()
+        );
+    }
+
+    private EvidenciaRelevoResponse toEvidenciaResponse(
+            ConsultarRelevosUseCase.Evidencia evidencia
+    ) {
+        return new EvidenciaRelevoResponse(
+                evidencia.id(),
+                evidencia.urlArchivo(),
+                evidencia.publicId(),
+                evidencia.tipo(),
+                evidencia.createdAt()
+        );
+    }
+
+    private EvidenciaRelevoResponse toEvidenciaResponse(
+            GestionarEvidenciaRelevoUseCase.Evidencia evidencia
+    ) {
+        return new EvidenciaRelevoResponse(
+                evidencia.id(),
+                evidencia.urlArchivo(),
+                evidencia.publicId(),
+                evidencia.tipo(),
+                evidencia.createdAt()
+        );
+    }
+
+    private GestionarEvidenciaRelevoUseCase.ArchivoEntrada archivo(
+            MultipartFile file
+    ) throws IOException {
+        return new GestionarEvidenciaRelevoUseCase.ArchivoEntrada(
+                file.getOriginalFilename(),
+                file.getContentType(),
+                file.getBytes()
+        );
+    }
+
+    private RelevoHistorialUseCase.Usuario usuarioActual() {
+        Trabajador actual =
+                currentUserService.requireCurrent();
+
+        return new RelevoHistorialUseCase.Usuario(
+                actual.getRolSistema().name(),
+                actual.getPlaza() == null
+                        ? null
+                        : actual.getPlaza().getId()
+        );
+    }
+
+    private RelevoRequest asegurarIdentidadOperador(
+            RelevoRequest request
+    ) {
+        Trabajador actual =
+                currentUserService.requireCurrent();
 
         if (actual.getRolSistema() != RolSistema.OPERADOR) {
             return request;
