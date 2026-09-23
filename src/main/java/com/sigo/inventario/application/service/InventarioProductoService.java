@@ -188,7 +188,7 @@ public class InventarioProductoService {
 
 
     auditoria.registrar(
-            usuario.trabajador(),
+            usuario.trabajadorId(),
             "PRODUCTO_CREADO",
             "INVENTARIO_PRODUCTO",
             producto.getId(),
@@ -307,7 +307,7 @@ public class InventarioProductoService {
 
 
     auditoria.registrar(
-            usuario.trabajador(),
+            usuario.trabajadorId(),
             "PRODUCTO_ACTUALIZADO",
             "INVENTARIO_PRODUCTO",
             producto.getId(),
@@ -376,7 +376,7 @@ public class InventarioProductoService {
 
 
     auditoria.registrar(
-            usuario.trabajador(),
+            usuario.trabajadorId(),
             activo
                     ? "PRODUCTO_ACTIVADO"
                     : "PRODUCTO_DESACTIVADO",
