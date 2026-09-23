@@ -32,9 +32,7 @@ class GuardarConteoInventarioServiceTest {
                         detallePort,
                         (productoId, rolId, plazaId) -> true,
                         new StubConsultaUseCase(),
-                        new InventarioAuditoriaService(
-                                auditoriaPort
-                        )
+                        auditoriaPort
                 );
 
         var resultado = service.guardar(
@@ -66,9 +64,7 @@ class GuardarConteoInventarioServiceTest {
                         new StubDetallePort(),
                         (productoId, rolId, plazaId) -> true,
                         new StubConsultaUseCase(),
-                        new InventarioAuditoriaService(
-                                new StubAuditoriaPort()
-                        )
+                        new StubAuditoriaPort()
                 );
 
         assertThrows(
