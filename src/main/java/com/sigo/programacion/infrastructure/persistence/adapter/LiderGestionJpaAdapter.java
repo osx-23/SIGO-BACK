@@ -9,10 +9,9 @@ import com.sigo.programacion.application.port.in.ListarLideresUseCase;
 import com.sigo.programacion.application.port.out.LiderGestionPort;
 import com.sigo.programacion.infrastructure.persistence.entity.AgenteControladorLider;
 import com.sigo.programacion.infrastructure.persistence.repository.AgenteControladorLiderRepository;
+import com.sigo.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -139,10 +138,7 @@ public class LiderGestionJpaAdapter
         );
     }
 
-    private ResponseStatusException bad(String message) {
-        return new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                message
-        );
+    private BusinessException bad(String message) {
+        return new BusinessException(message);
     }
 }
