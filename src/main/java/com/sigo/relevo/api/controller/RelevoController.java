@@ -1,7 +1,5 @@
 package com.sigo.relevo.api.controller;
 
-import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
-import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
 import com.sigo.relevo.api.dto.ElementoRelevoResponse;
 import com.sigo.relevo.api.dto.EvidenciaRelevoResponse;
 import com.sigo.relevo.api.dto.RelevoChecklistResponse;
@@ -11,15 +9,14 @@ import com.sigo.relevo.api.dto.RelevoViaResponse;
 import com.sigo.relevo.application.port.in.ConsultarRelevosUseCase;
 import com.sigo.relevo.application.port.in.GestionarEvidenciaRelevoUseCase;
 import com.sigo.relevo.application.port.in.GestionarRelevoUseCase;
+import com.sigo.relevo.application.port.in.RelevoAccesoUseCase;
 import com.sigo.relevo.application.port.in.RelevoHistorialUseCase;
-import com.sigo.security.application.service.CurrentUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -34,7 +31,7 @@ public class RelevoController {
     private final GestionarRelevoUseCase gestionarUseCase;
     private final GestionarEvidenciaRelevoUseCase evidenciaUseCase;
     private final RelevoHistorialUseCase historialUseCase;
-    private final CurrentUserService currentUserService;
+    private final RelevoAccesoUseCase accesoUseCase;
 
     @GetMapping("/elementos")
     public List<ElementoRelevoResponse> elementos() {
@@ -59,12 +56,11 @@ public class RelevoController {
     public RelevoResponse registrar(
             @Valid @RequestBody RelevoRequest request
     ) {
-        RelevoRequest seguro =
-                asegurarIdentidadOperador(request);
-
         return toResponse(
                 gestionarUseCase.registrar(
-                        toCommand(seguro)
+                        accesoUseCase.prepararRegistro(
+                                toCommand(request)
+                        )
                 )
         );
     }
@@ -74,15 +70,7 @@ public class RelevoController {
             @PathVariable Long id,
             @Valid @RequestBody RelevoRequest request
     ) {
-        Trabajador actual =
-                currentUserService.requireCurrent();
-
-        if (actual.getRolSistema() == RolSistema.OPERADOR) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Los operadores solo pueden consultar el historial de relevos"
-            );
-        }
+        accesoUseCase.exigirPuedeActualizar();
 
         return toResponse(
                 gestionarUseCase.actualizar(
@@ -98,7 +86,7 @@ public class RelevoController {
     ) {
         return toResponse(
                 historialUseCase.obtenerPara(
-                        usuarioActual(),
+                        accesoUseCase.usuarioActual(),
                         id
                 )
         );
@@ -115,7 +103,7 @@ public class RelevoController {
     ) {
         return historialUseCase
                 .listarPara(
-                        usuarioActual(),
+                        accesoUseCase.usuarioActual(),
                         inicio,
                         fin
                 )
@@ -313,48 +301,6 @@ public class RelevoController {
                 file.getOriginalFilename(),
                 file.getContentType(),
                 file.getBytes()
-        );
-    }
-
-    private RelevoHistorialUseCase.Usuario usuarioActual() {
-        Trabajador actual =
-                currentUserService.requireCurrent();
-
-        return new RelevoHistorialUseCase.Usuario(
-                actual.getRolSistema().name(),
-                actual.getPlaza() == null
-                        ? null
-                        : actual.getPlaza().getId()
-        );
-    }
-
-    private RelevoRequest asegurarIdentidadOperador(
-            RelevoRequest request
-    ) {
-        Trabajador actual =
-                currentUserService.requireCurrent();
-
-        if (actual.getRolSistema() != RolSistema.OPERADOR) {
-            return request;
-        }
-
-        if (actual.getPlaza() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "El operador no tiene una plaza asignada"
-            );
-        }
-
-        return new RelevoRequest(
-                actual.getPlaza().getId(),
-                request.turnoId(),
-                actual.getId(),
-                request.fecha(),
-                request.hora(),
-                request.observaciones(),
-                request.resumen(),
-                request.checklist(),
-                request.vias()
         );
     }
 }
