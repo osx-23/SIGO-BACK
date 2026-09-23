@@ -2,10 +2,9 @@ package com.sigo.programacion.infrastructure.security;
 
 import com.sigo.programacion.application.port.out.ProgramacionAccessPort;
 import com.sigo.security.application.port.in.UsuarioActualUseCase;
+import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Objects;
 
@@ -22,10 +21,7 @@ public class ProgramacionAccessAdapter
                 usuarioActualUseCase.requireActual();
 
         if (!"SUPERVISOR".equals(actual.rol())) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Solo el Supervisor puede realizar esta operación"
-            );
+            throw new ForbiddenException("Solo el Supervisor puede realizar esta operación");
         }
 
         return actual.id();
@@ -41,17 +37,11 @@ public class ProgramacionAccessAdapter
         }
 
         if (!"CONTROLADOR".equals(actual.rol())) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "No tienes acceso a la programación mensual"
-            );
+            throw new ForbiddenException("No tienes acceso a la programación mensual");
         }
 
         if (!Objects.equals(actual.plazaId(), plazaId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Solo puedes consultar tu propia plaza"
-            );
+            throw new ForbiddenException("Solo puedes consultar tu propia plaza");
         }
     }
 
@@ -65,17 +55,11 @@ public class ProgramacionAccessAdapter
         }
 
         if (!"CONTROLADOR".equals(actual.rol())) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Solo Supervisor o Controlador puede gestionar la distribución"
-            );
+            throw new ForbiddenException("Solo Supervisor o Controlador puede gestionar la distribución");
         }
 
         if (!Objects.equals(actual.plazaId(), plazaId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "El controlador solo puede gestionar su propia plaza"
-            );
+            throw new ForbiddenException("El controlador solo puede gestionar su propia plaza");
         }
     }
 
