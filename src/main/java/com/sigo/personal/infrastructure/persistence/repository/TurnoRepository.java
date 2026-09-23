@@ -1,0 +1,1 @@
+package com.sigo.personal.infrastructure.persistence.repository; import com.sigo.personal.infrastructure.persistence.entity.Turno; import org.springframework.data.jpa.repository.JpaRepository; public interface TurnoRepository extends JpaRepository<Turno,Long>{}

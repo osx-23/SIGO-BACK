@@ -1,0 +1,1 @@
+package com.sigo.asistencia.infrastructure.persistence.repository; import com.sigo.asistencia.infrastructure.persistence.entity.MotivoAusencia; import org.springframework.data.jpa.repository.JpaRepository; public interface MotivoAusenciaRepository extends JpaRepository<MotivoAusencia,Long>{}
