@@ -6,11 +6,12 @@ import com.sigo.inventario.application.port.out.InventarioConsultaPort;
 import com.sigo.inventario.application.port.out.InventarioDetalleGestionPort;
 import com.sigo.inventario.application.port.out.InventarioProductoVisibilidadPort;
 import com.sigo.inventario.domain.InventarioEstado;
+import com.sigo.shared.exception.BusinessException;
+import com.sigo.shared.exception.ConflictException;
+import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.HashSet;
@@ -40,16 +41,12 @@ public class GuardarConteoInventarioService
                 || usuario.trabajadorId() == null
                 || usuario.plazaId() == null
                 || usuario.rolId() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Usuario de inventario inválido"
+            throw new ForbiddenException("Usuario de inventario inválido"
             );
         }
 
         if (productos == null || productos.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Debe registrar al menos un producto"
+            throw new BusinessException("Debe registrar al menos un producto"
             );
         }
 
@@ -59,17 +56,13 @@ public class GuardarConteoInventarioService
         if (!inventario.responsableId().equals(
                 usuario.trabajadorId()
         )) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "El inventario pertenece a otro trabajador"
+            throw new ForbiddenException("El inventario pertenece a otro trabajador"
             );
         }
 
         if (inventario.estado()
                 != InventarioEstado.EN_PROCESO) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Solo se puede editar un inventario EN_PROCESO"
+            throw new ConflictException("Solo se puede editar un inventario EN_PROCESO"
             );
         }
 
@@ -77,32 +70,24 @@ public class GuardarConteoInventarioService
 
         for (Item item : productos) {
             if (item == null || item.productoId() == null) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Producto inválido"
+                throw new BusinessException("Producto inválido"
                 );
             }
 
             if (!ids.add(item.productoId())) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Producto repetido"
+                throw new BusinessException("Producto repetido"
                 );
             }
 
             if (item.cantidad() == null) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "La cantidad es obligatoria"
+                throw new BusinessException("La cantidad es obligatoria"
                 );
             }
 
             if (item.cantidad().compareTo(
                     BigDecimal.ZERO
             ) < 0) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "La cantidad no puede ser negativa"
+                throw new BusinessException("La cantidad no puede ser negativa"
                 );
             }
 
@@ -113,9 +98,7 @@ public class GuardarConteoInventarioService
             );
 
             if (!visible) {
-                throw new ResponseStatusException(
-                        HttpStatus.FORBIDDEN,
-                        "Producto no autorizado para el rol o plaza"
+                throw new ForbiddenException("Producto no autorizado para el rol o plaza"
                 );
             }
         }
