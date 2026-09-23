@@ -25,6 +25,16 @@ public class GlobalExceptionHandler {
   return build(HttpStatus.BAD_REQUEST, e.getMessage());
  }
 
+ @ExceptionHandler(ForbiddenException.class)
+ ResponseEntity<Map<String, Object>> forbidden(ForbiddenException e) {
+  return build(HttpStatus.FORBIDDEN, e.getMessage());
+ }
+
+ @ExceptionHandler(TooManyRequestsException.class)
+ ResponseEntity<Map<String, Object>> tooMany(TooManyRequestsException e) {
+  return build(HttpStatus.TOO_MANY_REQUESTS, e.getMessage());
+ }
+
  @ExceptionHandler(MethodArgumentNotValidException.class)
  ResponseEntity<Map<String, Object>> val(MethodArgumentNotValidException e) {
 
