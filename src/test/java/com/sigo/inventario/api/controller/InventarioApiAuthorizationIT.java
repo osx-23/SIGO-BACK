@@ -122,7 +122,7 @@ class InventarioApiAuthorizationIT {
                 .andExpect(jsonPath("$.trabajadorId").value(101))
                 .andExpect(jsonPath("$.codigo").value(9301))
                 .andExpect(jsonPath("$.rol").value("AGENTE"))
-                .andExpect(jsonPath("$.plazaCodigo").value("P4"));
+                .andExpect(jsonPath("$.plaza").value("P4"));
     }
 
     @Test
