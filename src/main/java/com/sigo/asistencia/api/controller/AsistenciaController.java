@@ -4,11 +4,11 @@ import com.sigo.asistencia.api.dto.AsistenciaRequest;
 import com.sigo.asistencia.api.dto.AsistenciaResponse;
 import com.sigo.asistencia.api.dto.AsistenciaUpdateRequest;
 import com.sigo.asistencia.api.dto.EvidenciaResponse;
-import com.sigo.asistencia.application.service.AsistenciaExcepcionService;
 import com.sigo.asistencia.application.port.in.ConsultarAsistenciasUseCase;
 import com.sigo.asistencia.application.port.in.GestionarAsistenciaUseCase;
 import com.sigo.asistencia.application.port.in.GestionarEvidenciaAsistenciaUseCase;
 import com.sigo.asistencia.application.port.in.ObtenerProgramadosAsistenciaUseCase;
+import com.sigo.asistencia.application.port.in.RegistrarAsistenciaExcepcionUseCase;
 import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
 import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
 import com.sigo.security.application.service.CurrentUserService;
@@ -35,7 +35,7 @@ public class AsistenciaController {
     private final GestionarAsistenciaUseCase gestionarUseCase;
     private final GestionarEvidenciaAsistenciaUseCase evidenciaUseCase;
     private final ConsultarAsistenciasUseCase consultaUseCase;
-    private final AsistenciaExcepcionService asistenciaExcepcionService;
+    private final RegistrarAsistenciaExcepcionUseCase asistenciaExcepcionUseCase;
     private final ObtenerProgramadosAsistenciaUseCase programacionService;
     private final CurrentUserService currentUserService;
 
@@ -48,7 +48,11 @@ public class AsistenciaController {
 
         if (excepcionControlador) {
             return ResponseEntity.ok(
-                    asistenciaExcepcionService.registrar(request)
+                    toResponse(
+                            asistenciaExcepcionUseCase.registrar(
+                                    toCommand(request)
+                            )
+                    )
             );
         }
 
