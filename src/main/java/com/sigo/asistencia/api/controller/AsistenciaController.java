@@ -6,6 +6,7 @@ import com.sigo.asistencia.api.dto.AsistenciaUpdateRequest;
 import com.sigo.asistencia.api.dto.EvidenciaResponse;
 import com.sigo.asistencia.application.service.AsistenciaExcepcionService;
 import com.sigo.asistencia.application.port.in.ConsultarAsistenciasUseCase;
+import com.sigo.asistencia.application.port.in.GestionarEvidenciaAsistenciaUseCase;
 import com.sigo.asistencia.application.port.in.ObtenerProgramadosAsistenciaUseCase;
 import com.sigo.asistencia.application.service.AsistenciaService;
 import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
@@ -32,6 +33,7 @@ import java.util.Map;
 public class AsistenciaController {
 
     private final AsistenciaService asistenciaService;
+    private final GestionarEvidenciaAsistenciaUseCase evidenciaUseCase;
     private final ConsultarAsistenciasUseCase consultaUseCase;
     private final AsistenciaExcepcionService asistenciaExcepcionService;
     private final ObtenerProgramadosAsistenciaUseCase programacionService;
@@ -120,7 +122,14 @@ public class AsistenciaController {
             @RequestParam("tipo") String tipo
     ) throws IOException {
         exigirRolAsistencia();
-        return ResponseEntity.ok(asistenciaService.guardarEvidencia(id, file, tipo));
+        var evidencia = evidenciaUseCase.guardar(id, file, tipo);
+        return ResponseEntity.ok(
+                new EvidenciaResponse(
+                        evidencia.id(),
+                        evidencia.urlArchivo(),
+                        evidencia.tipo()
+                )
+        );
     }
 
     @DeleteMapping("/{asistenciaId}/evidencias/{evidenciaId}")
@@ -129,7 +138,7 @@ public class AsistenciaController {
             @PathVariable Long evidenciaId
     ) throws IOException {
         exigirRolAsistencia();
-        asistenciaService.eliminarEvidencia(asistenciaId, evidenciaId);
+        evidenciaUseCase.eliminar(asistenciaId, evidenciaId);
         return ResponseEntity.noContent().build();
     }
 
