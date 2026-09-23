@@ -1,27 +1,41 @@
 package com.sigo.inventario.application.service;
-import com.sigo.inventario.api.dto.response.CatalogoItemResponse;
-import com.sigo.inventario.infrastructure.persistence.repository.*;
-import com.sigo.personal.infrastructure.persistence.repository.PlazaRepository;
+
+import com.sigo.inventario.application.port.in.InventarioCatalogoUseCase;
+import com.sigo.inventario.application.port.out.InventarioCatalogoQueryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
-@Service @RequiredArgsConstructor
-public class InventarioCatalogoService {
-  private final InventarioCategoriaRepository categorias;
-  private final InventarioAmbitoRepository ambitos;
-  private final InventarioRolRepository roles;
-  private final PlazaRepository plazas;
-  @Transactional(readOnly=true) public List<CatalogoItemResponse> categorias(){
-    return categorias.findByActivoTrueOrderByNombreAsc().stream().map(x->new CatalogoItemResponse(x.getId(),null,x.getNombre())).toList();
-  }
-  @Transactional(readOnly=true) public List<CatalogoItemResponse> ambitos(){
-    return ambitos.findByActivoTrueOrderByNombreAsc().stream().map(x->new CatalogoItemResponse(x.getId(),x.getCodigo(),x.getNombre())).toList();
-  }
-  @Transactional(readOnly=true) public List<CatalogoItemResponse> roles(){
-    return roles.findByActivoTrueOrderByNombreAsc().stream().map(x->new CatalogoItemResponse(x.getId(),x.getCodigo(),x.getNombre())).toList();
-  }
-  @Transactional(readOnly=true) public List<CatalogoItemResponse> plazas(){
-    return plazas.findByActivoTrueOrderByCodigoAsc().stream().map(x->new CatalogoItemResponse(x.getId(),x.getCodigo(),x.getDescripcion())).toList();
-  }
+
+@Service
+@RequiredArgsConstructor
+public class InventarioCatalogoService
+        implements InventarioCatalogoUseCase {
+
+    private final InventarioCatalogoQueryPort queryPort;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Item> categorias() {
+        return queryPort.categorias();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Item> ambitos() {
+        return queryPort.ambitos();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Item> roles() {
+        return queryPort.roles();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Item> plazas() {
+        return queryPort.plazas();
+    }
 }
