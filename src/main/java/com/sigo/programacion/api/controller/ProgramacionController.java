@@ -1,5 +1,6 @@
 package com.sigo.programacion.api.controller;
 
+import com.sigo.programacion.application.port.in.GuardarOrdenSecuenciaUseCase;
 import com.sigo.programacion.application.service.ProgramacionService;
 import com.sigo.programacion.application.service.ProgramacionService.AsignarSecuenciaRequest;
 import com.sigo.programacion.application.service.ProgramacionService.GrupoLiderRequest;
@@ -26,6 +27,8 @@ import java.util.List;
 public class ProgramacionController {
 
     private final ProgramacionService programacionService;
+
+    private final GuardarOrdenSecuenciaUseCase guardarOrdenSecuenciaUseCase;
 
 
     /*
@@ -137,8 +140,20 @@ public class ProgramacionController {
             @Valid
             @RequestBody GuardarOrdenSecuenciaRequest request
     ) {
-        programacionService.guardarOrdenSecuencia(
-                request
+        guardarOrdenSecuenciaUseCase.guardar(
+                new GuardarOrdenSecuenciaUseCase.Command(
+                        request.plazaId(),
+                        request.grupo().name(),
+                        request.agentes()
+                                .stream()
+                                .map(item ->
+                                        new GuardarOrdenSecuenciaUseCase.Item(
+                                                item.agenteId(),
+                                                item.orden()
+                                        )
+                                )
+                                .toList()
+                )
         );
     }
 }
