@@ -106,7 +106,7 @@ public class InventarioService {
             conteos.save(inventario);
 
     auditoria.registrar(
-            usuario.trabajador(),
+            usuario.trabajadorId(),
             "INVENTARIO_INICIADO",
             "INVENTARIO_CONTEO",
             inventario.getId(),
@@ -295,7 +295,7 @@ public class InventarioService {
     }
 
     auditoria.registrar(
-            usuario.trabajador(),
+            usuario.trabajadorId(),
             "CONTEO_GUARDADO",
             "INVENTARIO_CONTEO",
             inventarioId,
@@ -431,7 +431,7 @@ public class InventarioService {
     conteos.save(inventario);
 
     auditoria.registrar(
-            usuario.trabajador(),
+            usuario.trabajadorId(),
             "INVENTARIO_FINALIZADO",
             "INVENTARIO_CONTEO",
             inventarioId,
@@ -532,7 +532,7 @@ public class InventarioService {
     conteos.save(inventario);
 
     auditoria.registrar(
-            usuario.trabajador(),
+            usuario.trabajadorId(),
             "INVENTARIO_ANULADO",
             "INVENTARIO_CONTEO",
             inventarioId,
