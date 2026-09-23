@@ -12,7 +12,6 @@ import com.sigo.inventario.application.port.in.IniciarInventarioUseCase;
 import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
 import com.sigo.inventario.application.security.InventarioUsuarioContextService;
-import com.sigo.inventario.application.service.InventarioService;
 import com.sigo.inventario.domain.InventarioEstado;
 import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
 import jakarta.validation.Valid;
@@ -33,7 +32,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class InventarioController {
 
-    private final InventarioService service;
     private final CerrarInventarioUseCase cerrarUseCase;
     private final GuardarConteoInventarioUseCase guardarConteoUseCase;
     private final IniciarInventarioUseCase iniciarUseCase;
