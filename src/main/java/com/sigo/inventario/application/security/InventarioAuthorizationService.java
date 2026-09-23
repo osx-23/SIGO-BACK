@@ -1,7 +1,6 @@
 package com.sigo.inventario.application.security;
 
-import com.sigo.inventario.infrastructure.persistence.entity.InventarioConteo;
-import com.sigo.inventario.infrastructure.persistence.repository.InventarioProductoRepository;
+import com.sigo.inventario.application.port.out.InventarioProductoVisibilidadPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -11,7 +10,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class InventarioAuthorizationService {
 
-  private final InventarioProductoRepository productoRepository;
+  private final InventarioProductoVisibilidadPort visibilidadPort;
 
 
   public void exigirPlazaAsignada(
@@ -90,14 +89,12 @@ public class InventarioAuthorizationService {
 
   public void exigirPuedeModificarConteo(
           InventarioUsuarioActual u,
-          InventarioConteo i
+          Long responsableId
   ) {
 
-    if (!i.getResponsable()
-            .getId()
-            .equals(
-                    u.trabajadorId()
-            )) {
+    if (!responsableId.equals(
+            u.trabajadorId()
+    )) {
 
       throw new ResponseStatusException(
               HttpStatus.FORBIDDEN,
@@ -115,9 +112,9 @@ public class InventarioAuthorizationService {
     exigirPlazaAsignada(u);
 
     boolean visible =
-            productoRepository.esVisiblePara(
+            visibilidadPort.esVisiblePara(
                     productoId,
-                    u.rol().getId(),
+                    u.rolId(),
                     u.plazaId()
             );
 
