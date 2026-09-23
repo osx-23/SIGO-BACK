@@ -2,6 +2,7 @@ package com.sigo.personal.application.service;
 
 import com.sigo.personal.application.port.in.TrabajadorUseCase;
 import com.sigo.personal.application.port.out.TrabajadorGestionPort;
+import com.sigo.personal.application.port.out.TrabajadorProgramacionPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +14,7 @@ import java.util.List;
 public class TrabajadorService implements TrabajadorUseCase {
 
     private final TrabajadorGestionPort gestionPort;
+    private final TrabajadorProgramacionPort programacionPort;
 
     @Override
     @Transactional(readOnly = true)
@@ -51,10 +53,32 @@ public class TrabajadorService implements TrabajadorUseCase {
             );
         }
 
-        return gestionPort.actualizarAdministracion(
+        TrabajadorGestionPort.PreparacionActualizacion preparacion =
+                gestionPort.prepararActualizacion(
+                        trabajadorId,
+                        plazaId,
+                        activo
+                );
+
+        programacionPort.cerrarRelacionesAntesDeCambio(
                 trabajadorId,
-                plazaId,
-                activo
+                preparacion.cambioPlaza(),
+                preparacion.quedaraInactivo()
         );
+
+        TrabajadorData actualizado =
+                gestionPort.aplicarActualizacion(
+                        trabajadorId,
+                        plazaId,
+                        activo
+                );
+
+        programacionPort.sincronizarSecuenciaDespuesDeCambio(
+                trabajadorId,
+                preparacion.cambioPlaza(),
+                plazaId
+        );
+
+        return actualizado;
     }
 }
