@@ -39,7 +39,11 @@ public class TurnoGestionJpaAdapter
             LocalDate hasta
     ) {
         return programacionRepository
-                .findMes(plazaId, desde, hasta)
+                .findMesResumen(
+                        plazaId,
+                        desde,
+                        hasta
+                )
                 .stream()
                 .map(this::toData)
                 .toList();
@@ -182,6 +186,21 @@ public class TurnoGestionJpaAdapter
                 programacion.getTrabajador().getNombreCompleto(),
                 programacion.getPlaza().getId(),
                 programacion.getPlaza().getCodigo(),
+                programacion.getFecha(),
+                programacion.getEstado().name()
+        );
+    }
+
+    private ListarTurnosUseCase.Turno toData(
+            ProgramacionTurnoRepository.TurnoResumen programacion
+    ) {
+        return new ListarTurnosUseCase.Turno(
+                programacion.getProgramacionId(),
+                programacion.getTrabajadorId(),
+                programacion.getCodigoTrabajador(),
+                programacion.getNombreTrabajador(),
+                programacion.getPlazaId(),
+                programacion.getPlazaCodigo(),
                 programacion.getFecha(),
                 programacion.getEstado().name()
         );
