@@ -6,6 +6,7 @@ import com.sigo.inventario.api.dto.response.InventarioDetalleItemResponse;
 import com.sigo.inventario.api.dto.response.InventarioDetalleResponse;
 import com.sigo.inventario.api.dto.response.InventarioResumenResponse;
 import com.sigo.inventario.api.dto.response.ProductoInventarioResponse;
+import com.sigo.inventario.domain.InventarioEstado;
 import com.sigo.inventario.infrastructure.persistence.entity.EstadoInventario;
 import com.sigo.inventario.infrastructure.persistence.entity.InventarioConteo;
 import com.sigo.inventario.infrastructure.persistence.entity.InventarioConteoDetalle;
@@ -47,7 +48,6 @@ public class InventarioService {
   private final InventarioConteoRepository conteos;
   private final InventarioConteoDetalleRepository detalles;
   private final InventarioProductoRepository productos;
-  private final InventarioRolRepository roles;
   private final InventarioAuthorizationService auth;
   private final InventarioAuditoriaService auditoria;
 
@@ -121,51 +121,6 @@ public class InventarioService {
     );
 
     return resumen(inventario);
-  }
-
-
-  // ============================================================
-  // PRODUCTOS PERMITIDOS
-  // ============================================================
-
-  @Transactional(readOnly = true)
-  public List<ProductoInventarioResponse> productosPermitidos(
-          InventarioUsuarioActual usuario,
-          Long inventarioId
-  ) {
-
-    InventarioConteo inventario =
-            obtener(inventarioId);
-
-    auth.exigirPuedeModificarConteo(
-            usuario,
-            inventario
-                    .getResponsable()
-                    .getId()
-    );
-
-    if (inventario.getEstado()
-            != EstadoInventario.EN_PROCESO) {
-
-      throw new ResponseStatusException(
-              HttpStatus.CONFLICT,
-              "Inventario cerrado"
-      );
-    }
-
-    return productos
-            .buscarPermitidos(
-                    inventario
-                            .getRol()
-                            .getId(),
-
-                    inventario
-                            .getPlaza()
-                            .getId()
-            )
-            .stream()
-            .map(this::producto)
-            .toList();
   }
 
 
@@ -309,9 +264,11 @@ public class InventarioService {
             )
     );
 
-    return detalle(
-            usuario,
-            inventarioId
+    return toDetalle(
+            inventario,
+            detalles.findByInventarioIdOrderByNombreProductoSnapshotAsc(
+                    inventarioId
+            )
     );
   }
 
@@ -559,330 +516,6 @@ public class InventarioService {
 
 
   // ============================================================
-  // DETALLE
-  // ============================================================
-
-  @Transactional(readOnly = true)
-  public InventarioDetalleResponse detalle(
-          InventarioUsuarioActual usuario,
-          Long inventarioId
-  ) {
-
-    InventarioConteo inventario =
-            obtener(inventarioId);
-
-    auth.exigirPuedeConsultarPlaza(
-            usuario,
-            inventario
-                    .getPlaza()
-                    .getId()
-    );
-
-    List<InventarioConteoDetalle> listaDetalles =
-            detalles
-                    .findByInventarioIdOrderByNombreProductoSnapshotAsc(
-                            inventarioId
-                    );
-
-    return toDetalle(
-            inventario,
-            listaDetalles
-    );
-  }
-
-
-  // ============================================================
-  // HISTORIAL
-  // ============================================================
-
-  @Transactional(readOnly = true)
-  public Page<InventarioResumenResponse> historial(
-          InventarioUsuarioActual usuario,
-          Long plazaId,
-          Long responsableId,
-          String rol,
-          EstadoInventario estado,
-          LocalDate desde,
-          LocalDate hasta,
-          int page,
-          int size
-  ) {
-
-    /*
-     * Supervisor:
-     * puede consultar cualquier plaza.
-     *
-     * Controlador / Agente:
-     * quedan restringidos automáticamente
-     * a su plaza asignada.
-     */
-
-    Long plazaFiltro =
-            plazaId;
-
-    if (!"SUPERVISOR"
-            .equalsIgnoreCase(
-                    usuario.rolCodigo()
-            )) {
-
-      auth.exigirPlazaAsignada(
-              usuario
-      );
-
-      if (plazaId != null
-              && !plazaId.equals(
-              usuario.plazaId()
-      )) {
-
-        throw new ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "No puede consultar inventarios de otra plaza"
-        );
-      }
-
-      plazaFiltro =
-              usuario.plazaId();
-    }
-
-
-    // --------------------------------------------------------
-    // Resolver rol
-    // --------------------------------------------------------
-
-    Long rolId =
-            null;
-
-    if (rol != null
-            && !rol.isBlank()) {
-
-      String codigoRol =
-              rol
-                      .trim()
-                      .toUpperCase(
-                              Locale.ROOT
-                      );
-
-      rolId =
-              roles
-                      .findByCodigoAndActivoTrue(
-                              codigoRol
-                      )
-                      .map(
-                              InventarioRol::getId
-                      )
-                      .orElseThrow(
-                              () ->
-                                      new ResponseStatusException(
-                                              HttpStatus.BAD_REQUEST,
-                                              "Rol inválido"
-                                      )
-                      );
-    }
-
-
-    // --------------------------------------------------------
-    // Fechas Lima
-    // --------------------------------------------------------
-
-    ZoneId zonaLima =
-            ZoneId.of(
-                    "America/Lima"
-            );
-
-    OffsetDateTime fechaDesde =
-            desde == null
-                    ? null
-                    : desde
-                    .atStartOfDay(
-                            zonaLima
-                    )
-                    .toOffsetDateTime();
-
-    OffsetDateTime fechaHasta =
-            hasta == null
-                    ? null
-                    : hasta
-                    .plusDays(1)
-                    .atStartOfDay(
-                            zonaLima
-                    )
-                    .minusNanos(1)
-                    .toOffsetDateTime();
-
-
-    // --------------------------------------------------------
-    // Specification dinámica
-    // --------------------------------------------------------
-
-    Specification<InventarioConteo> spec =
-            Specification.where(null);
-
-
-    if (plazaFiltro != null) {
-
-      Long finalPlazaFiltro =
-              plazaFiltro;
-
-      spec =
-              spec.and(
-                      (
-                              root,
-                              query,
-                              cb
-                      ) ->
-                              cb.equal(
-                                      root
-                                              .get("plaza")
-                                              .get("id"),
-                                      finalPlazaFiltro
-                              )
-              );
-    }
-
-
-    if (responsableId != null) {
-
-      spec =
-              spec.and(
-                      (
-                              root,
-                              query,
-                              cb
-                      ) ->
-                              cb.equal(
-                                      root
-                                              .get("responsable")
-                                              .get("id"),
-                                      responsableId
-                              )
-              );
-    }
-
-
-    if (rolId != null) {
-
-      Long finalRolId =
-              rolId;
-
-      spec =
-              spec.and(
-                      (
-                              root,
-                              query,
-                              cb
-                      ) ->
-                              cb.equal(
-                                      root
-                                              .get("rol")
-                                              .get("id"),
-                                      finalRolId
-                              )
-              );
-    }
-
-
-    if (estado != null) {
-
-      spec =
-              spec.and(
-                      (
-                              root,
-                              query,
-                              cb
-                      ) ->
-                              cb.equal(
-                                      root.get("estado"),
-                                      estado
-                              )
-              );
-    }
-
-
-    if (fechaDesde != null) {
-
-      spec =
-              spec.and(
-                      (
-                              root,
-                              query,
-                              cb
-                      ) ->
-                              cb.greaterThanOrEqualTo(
-                                      root.get(
-                                              "fechaInicio"
-                                      ),
-                                      fechaDesde
-                              )
-              );
-    }
-
-
-    if (fechaHasta != null) {
-
-      spec =
-              spec.and(
-                      (
-                              root,
-                              query,
-                              cb
-                      ) ->
-                              cb.lessThanOrEqualTo(
-                                      root.get(
-                                              "fechaInicio"
-                                      ),
-                                      fechaHasta
-                              )
-              );
-    }
-
-
-    // --------------------------------------------------------
-    // Paginación
-    // --------------------------------------------------------
-
-    int paginaSegura =
-            Math.max(
-                    0,
-                    page
-            );
-
-    int tamanioSeguro =
-            Math.min(
-                    100,
-                    Math.max(
-                            1,
-                            size
-                    )
-            );
-
-    Pageable pageable =
-            PageRequest.of(
-                    paginaSegura,
-                    tamanioSeguro,
-                    org.springframework.data.domain.Sort
-                            .by(
-                                    org.springframework.data.domain.Sort.Direction.DESC,
-                                    "fechaInicio"
-                            )
-            );
-
-
-    // --------------------------------------------------------
-    // Consulta
-    // --------------------------------------------------------
-
-    return conteos
-            .findAll(
-                    spec,
-                    pageable
-            )
-            .map(
-                    this::resumen
-            );
-  }
-
-
-  // ============================================================
   // OBTENER INVENTARIO
   // ============================================================
 
@@ -950,52 +583,11 @@ public class InventarioService {
             inventario
                     .getFechaFinalizacion(),
 
-            inventario
-                    .getEstado(),
+            InventarioEstado.valueOf(
+                    inventario.getEstado().name()
+            ),
 
             cantidadProductos
-    );
-  }
-
-
-  // ============================================================
-  // PRODUCTO RESPONSE
-  // ============================================================
-
-  private ProductoInventarioResponse producto(
-          InventarioProducto producto
-  ) {
-
-    return new ProductoInventarioResponse(
-            producto.getId(),
-            producto.getCodigo(),
-            producto.getNombre(),
-            producto.getDescripcion(),
-            producto.getUnidadMedida(),
-
-            producto.getCategoria() == null
-                    ? null
-                    : producto
-                    .getCategoria()
-                    .getId(),
-
-            producto.getCategoria() == null
-                    ? null
-                    : producto
-                    .getCategoria()
-                    .getNombre(),
-
-            producto.getAmbito() == null
-                    ? null
-                    : producto
-                    .getAmbito()
-                    .getId(),
-
-            producto.getAmbito() == null
-                    ? null
-                    : producto
-                    .getAmbito()
-                    .getNombre()
     );
   }
 
@@ -1071,8 +663,9 @@ public class InventarioService {
             inventario
                     .getFechaFinalizacion(),
 
-            inventario
-                    .getEstado(),
+            InventarioEstado.valueOf(
+                    inventario.getEstado().name()
+            ),
 
             inventario
                     .getObservacion(),
