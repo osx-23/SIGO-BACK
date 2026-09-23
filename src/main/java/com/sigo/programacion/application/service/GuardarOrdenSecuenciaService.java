@@ -2,7 +2,7 @@ package com.sigo.programacion.application.service;
 
 import com.sigo.programacion.application.port.in.GuardarOrdenSecuenciaUseCase;
 import com.sigo.programacion.application.port.out.SecuenciaOrdenPort;
-import com.sigo.programacion.application.port.out.SupervisorActualPort;
+import com.sigo.programacion.application.port.out.ProgramacionAccessPort;
 import com.sigo.programacion.domain.SecuenciaOrdenInvalidoException;
 import com.sigo.programacion.domain.SecuenciaOrdenPolicy;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +15,7 @@ public class GuardarOrdenSecuenciaService
         implements GuardarOrdenSecuenciaUseCase {
 
     private final SecuenciaOrdenPort secuenciaOrdenPort;
-    private final SupervisorActualPort supervisorActualPort;
+    private final ProgramacionAccessPort accessPort;
 
     private final SecuenciaOrdenPolicy policy =
             new SecuenciaOrdenPolicy();
@@ -24,7 +24,7 @@ public class GuardarOrdenSecuenciaService
     @Transactional
     public void guardar(Command command) {
         Long supervisorId =
-                supervisorActualPort.requireSupervisorId();
+                accessPort.requireSupervisorId();
 
         if (command == null
                 || command.plazaId() == null
