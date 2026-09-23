@@ -4,23 +4,19 @@ import com.sigo.asistencia.api.dto.AsistenciaRequest;
 import com.sigo.asistencia.api.dto.AsistenciaResponse;
 import com.sigo.asistencia.api.dto.AsistenciaUpdateRequest;
 import com.sigo.asistencia.api.dto.EvidenciaResponse;
+import com.sigo.asistencia.application.port.in.AsistenciaAccesoUseCase;
 import com.sigo.asistencia.application.port.in.ConsultarAsistenciasUseCase;
 import com.sigo.asistencia.application.port.in.GestionarAsistenciaUseCase;
 import com.sigo.asistencia.application.port.in.GestionarEvidenciaAsistenciaUseCase;
 import com.sigo.asistencia.application.port.in.ObtenerProgramadosAsistenciaUseCase;
 import com.sigo.asistencia.application.port.in.RegistrarAsistenciaExcepcionUseCase;
-import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
-import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
-import com.sigo.security.application.service.CurrentUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -37,14 +33,14 @@ public class AsistenciaController {
     private final ConsultarAsistenciasUseCase consultaUseCase;
     private final RegistrarAsistenciaExcepcionUseCase asistenciaExcepcionUseCase;
     private final ObtenerProgramadosAsistenciaUseCase programacionService;
-    private final CurrentUserService currentUserService;
+    private final AsistenciaAccesoUseCase accesoUseCase;
 
     @PostMapping
     public ResponseEntity<AsistenciaResponse> registrar(
             @Valid @RequestBody AsistenciaRequest request,
             @RequestParam(defaultValue = "false") boolean excepcionControlador
     ) {
-        exigirRolAsistencia();
+        accesoUseCase.exigirGestion();
 
         if (excepcionControlador) {
             return ResponseEntity.ok(
@@ -94,7 +90,7 @@ public class AsistenciaController {
             @RequestParam Long plazaId,
             @RequestParam Long turnoId
     ) {
-        exigirRolAsistencia();
+        accesoUseCase.exigirGestion();
         return ResponseEntity.ok(Map.of(
                 "programados",
                 programacionService.obtenerProgramados(plazaId, turnoId)
@@ -138,7 +134,7 @@ public class AsistenciaController {
             @RequestParam("file") MultipartFile file,
             @RequestParam("tipo") String tipo
     ) throws IOException {
-        exigirRolAsistencia();
+        accesoUseCase.exigirGestion();
         var evidencia = evidenciaUseCase.guardar(
                 id,
                 new GestionarEvidenciaAsistenciaUseCase.ArchivoEntrada(
@@ -162,7 +158,7 @@ public class AsistenciaController {
             @PathVariable Long asistenciaId,
             @PathVariable Long evidenciaId
     ) throws IOException {
-        exigirRolAsistencia();
+        accesoUseCase.exigirGestion();
         evidenciaUseCase.eliminar(asistenciaId, evidenciaId);
         return ResponseEntity.noContent().build();
     }
@@ -274,14 +270,14 @@ public class AsistenciaController {
     private AsistenciaRequest asegurarIdentidad(AsistenciaRequest request) {
         // Supervisores y controladores pueden registrar asistencia en cualquier plaza.
         // La plaza válida es la seleccionada explícitamente en el formulario.
-        exigirRolAsistencia();
+        accesoUseCase.exigirGestion();
         return request;
     }
 
     private AsistenciaUpdateRequest asegurarIdentidad(AsistenciaUpdateRequest request) {
         // Supervisores y controladores pueden actualizar registros de cualquier plaza.
         // No se reemplaza plazaId por la plaza asignada al usuario autenticado.
-        exigirRolAsistencia();
+        accesoUseCase.exigirGestion();
         return request;
     }
 
