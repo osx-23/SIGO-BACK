@@ -5,7 +5,7 @@ import com.sigo.asistencia.api.dto.AsistenciaResponse;
 import com.sigo.asistencia.api.dto.AsistenciaUpdateRequest;
 import com.sigo.asistencia.api.dto.EvidenciaResponse;
 import com.sigo.asistencia.application.service.AsistenciaExcepcionService;
-import com.sigo.asistencia.application.service.AsistenciaProgramacionService;
+import com.sigo.asistencia.application.port.in.ObtenerProgramadosAsistenciaUseCase;
 import com.sigo.asistencia.application.service.AsistenciaService;
 import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
 import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
@@ -32,7 +32,7 @@ public class AsistenciaController {
 
     private final AsistenciaService asistenciaService;
     private final AsistenciaExcepcionService asistenciaExcepcionService;
-    private final AsistenciaProgramacionService programacionService;
+    private final ObtenerProgramadosAsistenciaUseCase programacionService;
     private final CurrentUserService currentUserService;
 
     @PostMapping
