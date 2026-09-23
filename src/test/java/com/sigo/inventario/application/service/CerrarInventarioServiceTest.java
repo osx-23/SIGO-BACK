@@ -30,9 +30,7 @@ class CerrarInventarioServiceTest {
                         new StubConsultaPort(),
                         cierrePort,
                         new StubConsultaUseCase(),
-                        new InventarioAuditoriaService(
-                                new StubAuditoriaPort()
-                        )
+                        new StubAuditoriaPort()
                 );
 
         var detalle = service.finalizar(
@@ -55,9 +53,7 @@ class CerrarInventarioServiceTest {
                         new StubConsultaPort(true),
                         new StubCierrePort(),
                         new StubConsultaUseCase(),
-                        new InventarioAuditoriaService(
-                                new StubAuditoriaPort()
-                        )
+                        new StubAuditoriaPort()
                 );
 
         assertThrows(
