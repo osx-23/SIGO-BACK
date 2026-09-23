@@ -7,4 +7,6 @@ public interface ProgramacionAccessPort {
     void validarLecturaPlaza(Long plazaId);
 
     void validarGestionPlaza(Long plazaId);
+
+    Long requireGestionPlazaUsuarioId(Long plazaId);
 }
