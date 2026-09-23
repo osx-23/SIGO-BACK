@@ -13,7 +13,6 @@ import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
 import com.sigo.inventario.application.security.InventarioUsuarioContextService;
 import com.sigo.inventario.domain.InventarioEstado;
-import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -317,19 +316,16 @@ public class InventarioController {
             int page,
             int size
     ) {
-        RolSistema rolSistema =
-                actual.trabajador().getRolSistema();
-
-        if (rolSistema == RolSistema.CONTROLADOR
-                || rolSistema == RolSistema.SUPERVISOR) {
+        if (actual.esControladorSistema()
+                || actual.esSupervisorSistema()) {
             return;
         }
 
         boolean recuperacionPropia =
-                rolSistema == RolSistema.OPERADOR
+                actual.esOperadorSistema()
                         && responsableId != null
                         && responsableId.equals(
-                                actual.trabajador().getId()
+                                actual.trabajadorId()
                         )
                         && estado == InventarioEstado.EN_PROCESO
                         && plazaId == null
