@@ -2,6 +2,7 @@ package com.sigo.inventario.application.service;
 
 import com.sigo.inventario.application.port.in.InventarioProductoUseCase;
 import com.sigo.inventario.application.port.out.InventarioProductoGestionPort;
+import com.sigo.inventario.application.port.out.InventarioAuditoriaPort;
 import com.sigo.shared.exception.BusinessException;
 import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +20,7 @@ public class InventarioProductoApplicationService
         implements InventarioProductoUseCase {
 
     private final InventarioProductoGestionPort gestionPort;
-    private final InventarioAuditoriaService auditoria;
+    private final InventarioAuditoriaPort auditoria;
 
     @Override
     @Transactional(readOnly = true)
