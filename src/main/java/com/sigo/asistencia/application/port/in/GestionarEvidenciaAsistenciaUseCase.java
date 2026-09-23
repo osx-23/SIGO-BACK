@@ -1,14 +1,12 @@
 package com.sigo.asistencia.application.port.in;
 
-import org.springframework.web.multipart.MultipartFile;
-
 import java.io.IOException;
 
 public interface GestionarEvidenciaAsistenciaUseCase {
 
     Evidencia guardar(
             Long asistenciaId,
-            MultipartFile archivo,
+            ArchivoEntrada archivo,
             String tipo
     ) throws IOException;
 
@@ -16,6 +14,16 @@ public interface GestionarEvidenciaAsistenciaUseCase {
             Long asistenciaId,
             Long evidenciaId
     ) throws IOException;
+
+    record ArchivoEntrada(
+            String nombre,
+            String contentType,
+            byte[] contenido
+    ) {
+        public boolean vacio() {
+            return contenido == null || contenido.length == 0;
+        }
+    }
 
     record Evidencia(
             Long id,
