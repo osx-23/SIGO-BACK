@@ -1,12 +1,14 @@
 package com.sigo.programacion.api.controller;
 
+import com.sigo.programacion.application.port.in.AsignarLiderUseCase;
 import com.sigo.programacion.application.port.in.AsignarSecuenciaUseCase;
 import com.sigo.programacion.application.port.in.GuardarOrdenSecuenciaUseCase;
+import com.sigo.programacion.application.port.in.ListarLideresUseCase;
 import com.sigo.programacion.application.port.in.ListarSecuenciasUseCase;
 import com.sigo.programacion.application.service.ProgramacionService;
-import com.sigo.programacion.application.service.ProgramacionService.GrupoLiderRequest;
-import com.sigo.programacion.application.service.ProgramacionService.GrupoLiderResponse;
 import com.sigo.programacion.api.dto.AsignarSecuenciaRequest;
+import com.sigo.programacion.api.dto.GrupoLiderRequest;
+import com.sigo.programacion.api.dto.GrupoLiderResponse;
 import com.sigo.programacion.api.dto.GuardarOrdenSecuenciaRequest;
 import com.sigo.programacion.api.dto.SecuenciaAgenteResponse;
 import com.sigo.programacion.application.service.ProgramacionService.GuardarProgramacionRequest;
@@ -35,6 +37,10 @@ public class ProgramacionController {
     private final ListarSecuenciasUseCase listarSecuenciasUseCase;
 
     private final AsignarSecuenciaUseCase asignarSecuenciaUseCase;
+
+    private final ListarLideresUseCase listarLideresUseCase;
+
+    private final AsignarLiderUseCase asignarLiderUseCase;
 
 
     /*
@@ -96,9 +102,11 @@ public class ProgramacionController {
     public List<GrupoLiderResponse> listarLideres(
             @RequestParam Long plazaId
     ) {
-        return programacionService.listarLideres(
-                plazaId
-        );
+        return listarLideresUseCase
+                .listar(plazaId)
+                .stream()
+                .map(this::toLiderResponse)
+                .toList();
     }
 
 
@@ -107,9 +115,16 @@ public class ProgramacionController {
             @Valid
             @RequestBody GrupoLiderRequest request
     ) {
-        return programacionService.asignarLider(
-                request
+        var lider = asignarLiderUseCase.asignar(
+                new AsignarLiderUseCase.Command(
+                        request.agenteId(),
+                        request.controladorId(),
+                        request.plazaId(),
+                        request.fechaInicio()
+                )
         );
+
+        return toLiderResponse(lider);
     }
 
 
@@ -168,6 +183,26 @@ public class ProgramacionController {
                                 )
                                 .toList()
                 )
+        );
+    }
+
+
+    private GrupoLiderResponse toLiderResponse(
+            ListarLideresUseCase.Lider lider
+    ) {
+        return new GrupoLiderResponse(
+                lider.id(),
+                lider.agenteId(),
+                lider.agenteCodigo(),
+                lider.agenteNombre(),
+                lider.controladorId(),
+                lider.controladorCodigo(),
+                lider.controladorNombre(),
+                lider.plazaId(),
+                lider.plazaCodigo(),
+                lider.fechaInicio(),
+                lider.fechaFin(),
+                lider.activo()
         );
     }
 
