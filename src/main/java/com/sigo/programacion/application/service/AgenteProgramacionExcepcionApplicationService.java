@@ -3,11 +3,10 @@ package com.sigo.programacion.application.service;
 import com.sigo.programacion.application.port.in.AgenteProgramacionExcepcionUseCase;
 import com.sigo.programacion.application.port.out.AgenteProgramacionExcepcionPort;
 import com.sigo.programacion.domain.ProgramacionValidationException;
+import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -99,8 +98,7 @@ public class AgenteProgramacionExcepcionApplicationService
 
     private void validarPlaza(Long plazaId) {
         if (plazaId == null || !port.existePlazaActiva(plazaId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
+            throw new ResourceNotFoundException(
                     "Plaza no encontrada o inactiva"
             );
         }
