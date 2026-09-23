@@ -4,11 +4,11 @@ import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
 import com.sigo.inventario.application.port.out.InventarioConsultaPort;
 import com.sigo.inventario.domain.InventarioEstado;
 import com.sigo.shared.exception.BusinessException;
+import com.sigo.shared.exception.ConflictException;
+import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -38,17 +38,13 @@ public class InventarioConsultaService
         if (!inventario.responsableId().equals(
                 usuario.trabajadorId()
         )) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "El inventario pertenece a otro trabajador"
+            throw new ForbiddenException("El inventario pertenece a otro trabajador"
             );
         }
 
         if (inventario.estado()
                 != InventarioEstado.EN_PROCESO) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Inventario cerrado"
+            throw new ConflictException("Inventario cerrado"
             );
         }
 
@@ -111,9 +107,7 @@ public class InventarioConsultaService
 
             if (plazaId != null
                     && !plazaId.equals(usuario.plazaId())) {
-                throw new ResponseStatusException(
-                        HttpStatus.FORBIDDEN,
-                        "No puede consultar inventarios de otra plaza"
+                throw new ForbiddenException("No puede consultar inventarios de otra plaza"
                 );
             }
 
@@ -192,18 +186,14 @@ public class InventarioConsultaService
         exigirPlazaAsignada(usuario);
 
         if (!usuario.plazaId().equals(plazaId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "No puede consultar otra plaza"
+            throw new ForbiddenException("No puede consultar otra plaza"
             );
         }
     }
 
     private void exigirPlazaAsignada(Usuario usuario) {
         if (usuario.plazaId() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Trabajador sin plaza asignada"
+            throw new ForbiddenException("Trabajador sin plaza asignada"
             );
         }
     }
