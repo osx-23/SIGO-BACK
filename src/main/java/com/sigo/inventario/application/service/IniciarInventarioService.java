@@ -2,6 +2,7 @@ package com.sigo.inventario.application.service;
 
 import com.sigo.inventario.application.port.in.IniciarInventarioUseCase;
 import com.sigo.inventario.application.port.out.IniciarInventarioPort;
+import com.sigo.inventario.application.port.out.InventarioAuditoriaPort;
 import com.sigo.shared.exception.ConflictException;
 import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +17,7 @@ public class IniciarInventarioService
         implements IniciarInventarioUseCase {
 
     private final IniciarInventarioPort iniciarPort;
-    private final InventarioAuditoriaService auditoria;
+    private final InventarioAuditoriaPort auditoria;
 
     @Override
     @Transactional
