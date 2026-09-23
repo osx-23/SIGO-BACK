@@ -6,10 +6,9 @@ import com.sigo.inventario.infrastructure.persistence.entity.InventarioRol;
 import com.sigo.inventario.infrastructure.persistence.repository.InventarioPuestoRolRepository;
 import com.sigo.inventario.infrastructure.persistence.repository.InventarioRolRepository;
 import com.sigo.security.application.port.in.UsuarioActualUseCase;
+import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 @Component
 @RequiredArgsConstructor
@@ -52,8 +51,7 @@ public class InventarioUsuarioContextAdapter
         }
 
         if (trabajador.puestoId() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new ForbiddenException(
                     "Trabajador sin puesto asignado"
             );
         }
@@ -63,8 +61,7 @@ public class InventarioUsuarioContextAdapter
                         trabajador.puestoId()
                 )
                 .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.FORBIDDEN,
+                        new ForbiddenException(
                                 "El puesto no tiene rol de Inventario"
                         )
                 );
@@ -72,8 +69,7 @@ public class InventarioUsuarioContextAdapter
         if (!Boolean.TRUE.equals(
                 puestoRol.getRol().getActivo()
         )) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new ForbiddenException(
                     "Rol de inventario inactivo"
             );
         }
@@ -85,8 +81,7 @@ public class InventarioUsuarioContextAdapter
         return inventarioRolRepository
                 .findByCodigoAndActivoTrue(codigo)
                 .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.FORBIDDEN,
+                        new ForbiddenException(
                                 "No existe un rol activo de Inventario para "
                                         + codigo
                         )
