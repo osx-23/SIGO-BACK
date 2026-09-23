@@ -1,9 +1,9 @@
 package com.sigo.personal.api.controller;
 
 import com.sigo.personal.api.dto.TrabajadorAdminUpdateRequest;
+import com.sigo.personal.api.dto.TrabajadorPublicResponse;
 import com.sigo.personal.api.dto.TrabajadorResponse;
-import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
-import com.sigo.personal.application.service.TrabajadorService;
+import com.sigo.personal.application.port.in.TrabajadorUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,128 +17,113 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TrabajadorController {
 
-    private final TrabajadorService trabajadorService;
+    private final TrabajadorUseCase useCase;
 
-    /*
-     * ============================================================
-     * AGENTES POR PLAZA
-     * ============================================================
-     *
-     * Devuelve únicamente agentes activos pertenecientes
-     * a la plaza indicada.
-     *
-     * Ejemplo:
-     * GET /api/trabajadores/agentes?plazaId=4
-     */
     @GetMapping("/agentes")
-    public ResponseEntity<List<Trabajador>> listarAgentesPorPlaza(
+    public ResponseEntity<List<TrabajadorPublicResponse>> listarAgentesPorPlaza(
             @RequestParam Long plazaId
     ) {
-
-        List<Trabajador> agentes =
-                trabajadorService.listarAgentesPorPlaza(plazaId);
-
-        return ResponseEntity.ok(agentes);
+        return ResponseEntity.ok(
+                useCase.listarAgentesPorPlaza(plazaId)
+                        .stream()
+                        .map(this::toPublicResponse)
+                        .toList()
+        );
     }
 
-    /*
-     * ============================================================
-     * CONTROLADORES POR PLAZA
-     * ============================================================
-     *
-     * Devuelve únicamente controladores activos pertenecientes
-     * a la plaza indicada.
-     *
-     * Ejemplo:
-     * GET /api/trabajadores/controladores?plazaId=4
-     */
     @GetMapping("/controladores")
-    public ResponseEntity<List<Trabajador>> listarControladoresPorPlaza(
+    public ResponseEntity<List<TrabajadorPublicResponse>> listarControladoresPorPlaza(
             @RequestParam Long plazaId
     ) {
-
-        List<Trabajador> controladores =
-                trabajadorService.listarControladoresPorPlaza(plazaId);
-
-        return ResponseEntity.ok(controladores);
+        return ResponseEntity.ok(
+                useCase.listarControladoresPorPlaza(plazaId)
+                        .stream()
+                        .map(this::toPublicResponse)
+                        .toList()
+        );
     }
 
-    /*
-     * ============================================================
-     * ADMINISTRACIÓN DE USUARIOS
-     * ============================================================
-     *
-     * Solo SUPERVISOR.
-     *
-     * Sin plazaId:
-     *
-     * GET /api/trabajadores/admin
-     *
-     * Devuelve todos los trabajadores.
-     *
-     *
-     * Con plazaId:
-     *
-     * GET /api/trabajadores/admin?plazaId=4
-     *
-     * Devuelve únicamente trabajadores pertenecientes
-     * a esa plaza.
-     *
-     * Incluye activos e inactivos para permitir que el supervisor
-     * pueda reactivar trabajadores.
-     */
     @GetMapping("/admin")
     @PreAuthorize("hasRole('SUPERVISOR')")
     public ResponseEntity<List<TrabajadorResponse>> listarAdministracion(
             @RequestParam(required = false) Long plazaId
     ) {
-
-        List<TrabajadorResponse> trabajadores =
-                trabajadorService.listarAdministracion(plazaId);
-
-        return ResponseEntity.ok(trabajadores);
+        return ResponseEntity.ok(
+                useCase.listarAdministracion(plazaId)
+                        .stream()
+                        .map(this::toAdminResponse)
+                        .toList()
+        );
     }
 
-    /*
-     * ============================================================
-     * ACTUALIZAR USUARIO
-     * ============================================================
-     *
-     * Permite al supervisor:
-     *
-     * - Cambiar la plaza del trabajador.
-     * - Activar trabajador.
-     * - Inactivar trabajador.
-     *
-     * Ejemplo:
-     *
-     * PUT /api/trabajadores/admin/28
-     *
-     * Body:
-     *
-     * {
-     *   "plazaId": 4,
-     *   "activo": true
-     * }
-     *
-     * La lógica de:
-     *
-     * - cerrar relaciones de líder
-     * - mover la secuencia
-     * - dejar al agente "Sin secuencia"
-     *
-     * se encuentra en TrabajadorService.
-     */
     @PutMapping("/admin/{id}")
     @PreAuthorize("hasRole('SUPERVISOR')")
     public ResponseEntity<TrabajadorResponse> actualizarAdministracion(
             @PathVariable Long id,
-            @Valid @RequestBody TrabajadorAdminUpdateRequest request
+            @Valid
+            @RequestBody TrabajadorAdminUpdateRequest request
     ) {
+        return ResponseEntity.ok(
+                toAdminResponse(
+                        useCase.actualizarAdministracion(
+                                id,
+                                request.plazaId(),
+                                request.activo()
+                        )
+                )
+        );
+    }
 
-        TrabajadorResponse trabajador =
-                trabajadorService.actualizarAdministracion(id, request);
+    private TrabajadorResponse toAdminResponse(
+            TrabajadorUseCase.TrabajadorData trabajador
+    ) {
+        return new TrabajadorResponse(
+                trabajador.id(),
+                trabajador.codigo(),
+                trabajador.nombreCompleto(),
+                trabajador.puesto() == null
+                        ? null
+                        : new TrabajadorResponse.PuestoResumen(
+                                trabajador.puesto().id(),
+                                trabajador.puesto().nombre()
+                        ),
+                trabajador.plaza() == null
+                        ? null
+                        : new TrabajadorResponse.PlazaResumen(
+                                trabajador.plaza().id(),
+                                trabajador.plaza().codigo(),
+                                trabajador.plaza().descripcion()
+                        ),
+                trabajador.rolSistema(),
+                trabajador.requiereCambioPassword(),
+                trabajador.activo()
+        );
+    }
 
-        return ResponseEntity.ok(trabajador);
+    private TrabajadorPublicResponse toPublicResponse(
+            TrabajadorUseCase.TrabajadorData trabajador
+    ) {
+        return new TrabajadorPublicResponse(
+                trabajador.id(),
+                trabajador.codigo(),
+                trabajador.nombreCompleto(),
+                trabajador.puesto() == null
+                        ? null
+                        : new TrabajadorPublicResponse.PuestoResponse(
+                                trabajador.puesto().id(),
+                                trabajador.puesto().nombre()
+                        ),
+                trabajador.plaza() == null
+                        ? null
+                        : new TrabajadorPublicResponse.PlazaResponse(
+                                trabajador.plaza().id(),
+                                trabajador.plaza().codigo(),
+                                trabajador.plaza().descripcion(),
+                                trabajador.plaza().activo()
+                        ),
+                trabajador.rolSistema(),
+                trabajador.requiereCambioPassword(),
+                trabajador.activo()
+        );
     }
 }
