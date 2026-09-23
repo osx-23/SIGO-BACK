@@ -8,7 +8,7 @@ import com.sigo.inventario.application.port.out.InventarioDetalleGestionPort;
 import com.sigo.inventario.application.port.out.InventarioProductoVisibilidadPort;
 import com.sigo.inventario.domain.InventarioEstado;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.server.ResponseStatusException;
+import com.sigo.shared.exception.BusinessException;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -72,7 +72,7 @@ class GuardarConteoInventarioServiceTest {
                 );
 
         assertThrows(
-                ResponseStatusException.class,
+                BusinessException.class,
                 () -> service.guardar(
                         new GuardarConteoInventarioUseCase.Usuario(
                                 10L,
