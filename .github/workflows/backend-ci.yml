@@ -23,8 +23,8 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Compile
-        run: mvn -B -DskipTests compile
+      - name: Test
+        run: mvn -B test
 
       - name: Verify programacion architecture
         shell: bash
