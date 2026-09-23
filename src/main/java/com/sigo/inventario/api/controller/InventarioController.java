@@ -6,6 +6,7 @@ import com.sigo.inventario.api.dto.response.InventarioDetalleItemResponse;
 import com.sigo.inventario.api.dto.response.InventarioDetalleResponse;
 import com.sigo.inventario.api.dto.response.InventarioResumenResponse;
 import com.sigo.inventario.api.dto.response.ProductoInventarioResponse;
+import com.sigo.inventario.application.port.in.CerrarInventarioUseCase;
 import com.sigo.inventario.application.port.in.GuardarConteoInventarioUseCase;
 import com.sigo.inventario.application.port.in.IniciarInventarioUseCase;
 import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
@@ -33,6 +34,7 @@ import java.util.List;
 public class InventarioController {
 
     private final InventarioService service;
+    private final CerrarInventarioUseCase cerrarUseCase;
     private final GuardarConteoInventarioUseCase guardarConteoUseCase;
     private final IniciarInventarioUseCase iniciarUseCase;
     private final InventarioConsultaUseCase consultaUseCase;
@@ -116,9 +118,18 @@ public class InventarioController {
     public InventarioDetalleResponse finalizar(
             @PathVariable Long id
     ) {
-        return service.finalizar(
-                usuarios.obtenerActual(),
-                id
+        InventarioUsuarioActual actual =
+                usuarios.obtenerActual();
+
+        return toDetalleResponse(
+                cerrarUseCase.finalizar(
+                        new CerrarInventarioUseCase.Usuario(
+                                actual.trabajadorId(),
+                                actual.plazaId(),
+                                actual.rolCodigo()
+                        ),
+                        id
+                )
         );
     }
 
@@ -127,10 +138,19 @@ public class InventarioController {
             @PathVariable Long id,
             @Valid @RequestBody AnularInventarioRequest request
     ) {
-        return service.anular(
-                usuarios.obtenerActual(),
-                id,
-                request
+        InventarioUsuarioActual actual =
+                usuarios.obtenerActual();
+
+        return toDetalleResponse(
+                cerrarUseCase.anular(
+                        new CerrarInventarioUseCase.Usuario(
+                                actual.trabajadorId(),
+                                actual.plazaId(),
+                                actual.rolCodigo()
+                        ),
+                        id,
+                        request.motivo()
+                )
         );
     }
 
