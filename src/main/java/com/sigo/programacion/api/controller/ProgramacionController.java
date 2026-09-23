@@ -1,15 +1,17 @@
 package com.sigo.programacion.api.controller;
 
+import com.sigo.programacion.application.port.in.AsignarSecuenciaUseCase;
 import com.sigo.programacion.application.port.in.GuardarOrdenSecuenciaUseCase;
+import com.sigo.programacion.application.port.in.ListarSecuenciasUseCase;
 import com.sigo.programacion.application.service.ProgramacionService;
-import com.sigo.programacion.application.service.ProgramacionService.AsignarSecuenciaRequest;
 import com.sigo.programacion.application.service.ProgramacionService.GrupoLiderRequest;
 import com.sigo.programacion.application.service.ProgramacionService.GrupoLiderResponse;
+import com.sigo.programacion.api.dto.AsignarSecuenciaRequest;
 import com.sigo.programacion.api.dto.GuardarOrdenSecuenciaRequest;
+import com.sigo.programacion.api.dto.SecuenciaAgenteResponse;
 import com.sigo.programacion.application.service.ProgramacionService.GuardarProgramacionRequest;
 import com.sigo.programacion.application.service.ProgramacionService.MiHorarioResponse;
 import com.sigo.programacion.application.service.ProgramacionService.ProgramacionDiaResponse;
-import com.sigo.programacion.application.service.ProgramacionService.SecuenciaAgenteResponse;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,10 @@ public class ProgramacionController {
     private final ProgramacionService programacionService;
 
     private final GuardarOrdenSecuenciaUseCase guardarOrdenSecuenciaUseCase;
+
+    private final ListarSecuenciasUseCase listarSecuenciasUseCase;
+
+    private final AsignarSecuenciaUseCase asignarSecuenciaUseCase;
 
 
     /*
@@ -117,9 +123,11 @@ public class ProgramacionController {
     public List<SecuenciaAgenteResponse> listarSecuencias(
             @RequestParam Long plazaId
     ) {
-        return programacionService.listarSecuencias(
-                plazaId
-        );
+        return listarSecuenciasUseCase
+                .listar(plazaId)
+                .stream()
+                .map(this::toSecuenciaResponse)
+                .toList();
     }
 
 
@@ -128,9 +136,15 @@ public class ProgramacionController {
             @Valid
             @RequestBody AsignarSecuenciaRequest request
     ) {
-        return programacionService.asignarSecuencia(
-                request
+        var secuencia = asignarSecuenciaUseCase.asignar(
+                new AsignarSecuenciaUseCase.Command(
+                        request.agenteId(),
+                        request.plazaId(),
+                        request.grupo()
+                )
         );
+
+        return toSecuenciaResponse(secuencia);
     }
 
 
@@ -156,4 +170,21 @@ public class ProgramacionController {
                 )
         );
     }
+
+
+    private SecuenciaAgenteResponse toSecuenciaResponse(
+            ListarSecuenciasUseCase.Secuencia secuencia
+    ) {
+        return new SecuenciaAgenteResponse(
+                secuencia.id(),
+                secuencia.agenteId(),
+                secuencia.codigo(),
+                secuencia.nombre(),
+                secuencia.plazaId(),
+                secuencia.plazaCodigo(),
+                secuencia.grupo(),
+                secuencia.orden()
+        );
+    }
+
 }
