@@ -22,9 +22,7 @@ class InventarioProductoApplicationServiceTest {
         InventarioProductoApplicationService service =
                 new InventarioProductoApplicationService(
                         port,
-                        new InventarioAuditoriaService(
-                                new StubAuditoriaPort()
-                        )
+                        new StubAuditoriaPort()
                 );
 
         var producto = service.crear(
@@ -63,9 +61,7 @@ class InventarioProductoApplicationServiceTest {
         InventarioProductoApplicationService service =
                 new InventarioProductoApplicationService(
                         new StubPort(),
-                        new InventarioAuditoriaService(
-                                new StubAuditoriaPort()
-                        )
+                        new StubAuditoriaPort()
                 );
 
         assertThrows(
@@ -101,9 +97,7 @@ class InventarioProductoApplicationServiceTest {
         InventarioProductoApplicationService service =
                 new InventarioProductoApplicationService(
                         new StubPort(),
-                        new InventarioAuditoriaService(
-                                new StubAuditoriaPort()
-                        )
+                        new StubAuditoriaPort()
                 );
 
         assertThrows(
