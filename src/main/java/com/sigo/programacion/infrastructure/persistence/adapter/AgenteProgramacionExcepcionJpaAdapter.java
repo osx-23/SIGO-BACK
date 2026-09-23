@@ -8,10 +8,9 @@ import com.sigo.programacion.application.port.in.AgenteProgramacionExcepcionUseC
 import com.sigo.programacion.application.port.out.AgenteProgramacionExcepcionPort;
 import com.sigo.programacion.infrastructure.persistence.entity.AgenteProgramacionExcepcion;
 import com.sigo.programacion.infrastructure.persistence.repository.AgenteProgramacionExcepcionRepository;
+import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Objects;
@@ -50,8 +49,7 @@ public class AgenteProgramacionExcepcionJpaAdapter
                 )
                 .map(this::toData)
                 .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
+                        new ResourceNotFoundException(
                                 "El agente no tiene una excepción configurada en esta plaza"
                         )
                 );
@@ -65,8 +63,7 @@ public class AgenteProgramacionExcepcionJpaAdapter
                 .findById(command.trabajadorId())
                 .filter(t -> Boolean.TRUE.equals(t.getActivo()))
                 .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
+                        new ResourceNotFoundException(
                                 "Trabajador no encontrado o inactivo"
                         )
                 );
@@ -75,8 +72,7 @@ public class AgenteProgramacionExcepcionJpaAdapter
                 .findById(command.plazaId())
                 .filter(p -> Boolean.TRUE.equals(p.getActivo()))
                 .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
+                        new ResourceNotFoundException(
                                 "Plaza no encontrada o inactiva"
                         )
                 );
@@ -113,8 +109,7 @@ public class AgenteProgramacionExcepcionJpaAdapter
                         plazaId
                 )
                 .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
+                        new ResourceNotFoundException(
                                 "Excepción no encontrada"
                         )
                 );
