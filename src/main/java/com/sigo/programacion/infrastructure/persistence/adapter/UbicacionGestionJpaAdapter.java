@@ -133,7 +133,7 @@ public class UbicacionGestionJpaAdapter
         ubicacion.setTipo(tipoUbicacion);
 
         if (tipoUbicacion != TipoUbicacion.VIA) {
-            ubicacion.setVia(null);
+            ubicacion.setViaId(null);
         }
 
         if (orden != null && orden > 0) {
