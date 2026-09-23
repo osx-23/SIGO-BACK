@@ -65,6 +65,7 @@ jobs:
             src/main/java/com/sigo/inventario/application/service/InventarioCatalogoService.java
             src/main/java/com/sigo/inventario/application/service/InventarioStockService.java
             src/main/java/com/sigo/inventario/application/service/IniciarInventarioService.java
+            src/main/java/com/sigo/inventario/application/service/GuardarConteoInventarioService.java
             src/main/java/com/sigo/inventario/application/service/InventarioConsultaService.java
             src/main/java/com/sigo/inventario/application/security/InventarioAuthorizationService.java
             src/main/java/com/sigo/inventario/application/service/InventarioAuditoriaService.java
