@@ -1,25 +1,20 @@
 package com.sigo.programacion.application.service;
 
-import com.sigo.personal.infrastructure.persistence.entity.Plaza;
-import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
-import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
-import com.sigo.personal.infrastructure.persistence.repository.PlazaRepository;
-import com.sigo.personal.infrastructure.persistence.repository.TrabajadorRepository;
-import com.sigo.programacion.api.dto.generador.ProgramacionGeneradorDto.*;
-import com.sigo.programacion.infrastructure.persistence.entity.AgenteProgramacionExcepcion;
-import com.sigo.programacion.infrastructure.persistence.entity.EstadoProgramacion;
-import com.sigo.programacion.infrastructure.persistence.entity.GrupoProgramacion;
-import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionSecuenciaAgente;
-import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionTurno;
-import com.sigo.programacion.infrastructure.persistence.repository.AgenteProgramacionExcepcionRepository;
-import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionSecuenciaAgenteRepository;
-import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionTurnoRepository;
-import com.sigo.security.application.service.CurrentUserService;
+import com.sigo.programacion.application.port.in.GenerarProgramacionUseCase;
+import com.sigo.programacion.application.port.in.GenerarProgramacionUseCase.*;
+import com.sigo.programacion.application.port.out.ProgramacionAccessPort;
+import com.sigo.programacion.application.port.out.ProgramacionGeneradorDataPort;
+import com.sigo.programacion.domain.ProgramacionEstado;
+import com.sigo.programacion.domain.ProgramacionGrupo;
+import com.sigo.programacion.domain.ProgramacionValidationException;
+import com.sigo.programacion.domain.generador.GeneradorExcepcion;
+import com.sigo.programacion.domain.generador.GeneradorPlaza;
+import com.sigo.programacion.domain.generador.GeneradorSecuencia;
+import com.sigo.programacion.domain.generador.GeneradorTrabajador;
+import com.sigo.programacion.domain.generador.GeneradorTurno;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -33,7 +28,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class ProgramacionGeneradorService {
+public class ProgramacionGeneradorService implements GenerarProgramacionUseCase {
 
     /*
      * ============================================================
@@ -123,29 +118,26 @@ public class ProgramacionGeneradorService {
      */
     private static final int MIN_SIN_C_POR_SECUENCIA_SEMANA = 1;
 
-    private final ProgramacionTurnoRepository programacionRepo;
-    private final ProgramacionSecuenciaAgenteRepository secuenciaRepo;
-    private final AgenteProgramacionExcepcionRepository excepcionRepo;
-    private final TrabajadorRepository trabajadorRepo;
-    private final PlazaRepository plazaRepo;
-    private final CurrentUserService currentUser;
+    private final ProgramacionGeneradorDataPort dataPort;
+    private final ProgramacionAccessPort accessPort;
 
     // ============================================================
     // GENERACIÓN PRINCIPAL
     // ============================================================
 
+    @Override
     @Transactional(readOnly = true)
     public ProgramacionPropuestaResponse generar(
             GenerarProgramacionRequest request
     ) {
 
-        requireSupervisor();
+        accessPort.requireSupervisorId();
         validarRequest(request);
 
-        Plaza plaza = plazaRepo
-                .findById(request.plazaId())
-                .filter(p -> Boolean.TRUE.equals(p.getActivo()))
-                .orElseThrow(() -> bad("Plaza no válida o inactiva"));
+        GeneradorPlaza plaza =
+                dataPort.requirePlazaActiva(
+                        request.plazaId()
+                );
 
         YearMonth yearMonth = YearMonth.of(
                 request.anio(),
@@ -168,14 +160,14 @@ public class ProgramacionGeneradorService {
         // AGENTES
         // ========================================================
 
-        List<Trabajador> agentes =
-                trabajadorRepo.findAgentesByPlaza(plaza.getId());
+        List<GeneradorTrabajador> agentes =
+                dataPort.agentesPorPlaza(plaza.getId());
 
-        Map<Long, Trabajador> agentesPorId =
+        Map<Long, GeneradorTrabajador> agentesPorId =
                 agentes.stream()
                         .collect(
                                 Collectors.toMap(
-                                        Trabajador::getId,
+                                        GeneradorTrabajador::getId,
                                         Function.identity()
                                 )
                         );
@@ -184,10 +176,10 @@ public class ProgramacionGeneradorService {
         // SECUENCIAS
         // ========================================================
 
-        List<ProgramacionSecuenciaAgente> secuencias =
-                secuenciaRepo.findActivasByPlazaId(plaza.getId());
+        List<GeneradorSecuencia> secuencias =
+                dataPort.secuenciasPorPlaza(plaza.getId());
 
-        Map<Long, ProgramacionSecuenciaAgente> secuenciaPorAgente =
+        Map<Long, GeneradorSecuencia> secuenciaPorAgente =
                 secuencias.stream()
                         .collect(
                                 Collectors.toMap(
@@ -200,13 +192,12 @@ public class ProgramacionGeneradorService {
         // EXCEPCIONES
         // ========================================================
 
-        List<AgenteProgramacionExcepcion> excepciones =
-                excepcionRepo
-                        .findByPlazaIdAndActivoTrueOrderByTrabajadorNombreCompletoAsc(
-                                plaza.getId()
-                        );
+        List<GeneradorExcepcion> excepciones =
+                dataPort.excepcionesPorPlaza(
+                        plaza.getId()
+                );
 
-        Map<Long, AgenteProgramacionExcepcion> excepcionPorAgente =
+        Map<Long, GeneradorExcepcion> excepcionPorAgente =
                 excepciones.stream()
                         .collect(
                                 Collectors.toMap(
@@ -219,14 +210,14 @@ public class ProgramacionGeneradorService {
         // HISTÓRICO
         // ========================================================
 
-        List<ProgramacionTurno> historico =
-                programacionRepo.findMes(
+        List<GeneradorTurno> historico =
+                dataPort.historial(
                         plaza.getId(),
                         inicioHistorico,
                         fin
                 );
 
-        Map<Long, Map<LocalDate, EstadoProgramacion>> historicoPorAgente =
+        Map<Long, Map<LocalDate, ProgramacionEstado>> historicoPorAgente =
                 construirHistorico(historico);
 
         // ========================================================
@@ -245,7 +236,7 @@ public class ProgramacionGeneradorService {
         // PROPUESTA
         // ========================================================
 
-        Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta =
+        Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta =
                 new LinkedHashMap<>();
 
         Map<Long, Map<LocalDate, Boolean>> patronLaboral =
@@ -258,24 +249,24 @@ public class ProgramacionGeneradorService {
         // FULL TIME
         // ========================================================
 
-        List<ProgramacionSecuenciaAgente> fullTime =
+        List<GeneradorSecuencia> fullTime =
                 secuencias.stream()
                         .filter(
                                 s ->
                                         s.getGrupo() != null
                                                 && s.getGrupo()
-                                                != GrupoProgramacion.PART_TIME
+                                                != ProgramacionGrupo.PART_TIME
                         )
                         .sorted(
                                 Comparator
                                         .comparing(
-                                                ProgramacionSecuenciaAgente::getGrupo,
+                                                GeneradorSecuencia::getGrupo,
                                                 Comparator.nullsLast(
                                                         Comparator.naturalOrder()
                                                 )
                                         )
                                         .thenComparingInt(
-                                                (ProgramacionSecuenciaAgente s) ->
+                                                (GeneradorSecuencia s) ->
                                                         Optional.ofNullable(
                                                                         s.getOrden()
                                                                 )
@@ -284,7 +275,7 @@ public class ProgramacionGeneradorService {
                                                                 )
                                         )
                                         .thenComparingInt(
-                                                (ProgramacionSecuenciaAgente s) ->
+                                                (GeneradorSecuencia s) ->
                                                         Optional.ofNullable(
                                                                         s.getAgente()
                                                                                 .getCodigo()
@@ -311,9 +302,9 @@ public class ProgramacionGeneradorService {
         // CONSTRUIR CICLO 6x2
         // ========================================================
 
-        for (ProgramacionSecuenciaAgente secuencia : fullTime) {
+        for (GeneradorSecuencia secuencia : fullTime) {
 
-            Trabajador agente = secuencia.getAgente();
+            GeneradorTrabajador agente = secuencia.getAgente();
 
             Integer posicion =
                     posicionInicial.get(agente.getId());
@@ -325,7 +316,7 @@ public class ProgramacionGeneradorService {
             Map<LocalDate, Boolean> patron =
                     new LinkedHashMap<>();
 
-            Map<LocalDate, EstadoProgramacion> estados =
+            Map<LocalDate, ProgramacionEstado> estados =
                     new LinkedHashMap<>();
 
             Map<LocalDate, NovedadProgramacionRequest> novedadesAgente =
@@ -374,7 +365,7 @@ public class ProgramacionGeneradorService {
 
                     estados.put(
                             fecha,
-                            EstadoProgramacion.D
+                            ProgramacionEstado.D
                     );
                 }
 
@@ -398,7 +389,7 @@ public class ProgramacionGeneradorService {
         // AGENTES SIN SECUENCIA
         // ========================================================
 
-        for (Trabajador agente : agentes) {
+        for (GeneradorTrabajador agente : agentes) {
 
             if (!secuenciaPorAgente.containsKey(agente.getId())) {
 
@@ -471,17 +462,17 @@ public class ProgramacionGeneradorService {
         // PART TIME
         // ========================================================
 
-        List<ProgramacionSecuenciaAgente> partTime =
+        List<GeneradorSecuencia> partTime =
                 secuencias.stream()
                         .filter(
                                 s ->
                                         s.getGrupo()
-                                                == GrupoProgramacion.PART_TIME
+                                                == ProgramacionGrupo.PART_TIME
                         )
                         .sorted(
                                 Comparator
                                         .comparingInt(
-                                                (ProgramacionSecuenciaAgente s) ->
+                                                (GeneradorSecuencia s) ->
                                                         Optional.ofNullable(
                                                                         s.getOrden()
                                                                 )
@@ -490,7 +481,7 @@ public class ProgramacionGeneradorService {
                                                                 )
                                         )
                                         .thenComparingInt(
-                                                (ProgramacionSecuenciaAgente s) ->
+                                                (GeneradorSecuencia s) ->
                                                         Optional.ofNullable(
                                                                         s.getAgente()
                                                                                 .getCodigo()
@@ -620,16 +611,16 @@ public class ProgramacionGeneradorService {
     // ============================================================
 
     private Map<Long, Integer> determinarPosicionesFullTime(
-            List<ProgramacionSecuenciaAgente> fullTime,
+            List<GeneradorSecuencia> fullTime,
             LocalDate inicio,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
             List<ConflictoProgramacionResponse> conflictos
     ) {
 
         Map<Long, Set<Integer>> candidatos =
                 new HashMap<>();
 
-        for (ProgramacionSecuenciaAgente secuencia : fullTime) {
+        for (GeneradorSecuencia secuencia : fullTime) {
 
             Long trabajadorId =
                     secuencia.getAgente().getId();
@@ -649,22 +640,22 @@ public class ProgramacionGeneradorService {
             );
         }
 
-        Map<GrupoProgramacion, Integer> anclaGrupo =
+        Map<ProgramacionGrupo, Integer> anclaGrupo =
                 new EnumMap<>(
-                        GrupoProgramacion.class
+                        ProgramacionGrupo.class
                 );
 
-        List<GrupoProgramacion> grupos =
+        List<ProgramacionGrupo> grupos =
                 List.of(
-                        GrupoProgramacion.SECUENCIA_1,
-                        GrupoProgramacion.SECUENCIA_2,
-                        GrupoProgramacion.SECUENCIA_3,
-                        GrupoProgramacion.SECUENCIA_4
+                        ProgramacionGrupo.SECUENCIA_1,
+                        ProgramacionGrupo.SECUENCIA_2,
+                        ProgramacionGrupo.SECUENCIA_3,
+                        ProgramacionGrupo.SECUENCIA_4
                 );
 
-        for (GrupoProgramacion grupo : grupos) {
+        for (ProgramacionGrupo grupo : grupos) {
 
-            List<ProgramacionSecuenciaAgente> miembrosGrupo =
+            List<GeneradorSecuencia> miembrosGrupo =
                     fullTime.stream()
                             .filter(s -> s.getGrupo() == grupo)
                             .toList();
@@ -685,7 +676,7 @@ public class ProgramacionGeneradorService {
              */
             Set<Integer> interseccion = null;
 
-            for (ProgramacionSecuenciaAgente miembro : miembrosGrupo) {
+            for (GeneradorSecuencia miembro : miembrosGrupo) {
                 Set<Integer> posibles = candidatos.getOrDefault(
                         miembro.getAgente().getId(),
                         Set.of()
@@ -736,7 +727,7 @@ public class ProgramacionGeneradorService {
             if (posicionesExactas.size() == 1) {
                 anclaGrupo.put(grupo, posicionesExactas.iterator().next());
             } else {
-                for (ProgramacionSecuenciaAgente secuencia : miembrosGrupo) {
+                for (GeneradorSecuencia secuencia : miembrosGrupo) {
                     conflictos.add(
                             warning(
                                     "SECUENCIA_6X2_INCONSISTENTE",
@@ -753,9 +744,9 @@ public class ProgramacionGeneradorService {
         Map<Long, Integer> resultado =
                 new HashMap<>();
 
-        for (ProgramacionSecuenciaAgente secuencia : fullTime) {
+        for (GeneradorSecuencia secuencia : fullTime) {
 
-            Trabajador agente =
+            GeneradorTrabajador agente =
                     secuencia.getAgente();
 
             Set<Integer> posibles =
@@ -813,7 +804,7 @@ public class ProgramacionGeneradorService {
 
     private Set<Integer> posicionesCompatibles(
             LocalDate inicio,
-            Map<LocalDate, EstadoProgramacion> historico
+            Map<LocalDate, ProgramacionEstado> historico
     ) {
 
         LocalDate desde =
@@ -830,10 +821,10 @@ public class ProgramacionGeneradorService {
                         .map(Map.Entry::getValue)
                         .anyMatch(
                                 estado ->
-                                        estado == EstadoProgramacion.A
-                                                || estado == EstadoProgramacion.B
-                                                || estado == EstadoProgramacion.C
-                                                || estado == EstadoProgramacion.D
+                                        estado == ProgramacionEstado.A
+                                                || estado == ProgramacionEstado.B
+                                                || estado == ProgramacionEstado.C
+                                                || estado == ProgramacionEstado.D
                         );
 
         if (!tieneEvidenciaEstructural) {
@@ -860,7 +851,7 @@ public class ProgramacionGeneradorService {
             boolean compatible = true;
 
             for (
-                    Map.Entry<LocalDate, EstadoProgramacion> entry :
+                    Map.Entry<LocalDate, ProgramacionEstado> entry :
                     historico.entrySet()
             ) {
 
@@ -874,7 +865,7 @@ public class ProgramacionGeneradorService {
                     continue;
                 }
 
-                EstadoProgramacion observado =
+                ProgramacionEstado observado =
                         entry.getValue();
 
                 if (
@@ -885,10 +876,10 @@ public class ProgramacionGeneradorService {
                 }
 
                 if (
-                        observado != EstadoProgramacion.A
-                                && observado != EstadoProgramacion.B
-                                && observado != EstadoProgramacion.C
-                                && observado != EstadoProgramacion.D
+                        observado != ProgramacionEstado.A
+                                && observado != ProgramacionEstado.B
+                                && observado != ProgramacionEstado.C
+                                && observado != ProgramacionEstado.D
                 ) {
                     continue;
                 }
@@ -935,13 +926,13 @@ public class ProgramacionGeneradorService {
             GenerarProgramacionRequest request,
             LocalDate inicio,
             LocalDate fin,
-            List<ProgramacionSecuenciaAgente> fullTime,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
+            List<GeneradorSecuencia> fullTime,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
             Map<Long, Map<LocalDate, Boolean>> patronLaboral,
             Map<Long, Integer> posicionInicial,
             Map<Long, Map<LocalDate, NovedadProgramacionRequest>> novedades,
-            Map<Long, AgenteProgramacionExcepcion> excepciones,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico,
+            Map<Long, GeneradorExcepcion> excepciones,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
             Map<Long, Map<LocalDate, Integer>> cPorBloque,
             Map<Long, Integer> totalC,
             Map<String, Long> protegidoSinCPorSecuenciaSemana,
@@ -960,12 +951,12 @@ public class ProgramacionGeneradorService {
                             fecha
                     );
 
-            List<ProgramacionSecuenciaAgente> disponibles =
+            List<GeneradorSecuencia> disponibles =
                     new ArrayList<>();
 
-            for (ProgramacionSecuenciaAgente secuencia : fullTime) {
+            for (GeneradorSecuencia secuencia : fullTime) {
 
-                Trabajador agente =
+                GeneradorTrabajador agente =
                         secuencia.getAgente();
 
                 Map<LocalDate, Boolean> patron =
@@ -1002,7 +993,7 @@ public class ProgramacionGeneradorService {
              */
             asignarTurnoFullTime(
                     fecha,
-                    EstadoProgramacion.C,
+                    ProgramacionEstado.C,
                     requerida.c(),
                     disponibles,
                     propuesta,
@@ -1017,7 +1008,7 @@ public class ProgramacionGeneradorService {
 
             asignarTurnoFullTime(
                     fecha,
-                    EstadoProgramacion.B,
+                    ProgramacionEstado.B,
                     requerida.b(),
                     disponibles,
                     propuesta,
@@ -1032,7 +1023,7 @@ public class ProgramacionGeneradorService {
 
             asignarTurnoFullTime(
                     fecha,
-                    EstadoProgramacion.A,
+                    ProgramacionEstado.A,
                     requerida.a(),
                     disponibles,
                     propuesta,
@@ -1049,12 +1040,12 @@ public class ProgramacionGeneradorService {
              * Todo FT que estructuralmente trabaja debe recibir
              * algún turno compatible.
              */
-            for (ProgramacionSecuenciaAgente secuencia : disponibles) {
+            for (GeneradorSecuencia secuencia : disponibles) {
 
-                Trabajador agente =
+                GeneradorTrabajador agente =
                         secuencia.getAgente();
 
-                EstadoProgramacion actual =
+                ProgramacionEstado actual =
                         propuesta
                                 .get(agente.getId())
                                 .get(fecha);
@@ -1063,7 +1054,7 @@ public class ProgramacionGeneradorService {
                     continue;
                 }
 
-                EstadoProgramacion turno =
+                ProgramacionEstado turno =
                         elegirTurnoResidualFullTime(
                                 request,
                                 fecha,
@@ -1090,7 +1081,7 @@ public class ProgramacionGeneradorService {
                             propuesta
                     );
 
-                    if (turno == EstadoProgramacion.C) {
+                    if (turno == ProgramacionEstado.C) {
 
                         registrarC(
                                 agente.getId(),
@@ -1128,14 +1119,14 @@ public class ProgramacionGeneradorService {
 
     private void asignarTurnoFullTime(
             LocalDate fecha,
-            EstadoProgramacion turno,
+            ProgramacionEstado turno,
             int requerido,
-            List<ProgramacionSecuenciaAgente> disponibles,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
-            Map<Long, AgenteProgramacionExcepcion> excepciones,
+            List<GeneradorSecuencia> disponibles,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
+            Map<Long, GeneradorExcepcion> excepciones,
             Map<Long, Integer> posicionInicial,
             LocalDate inicioMes,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
             Map<Long, Map<LocalDate, Integer>> cPorBloque,
             Map<Long, Integer> totalC,
             Map<String, Long> protegidoSinCPorSecuenciaSemana
@@ -1158,10 +1149,10 @@ public class ProgramacionGeneradorService {
             return;
         }
 
-        List<ProgramacionSecuenciaAgente> candidatos =
+        List<GeneradorSecuencia> candidatos =
                 disponibles.stream()
                         .filter(
-                                (ProgramacionSecuenciaAgente s) ->
+                                (GeneradorSecuencia s) ->
                                         propuesta
                                                 .get(
                                                         s.getAgente().getId()
@@ -1170,7 +1161,7 @@ public class ProgramacionGeneradorService {
                                                 == null
                         )
                         .filter(
-                                (ProgramacionSecuenciaAgente s) ->
+                                (GeneradorSecuencia s) ->
                                         permite(
                                                 excepciones.get(
                                                         s.getAgente().getId()
@@ -1184,8 +1175,8 @@ public class ProgramacionGeneradorService {
                          * C únicamente en posiciones laborales 5/6.
                          */
                         .filter(
-                                (ProgramacionSecuenciaAgente s) ->
-                                        turno != EstadoProgramacion.C
+                                (GeneradorSecuencia s) ->
+                                        turno != ProgramacionEstado.C
                                                 || puedeAsignarCFullTime(
                                                 s.getAgente().getId(),
                                                 fecha,
@@ -1200,8 +1191,8 @@ public class ProgramacionGeneradorService {
                          * de C durante cada semana ISO.
                          */
                         .filter(
-                                (ProgramacionSecuenciaAgente s) ->
-                                        turno != EstadoProgramacion.C
+                                (GeneradorSecuencia s) ->
+                                        turno != ProgramacionEstado.C
                                                 || !estaProtegidoSinC(
                                                 s,
                                                 fecha,
@@ -1213,7 +1204,7 @@ public class ProgramacionGeneradorService {
                          * Respeta C -> A/B y la progresión A -> B -> C.
                          */
                         .filter(
-                                (ProgramacionSecuenciaAgente s) ->
+                                (GeneradorSecuencia s) ->
                                         transicionPermitidaFullTime(
                                                 s.getAgente().getId(),
                                                 fecha,
@@ -1241,13 +1232,13 @@ public class ProgramacionGeneradorService {
                         )
                         .toList();
 
-        for (ProgramacionSecuenciaAgente candidato : candidatos) {
+        for (GeneradorSecuencia candidato : candidatos) {
 
             if (faltan <= 0) {
                 break;
             }
 
-            Trabajador agente =
+            GeneradorTrabajador agente =
                     candidato.getAgente();
 
             asignarEstado(
@@ -1257,7 +1248,7 @@ public class ProgramacionGeneradorService {
                     propuesta
             );
 
-            if (turno == EstadoProgramacion.C) {
+            if (turno == ProgramacionEstado.C) {
 
                 registrarC(
                         agente.getId(),
@@ -1362,12 +1353,12 @@ public class ProgramacionGeneradorService {
     private boolean transicionPermitida(
             Long trabajadorId,
             LocalDate fecha,
-            EstadoProgramacion turnoNuevo,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico
+            ProgramacionEstado turnoNuevo,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico
     ) {
 
-        EstadoProgramacion ayer =
+        ProgramacionEstado ayer =
                 estadoDiaAnterior(
                         trabajadorId,
                         fecha,
@@ -1375,9 +1366,9 @@ public class ProgramacionGeneradorService {
                         historico
                 );
 
-        if (ayer == EstadoProgramacion.C) {
-            return turnoNuevo != EstadoProgramacion.A
-                    && turnoNuevo != EstadoProgramacion.B;
+        if (ayer == ProgramacionEstado.C) {
+            return turnoNuevo != ProgramacionEstado.A
+                    && turnoNuevo != ProgramacionEstado.B;
         }
 
         return true;
@@ -1397,10 +1388,10 @@ public class ProgramacionGeneradorService {
     private boolean transicionPermitidaFullTime(
             Long trabajadorId,
             LocalDate fecha,
-            EstadoProgramacion turnoNuevo,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico,
-            AgenteProgramacionExcepcion excepcion,
+            ProgramacionEstado turnoNuevo,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
+            GeneradorExcepcion excepcion,
             LocalDate inicioMes,
             Map<Long, Integer> posicionInicial
     ) {
@@ -1426,7 +1417,7 @@ public class ProgramacionGeneradorService {
             return false;
         }
 
-        EstadoProgramacion ultimo = ultimoTurnoOperativoDelBloque(
+        ProgramacionEstado ultimo = ultimoTurnoOperativoDelBloque(
                 trabajadorId,
                 fecha,
                 inicioMes,
@@ -1453,32 +1444,32 @@ public class ProgramacionGeneradorService {
          * histórico cuando el bloque comenzó en el mes anterior.
          */
         if (posicion <= 1
-                && turnoNuevo == EstadoProgramacion.B
-                && permite(excepcion, EstadoProgramacion.A)
-                && ultimo != EstadoProgramacion.B
-                && ultimo != EstadoProgramacion.C) {
+                && turnoNuevo == ProgramacionEstado.B
+                && permite(excepcion, ProgramacionEstado.A)
+                && ultimo != ProgramacionEstado.B
+                && ultimo != ProgramacionEstado.C) {
             return false;
         }
 
-        if (ultimo == EstadoProgramacion.C) {
-            return turnoNuevo == EstadoProgramacion.C;
+        if (ultimo == ProgramacionEstado.C) {
+            return turnoNuevo == ProgramacionEstado.C;
         }
 
-        if (ultimo == EstadoProgramacion.B
-                && turnoNuevo == EstadoProgramacion.A) {
+        if (ultimo == ProgramacionEstado.B
+                && turnoNuevo == ProgramacionEstado.A) {
             return false;
         }
 
         return true;
     }
 
-    private EstadoProgramacion ultimoTurnoOperativoDelBloque(
+    private ProgramacionEstado ultimoTurnoOperativoDelBloque(
             Long trabajadorId,
             LocalDate fecha,
             LocalDate inicioMes,
             Map<Long, Integer> posicionInicial,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico
     ) {
 
         int posicion = posicionCiclo(
@@ -1498,7 +1489,7 @@ public class ProgramacionGeneradorService {
              !cursor.isBefore(inicioBloque);
              cursor = cursor.minusDays(1)) {
 
-            EstadoProgramacion estado = estadoEnFecha(
+            ProgramacionEstado estado = estadoEnFecha(
                     trabajadorId,
                     cursor,
                     propuesta,
@@ -1513,14 +1504,14 @@ public class ProgramacionGeneradorService {
         return null;
     }
 
-    private EstadoProgramacion estadoEnFecha(
+    private ProgramacionEstado estadoEnFecha(
             Long trabajadorId,
             LocalDate fecha,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico
     ) {
 
-        Map<LocalDate, EstadoProgramacion> propuestaAgente =
+        Map<LocalDate, ProgramacionEstado> propuestaAgente =
                 propuesta.get(trabajadorId);
 
         if (propuestaAgente != null
@@ -1533,11 +1524,11 @@ public class ProgramacionGeneradorService {
                 .get(fecha);
     }
 
-    private EstadoProgramacion estadoDiaAnterior(
+    private ProgramacionEstado estadoDiaAnterior(
             Long trabajadorId,
             LocalDate fecha,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico
     ) {
 
         return estadoEnFecha(
@@ -1552,20 +1543,20 @@ public class ProgramacionGeneradorService {
     // COMPARADOR FULL TIME
     // ============================================================
 
-    private Comparator<ProgramacionSecuenciaAgente> comparadorCandidatos(
-            EstadoProgramacion turno,
+    private Comparator<GeneradorSecuencia> comparadorCandidatos(
+            ProgramacionEstado turno,
             LocalDate fecha,
             LocalDate inicioMes,
             Map<Long, Integer> posicionInicial,
             Map<Long, Map<LocalDate, Integer>> cPorBloque,
             Map<Long, Integer> totalC,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico,
-            Map<Long, AgenteProgramacionExcepcion> excepciones,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
+            Map<Long, GeneradorExcepcion> excepciones,
             Map<String, Long> protegidoSinCPorSecuenciaSemana
     ) {
 
-        Comparator<ProgramacionSecuenciaAgente> comparador;
+        Comparator<GeneradorSecuencia> comparador;
 
         /*
          * La primera prioridad es parecerse al patrón A A B B C C.
@@ -1575,7 +1566,7 @@ public class ProgramacionGeneradorService {
         comparador =
                 Comparator
                         .comparingInt(
-                                (ProgramacionSecuenciaAgente secuencia) ->
+                                (GeneradorSecuencia secuencia) ->
                                         penalizacionPatronObjetivo(
                                                 secuencia,
                                                 fecha,
@@ -1589,19 +1580,19 @@ public class ProgramacionGeneradorService {
                                         )
                         );
 
-        if (turno == EstadoProgramacion.C) {
+        if (turno == ProgramacionEstado.C) {
             comparador = comparador
                     .thenComparingInt(
-                            (ProgramacionSecuenciaAgente secuencia) ->
+                            (GeneradorSecuencia secuencia) ->
                                     estadoDiaAnterior(
                                             secuencia.getAgente().getId(),
                                             fecha,
                                             propuesta,
                                             historico
-                                    ) == EstadoProgramacion.C ? 0 : 1
+                                    ) == ProgramacionEstado.C ? 0 : 1
                     )
                     .thenComparingInt(
-                            (ProgramacionSecuenciaAgente secuencia) ->
+                            (GeneradorSecuencia secuencia) ->
                                     cantidadCEnBloque(
                                             secuencia.getAgente().getId(),
                                             fecha,
@@ -1611,7 +1602,7 @@ public class ProgramacionGeneradorService {
                                     )
                     )
                     .thenComparingInt(
-                            (ProgramacionSecuenciaAgente secuencia) ->
+                            (GeneradorSecuencia secuencia) ->
                                     totalC.getOrDefault(
                                             secuencia.getAgente().getId(),
                                             0
@@ -1621,7 +1612,7 @@ public class ProgramacionGeneradorService {
 
         return comparador
                 .thenComparingInt(
-                        (ProgramacionSecuenciaAgente s) ->
+                        (GeneradorSecuencia s) ->
                                 Optional.ofNullable(
                                                 s.getOrden()
                                         )
@@ -1630,7 +1621,7 @@ public class ProgramacionGeneradorService {
                                         )
                 )
                 .thenComparingInt(
-                        (ProgramacionSecuenciaAgente s) ->
+                        (GeneradorSecuencia s) ->
                                 Optional.ofNullable(
                                                 s.getAgente().getCodigo()
                                         )
@@ -1649,12 +1640,12 @@ public class ProgramacionGeneradorService {
      * 5/6 prefieren B para producir variantes como A A B B B B.
      */
     private int penalizacionPatronObjetivo(
-            ProgramacionSecuenciaAgente secuencia,
+            GeneradorSecuencia secuencia,
             LocalDate fecha,
-            EstadoProgramacion turno,
+            ProgramacionEstado turno,
             LocalDate inicioMes,
             Map<Long, Integer> posicionInicial,
-            AgenteProgramacionExcepcion excepcion,
+            GeneradorExcepcion excepcion,
             Map<String, Long> protegidoSinCPorSecuenciaSemana
     ) {
         int posicion = posicionCiclo(
@@ -1672,17 +1663,17 @@ public class ProgramacionGeneradorService {
                 secuencia, fecha, protegidoSinCPorSecuenciaSemana
         );
 
-        EstadoProgramacion ideal;
+        ProgramacionEstado ideal;
         if (posicion <= 1) {
-            ideal = permite(excepcion, EstadoProgramacion.A)
-                    ? EstadoProgramacion.A
-                    : EstadoProgramacion.B;
+            ideal = permite(excepcion, ProgramacionEstado.A)
+                    ? ProgramacionEstado.A
+                    : ProgramacionEstado.B;
         } else if (posicion <= 3) {
-            ideal = EstadoProgramacion.B;
+            ideal = ProgramacionEstado.B;
         } else {
             ideal = protegido
-                    ? EstadoProgramacion.B
-                    : EstadoProgramacion.C;
+                    ? ProgramacionEstado.B
+                    : ProgramacionEstado.C;
         }
 
         if (turno == ideal) {
@@ -1690,17 +1681,17 @@ public class ProgramacionGeneradorService {
         }
 
         // Alternativas que todavía conservan una progresión razonable.
-        if (posicion <= 1 && turno == EstadoProgramacion.B) return 20;
-        if (posicion >= 2 && posicion <= 3 && turno == EstadoProgramacion.A) return 20;
-        if (posicion >= 4 && turno == EstadoProgramacion.B) return 15;
-        if (posicion >= 4 && turno == EstadoProgramacion.A) return 30;
-        if (posicion >= 4 && turno == EstadoProgramacion.C) return protegido ? 100 : 0;
+        if (posicion <= 1 && turno == ProgramacionEstado.B) return 20;
+        if (posicion >= 2 && posicion <= 3 && turno == ProgramacionEstado.A) return 20;
+        if (posicion >= 4 && turno == ProgramacionEstado.B) return 15;
+        if (posicion >= 4 && turno == ProgramacionEstado.A) return 30;
+        if (posicion >= 4 && turno == ProgramacionEstado.C) return protegido ? 100 : 0;
 
         return 50;
     }
 
     private boolean estaProtegidoSinC(
-            ProgramacionSecuenciaAgente secuencia,
+            GeneradorSecuencia secuencia,
             LocalDate fecha,
             Map<String, Long> protegidoSinCPorSecuenciaSemana
     ) {
@@ -1714,7 +1705,7 @@ public class ProgramacionGeneradorService {
     }
 
     private String claveProteccion(
-            GrupoProgramacion grupo,
+            ProgramacionGrupo grupo,
             LocalDate fecha
     ) {
         return grupo.name() + "|" + claveSemana(fecha);
@@ -1726,22 +1717,22 @@ public class ProgramacionGeneradorService {
      * se elige alguien que no tenga ya un C histórico en esa semana.
      */
     private Map<String, Long> construirProteccionSemanalSinC(
-            List<ProgramacionSecuenciaAgente> fullTime,
+            List<GeneradorSecuencia> fullTime,
             LocalDate inicio,
             LocalDate fin,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico,
-            Map<Long, AgenteProgramacionExcepcion> excepciones,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
+            Map<Long, GeneradorExcepcion> excepciones,
             List<ConflictoProgramacionResponse> conflictos
     ) {
         Map<String, Long> resultado = new HashMap<>();
 
-        Map<GrupoProgramacion, List<ProgramacionSecuenciaAgente>> porGrupo =
+        Map<ProgramacionGrupo, List<GeneradorSecuencia>> porGrupo =
                 fullTime.stream()
                         .filter(s -> s.getGrupo() != null
-                                && s.getGrupo() != GrupoProgramacion.PART_TIME)
+                                && s.getGrupo() != ProgramacionGrupo.PART_TIME)
                         .collect(Collectors.groupingBy(
-                                ProgramacionSecuenciaAgente::getGrupo,
-                                () -> new EnumMap<>(GrupoProgramacion.class),
+                                GeneradorSecuencia::getGrupo,
+                                () -> new EnumMap<>(ProgramacionGrupo.class),
                                 Collectors.toList()
                         ));
 
@@ -1752,11 +1743,11 @@ public class ProgramacionGeneradorService {
             LocalDate lunes = semana;
             LocalDate domingo = lunes.plusDays(6);
 
-            for (Map.Entry<GrupoProgramacion, List<ProgramacionSecuenciaAgente>> entry : porGrupo.entrySet()) {
-                GrupoProgramacion grupo = entry.getKey();
-                List<ProgramacionSecuenciaAgente> miembros = entry.getValue().stream()
+            for (Map.Entry<ProgramacionGrupo, List<GeneradorSecuencia>> entry : porGrupo.entrySet()) {
+                ProgramacionGrupo grupo = entry.getKey();
+                List<GeneradorSecuencia> miembros = entry.getValue().stream()
                         .sorted(Comparator
-                                .comparingInt((ProgramacionSecuenciaAgente s) ->
+                                .comparingInt((GeneradorSecuencia s) ->
                                         Optional.ofNullable(s.getOrden()).orElse(Integer.MAX_VALUE))
                                 .thenComparingInt(s ->
                                         Optional.ofNullable(s.getAgente().getCodigo()).orElse(Integer.MAX_VALUE)))
@@ -1764,13 +1755,13 @@ public class ProgramacionGeneradorService {
 
                 if (miembros.isEmpty()) continue;
 
-                List<ProgramacionSecuenciaAgente> elegibles = miembros.stream()
+                List<GeneradorSecuencia> elegibles = miembros.stream()
                         .filter(s -> !tuvoCEnRangoHistorico(
                                 s.getAgente().getId(), lunes, inicio.minusDays(1), historico))
                         .toList();
 
                 if (elegibles.isEmpty()) {
-                    ProgramacionSecuenciaAgente referencia = miembros.get(0);
+                    GeneradorSecuencia referencia = miembros.get(0);
                     conflictos.add(warning(
                             "SIN_C_SEMANAL_NO_GARANTIZABLE",
                             referencia.getAgente(),
@@ -1783,18 +1774,18 @@ public class ProgramacionGeneradorService {
                 }
 
                 // Primero favorecemos a quien ya tenga restricción de C.
-                List<ProgramacionSecuenciaAgente> sinCPermitido = elegibles.stream()
+                List<GeneradorSecuencia> sinCPermitido = elegibles.stream()
                         .filter(s -> !permite(
                                 excepciones.get(s.getAgente().getId()),
-                                EstadoProgramacion.C))
+                                ProgramacionEstado.C))
                         .toList();
-                List<ProgramacionSecuenciaAgente> bolsa =
+                List<GeneradorSecuencia> bolsa =
                         sinCPermitido.isEmpty() ? elegibles : sinCPermitido;
 
                 WeekFields wf = WeekFields.ISO;
                 int numeroSemana = lunes.get(wf.weekOfWeekBasedYear());
                 int indice = Math.floorMod(numeroSemana + grupo.ordinal(), bolsa.size());
-                ProgramacionSecuenciaAgente elegido = bolsa.get(indice);
+                GeneradorSecuencia elegido = bolsa.get(indice);
 
                 resultado.put(claveProteccion(grupo, lunes), elegido.getAgente().getId());
             }
@@ -1809,12 +1800,12 @@ public class ProgramacionGeneradorService {
             Long trabajadorId,
             LocalDate desde,
             LocalDate hasta,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico
     ) {
         if (hasta.isBefore(desde)) return false;
-        Map<LocalDate, EstadoProgramacion> mapa = historico.getOrDefault(trabajadorId, Map.of());
+        Map<LocalDate, ProgramacionEstado> mapa = historico.getOrDefault(trabajadorId, Map.of());
         for (LocalDate fecha = desde; !fecha.isAfter(hasta); fecha = fecha.plusDays(1)) {
-            if (mapa.get(fecha) == EstadoProgramacion.C) return true;
+            if (mapa.get(fecha) == ProgramacionEstado.C) return true;
         }
         return false;
     }
@@ -1823,18 +1814,18 @@ public class ProgramacionGeneradorService {
     // TURNO RESIDUAL FULL TIME
     // ============================================================
 
-    private EstadoProgramacion elegirTurnoResidualFullTime(
+    private ProgramacionEstado elegirTurnoResidualFullTime(
             GenerarProgramacionRequest request,
             LocalDate fecha,
-            Trabajador agente,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
-            AgenteProgramacionExcepcion excepcion,
+            GeneradorTrabajador agente,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
+            GeneradorExcepcion excepcion,
             Map<Long, Integer> posicionInicial,
             LocalDate inicioMes,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
             Map<Long, Map<LocalDate, Integer>> cPorBloque,
             Map<Long, Integer> totalC,
-            ProgramacionSecuenciaAgente secuencia,
+            GeneradorSecuencia secuencia,
             Map<String, Long> protegidoSinCPorSecuenciaSemana
     ) {
 
@@ -1856,12 +1847,12 @@ public class ProgramacionGeneradorService {
         if (
                 permite(
                         excepcion,
-                        EstadoProgramacion.A
+                        ProgramacionEstado.A
                 )
                         && transicionPermitidaFullTime(
                         agente.getId(),
                         fecha,
-                        EstadoProgramacion.A,
+                        ProgramacionEstado.A,
                         propuesta,
                         historico,
                         excepcion,
@@ -1872,15 +1863,15 @@ public class ProgramacionGeneradorService {
 
             candidatos.add(
                     new TurnoResidual(
-                            EstadoProgramacion.A,
+                            ProgramacionEstado.A,
                             excesoSiAsigno(
                                     propuesta,
                                     fecha,
-                                    EstadoProgramacion.A,
+                                    ProgramacionEstado.A,
                                     requerida.a()
                             ),
                             penalizacionPatronObjetivo(
-                                    secuencia, fecha, EstadoProgramacion.A,
+                                    secuencia, fecha, ProgramacionEstado.A,
                                     inicioMes, posicionInicial, excepcion,
                                     protegidoSinCPorSecuenciaSemana
                             )
@@ -1895,12 +1886,12 @@ public class ProgramacionGeneradorService {
         if (
                 permite(
                         excepcion,
-                        EstadoProgramacion.B
+                        ProgramacionEstado.B
                 )
                         && transicionPermitidaFullTime(
                         agente.getId(),
                         fecha,
-                        EstadoProgramacion.B,
+                        ProgramacionEstado.B,
                         propuesta,
                         historico,
                         excepcion,
@@ -1911,15 +1902,15 @@ public class ProgramacionGeneradorService {
 
             candidatos.add(
                     new TurnoResidual(
-                            EstadoProgramacion.B,
+                            ProgramacionEstado.B,
                             excesoSiAsigno(
                                     propuesta,
                                     fecha,
-                                    EstadoProgramacion.B,
+                                    ProgramacionEstado.B,
                                     requerida.b()
                             ),
                             penalizacionPatronObjetivo(
-                                    secuencia, fecha, EstadoProgramacion.B,
+                                    secuencia, fecha, ProgramacionEstado.B,
                                     inicioMes, posicionInicial, excepcion,
                                     protegidoSinCPorSecuenciaSemana
                             )
@@ -1937,7 +1928,7 @@ public class ProgramacionGeneradorService {
         if (
                 permite(
                         excepcion,
-                        EstadoProgramacion.C
+                        ProgramacionEstado.C
                 )
                         && !estaProtegidoSinC(
                         secuencia,
@@ -1954,7 +1945,7 @@ public class ProgramacionGeneradorService {
                         && transicionPermitidaFullTime(
                         agente.getId(),
                         fecha,
-                        EstadoProgramacion.C,
+                        ProgramacionEstado.C,
                         propuesta,
                         historico,
                         excepcion,
@@ -1965,15 +1956,15 @@ public class ProgramacionGeneradorService {
 
             candidatos.add(
                     new TurnoResidual(
-                            EstadoProgramacion.C,
+                            ProgramacionEstado.C,
                             excesoSiAsigno(
                                     propuesta,
                                     fecha,
-                                    EstadoProgramacion.C,
+                                    ProgramacionEstado.C,
                                     requerida.c()
                             ),
                             penalizacionPatronObjetivo(
-                                    secuencia, fecha, EstadoProgramacion.C,
+                                    secuencia, fecha, ProgramacionEstado.C,
                                     inicioMes, posicionInicial, excepcion,
                                     protegidoSinCPorSecuenciaSemana
                             )
@@ -1999,9 +1990,9 @@ public class ProgramacionGeneradorService {
     }
 
     private int excesoSiAsigno(
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
             LocalDate fecha,
-            EstadoProgramacion turno,
+            ProgramacionEstado turno,
             int requerido
     ) {
 
@@ -2019,7 +2010,7 @@ public class ProgramacionGeneradorService {
     }
 
     private record TurnoResidual(
-            EstadoProgramacion estado,
+            ProgramacionEstado estado,
             int exceso,
             int penalizacion
     ) {
@@ -2031,16 +2022,16 @@ public class ProgramacionGeneradorService {
 
     private Map<Long, Map<LocalDate, Integer>>
     inicializarContadoresCFullTime(
-            List<ProgramacionSecuenciaAgente> fullTime,
+            List<GeneradorSecuencia> fullTime,
             LocalDate inicioMes,
             Map<Long, Integer> posicionInicial,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico
     ) {
 
         Map<Long, Map<LocalDate, Integer>> resultado =
                 new HashMap<>();
 
-        for (ProgramacionSecuenciaAgente secuencia : fullTime) {
+        for (GeneradorSecuencia secuencia : fullTime) {
 
             Long trabajadorId =
                     secuencia.getAgente().getId();
@@ -2063,7 +2054,7 @@ public class ProgramacionGeneradorService {
                 continue;
             }
 
-            Map<LocalDate, EstadoProgramacion> historialAgente =
+            Map<LocalDate, ProgramacionEstado> historialAgente =
                     historico.getOrDefault(
                             trabajadorId,
                             Map.of()
@@ -2073,7 +2064,7 @@ public class ProgramacionGeneradorService {
                     inicioMes.minusDays(7);
 
             for (
-                    Map.Entry<LocalDate, EstadoProgramacion> entry :
+                    Map.Entry<LocalDate, ProgramacionEstado> entry :
                     historialAgente.entrySet()
             ) {
 
@@ -2089,7 +2080,7 @@ public class ProgramacionGeneradorService {
 
                 if (
                         entry.getValue()
-                                != EstadoProgramacion.C
+                                != ProgramacionEstado.C
                 ) {
                     continue;
                 }
@@ -2131,9 +2122,9 @@ public class ProgramacionGeneradorService {
     }
 
     private Map<Long, Integer> inicializarTotalC(
-            List<ProgramacionSecuenciaAgente> fullTime,
+            List<GeneradorSecuencia> fullTime,
             LocalDate inicioMes,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico
     ) {
 
         Map<Long, Integer> resultado =
@@ -2142,7 +2133,7 @@ public class ProgramacionGeneradorService {
         LocalDate desde =
                 inicioMes.minusDays(31);
 
-        for (ProgramacionSecuenciaAgente secuencia : fullTime) {
+        for (GeneradorSecuencia secuencia : fullTime) {
 
             Long trabajadorId =
                     secuencia.getAgente().getId();
@@ -2168,7 +2159,7 @@ public class ProgramacionGeneradorService {
                             .filter(
                                     e ->
                                             e.getValue()
-                                                    == EstadoProgramacion.C
+                                                    == ProgramacionEstado.C
                             )
                             .count();
 
@@ -2270,8 +2261,8 @@ public class ProgramacionGeneradorService {
     private void asignarEstado(
             Long trabajadorId,
             LocalDate fecha,
-            EstadoProgramacion estado,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta
+            ProgramacionEstado estado,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta
     ) {
 
         propuesta
@@ -2287,19 +2278,19 @@ public class ProgramacionGeneradorService {
     // ============================================================
 
     private void inicializarPartTime(
-            List<ProgramacionSecuenciaAgente> partTime,
+            List<GeneradorSecuencia> partTime,
             LocalDate inicio,
             LocalDate fin,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
             Map<Long, Map<LocalDate, NovedadProgramacionRequest>> novedades
     ) {
 
-        for (ProgramacionSecuenciaAgente secuencia : partTime) {
+        for (GeneradorSecuencia secuencia : partTime) {
 
-            Trabajador agente =
+            GeneradorTrabajador agente =
                     secuencia.getAgente();
 
-            Map<LocalDate, EstadoProgramacion> estados =
+            Map<LocalDate, ProgramacionEstado> estados =
                     new LinkedHashMap<>();
 
             Map<LocalDate, NovedadProgramacionRequest> novedadesAgente =
@@ -2321,7 +2312,7 @@ public class ProgramacionGeneradorService {
                         fecha,
                         novedad != null
                                 ? novedad.estado()
-                                : EstadoProgramacion.D
+                                : ProgramacionEstado.D
                 );
             }
 
@@ -2336,11 +2327,11 @@ public class ProgramacionGeneradorService {
             GenerarProgramacionRequest request,
             LocalDate inicio,
             LocalDate fin,
-            List<ProgramacionSecuenciaAgente> partTime,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
+            List<GeneradorSecuencia> partTime,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
             Map<Long, Map<LocalDate, NovedadProgramacionRequest>> novedades,
-            Map<Long, AgenteProgramacionExcepcion> excepciones,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico,
+            Map<Long, GeneradorExcepcion> excepciones,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
             List<ConflictoProgramacionResponse> conflictos
     ) {
 
@@ -2352,7 +2343,7 @@ public class ProgramacionGeneradorService {
                 inicializarDiasSemanaPartTime(partTime, inicio, historico);
 
         Map<Long, Integer> diasMes = new HashMap<>();
-        for (ProgramacionSecuenciaAgente secuencia : partTime) {
+        for (GeneradorSecuencia secuencia : partTime) {
             diasMes.put(secuencia.getAgente().getId(), 0);
         }
 
@@ -2367,22 +2358,22 @@ public class ProgramacionGeneradorService {
             CoberturaTurnosRequest requerida = coberturaParaFecha(request, fecha);
 
             cubrirConPartTime(
-                    fecha, EstadoProgramacion.C,
-                    Math.max(0, requerida.c() - contar(propuesta, fecha, EstadoProgramacion.C)),
+                    fecha, ProgramacionEstado.C,
+                    Math.max(0, requerida.c() - contar(propuesta, fecha, ProgramacionEstado.C)),
                     partTime, propuesta, novedades, excepciones, historico,
                     diasSemana, diasMes
             );
 
             cubrirConPartTime(
-                    fecha, EstadoProgramacion.B,
-                    Math.max(0, requerida.b() - contar(propuesta, fecha, EstadoProgramacion.B)),
+                    fecha, ProgramacionEstado.B,
+                    Math.max(0, requerida.b() - contar(propuesta, fecha, ProgramacionEstado.B)),
                     partTime, propuesta, novedades, excepciones, historico,
                     diasSemana, diasMes
             );
 
             cubrirConPartTime(
-                    fecha, EstadoProgramacion.A,
-                    Math.max(0, requerida.a() - contar(propuesta, fecha, EstadoProgramacion.A)),
+                    fecha, ProgramacionEstado.A,
+                    Math.max(0, requerida.a() - contar(propuesta, fecha, ProgramacionEstado.A)),
                     partTime, propuesta, novedades, excepciones, historico,
                     diasSemana, diasMes
             );
@@ -2414,13 +2405,13 @@ public class ProgramacionGeneradorService {
 
     private void cubrirConPartTime(
             LocalDate fecha,
-            EstadoProgramacion turno,
+            ProgramacionEstado turno,
             int cantidad,
-            List<ProgramacionSecuenciaAgente> partTime,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
+            List<GeneradorSecuencia> partTime,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
             Map<Long, Map<LocalDate, NovedadProgramacionRequest>> novedades,
-            Map<Long, AgenteProgramacionExcepcion> excepciones,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico,
+            Map<Long, GeneradorExcepcion> excepciones,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
             Map<Long, Map<String, Integer>> diasSemana,
             Map<Long, Integer> diasMes
     ) {
@@ -2429,7 +2420,7 @@ public class ProgramacionGeneradorService {
 
         String semana = claveSemana(fecha);
 
-        List<ProgramacionSecuenciaAgente> candidatos = partTime.stream()
+        List<GeneradorSecuencia> candidatos = partTime.stream()
                 .filter(s -> {
                     Long trabajadorId = s.getAgente().getId();
 
@@ -2437,7 +2428,7 @@ public class ProgramacionGeneradorService {
                         return false;
                     }
 
-                    if (propuesta.get(trabajadorId).get(fecha) != EstadoProgramacion.D) {
+                    if (propuesta.get(trabajadorId).get(fecha) != ProgramacionEstado.D) {
                         return false;
                     }
 
@@ -2458,7 +2449,7 @@ public class ProgramacionGeneradorService {
                 })
                 .sorted(
                         Comparator
-                                .comparingInt((ProgramacionSecuenciaAgente s) ->
+                                .comparingInt((GeneradorSecuencia s) ->
                                         diasSemana
                                                 .getOrDefault(s.getAgente().getId(), Map.of())
                                                 .getOrDefault(semana, 0))
@@ -2472,7 +2463,7 @@ public class ProgramacionGeneradorService {
                 .toList();
 
         int asignados = 0;
-        for (ProgramacionSecuenciaAgente candidato : candidatos) {
+        for (GeneradorSecuencia candidato : candidatos) {
             if (asignados >= cantidad) break;
 
             Long trabajadorId = candidato.getAgente().getId();
@@ -2491,11 +2482,11 @@ public class ProgramacionGeneradorService {
             GenerarProgramacionRequest request,
             LocalDate inicio,
             LocalDate fin,
-            List<ProgramacionSecuenciaAgente> partTime,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
+            List<GeneradorSecuencia> partTime,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
             Map<Long, Map<LocalDate, NovedadProgramacionRequest>> novedades,
-            Map<Long, AgenteProgramacionExcepcion> excepciones,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico,
+            Map<Long, GeneradorExcepcion> excepciones,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
             Map<Long, Map<String, Integer>> diasSemana,
             Map<Long, Integer> diasMes,
             List<ConflictoProgramacionResponse> conflictos
@@ -2519,10 +2510,10 @@ public class ProgramacionGeneradorService {
              * Quien lleva menos turnos se completa primero. Esto evita
              * que un PT consuma todas las fechas útiles antes que otro.
              */
-            List<ProgramacionSecuenciaAgente> ordenSemana = partTime.stream()
+            List<GeneradorSecuencia> ordenSemana = partTime.stream()
                     .sorted(
                             Comparator
-                                    .comparingInt((ProgramacionSecuenciaAgente s) ->
+                                    .comparingInt((GeneradorSecuencia s) ->
                                             diasSemana
                                                     .getOrDefault(s.getAgente().getId(), Map.of())
                                                     .getOrDefault(semana, 0))
@@ -2535,8 +2526,8 @@ public class ProgramacionGeneradorService {
                     )
                     .toList();
 
-            for (ProgramacionSecuenciaAgente secuencia : ordenSemana) {
-                Trabajador agente = secuencia.getAgente();
+            for (GeneradorSecuencia secuencia : ordenSemana) {
+                GeneradorTrabajador agente = secuencia.getAgente();
                 Long trabajadorId = agente.getId();
 
                 while (diasSemana
@@ -2577,10 +2568,10 @@ public class ProgramacionGeneradorService {
             Long trabajadorId,
             LocalDate desde,
             LocalDate hasta,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
             Map<Long, Map<LocalDate, NovedadProgramacionRequest>> novedades,
-            AgenteProgramacionExcepcion excepcion,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico
+            GeneradorExcepcion excepcion,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico
     ) {
 
         List<CandidatoPartTime> candidatos = new ArrayList<>();
@@ -2591,16 +2582,16 @@ public class ProgramacionGeneradorService {
                 continue;
             }
 
-            if (propuesta.get(trabajadorId).get(fecha) != EstadoProgramacion.D) {
+            if (propuesta.get(trabajadorId).get(fecha) != ProgramacionEstado.D) {
                 continue;
             }
 
             CoberturaTurnosRequest requerida = coberturaParaFecha(request, fecha);
 
-            for (EstadoProgramacion turno : List.of(
-                    EstadoProgramacion.A,
-                    EstadoProgramacion.B,
-                    EstadoProgramacion.C)) {
+            for (ProgramacionEstado turno : List.of(
+                    ProgramacionEstado.A,
+                    ProgramacionEstado.B,
+                    ProgramacionEstado.C)) {
 
                 if (!permite(excepcion, turno)) {
                     continue;
@@ -2648,7 +2639,7 @@ public class ProgramacionGeneradorService {
      * primero A, luego B y finalmente C. La cobertura y el exceso
      * siempre tienen prioridad sobre este desempate.
      */
-    private int prioridadTurnoPartTime(EstadoProgramacion turno) {
+    private int prioridadTurnoPartTime(ProgramacionEstado turno) {
         return switch (turno) {
             case A -> 0;
             case B -> 1;
@@ -2665,9 +2656,9 @@ public class ProgramacionGeneradorService {
     private boolean transicionPermitidaPartTimeCompleta(
             Long trabajadorId,
             LocalDate fecha,
-            EstadoProgramacion turnoNuevo,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico
+            ProgramacionEstado turnoNuevo,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico
     ) {
 
         if (!transicionPermitida(
@@ -2675,22 +2666,22 @@ public class ProgramacionGeneradorService {
             return false;
         }
 
-        EstadoProgramacion manana = estadoEnFecha(
+        ProgramacionEstado manana = estadoEnFecha(
                 trabajadorId,
                 fecha.plusDays(1),
                 propuesta,
                 historico
         );
 
-        return turnoNuevo != EstadoProgramacion.C
-                || (manana != EstadoProgramacion.A
-                && manana != EstadoProgramacion.B);
+        return turnoNuevo != ProgramacionEstado.C
+                || (manana != ProgramacionEstado.A
+                && manana != ProgramacionEstado.B);
     }
 
     private void validarTresTurnosPartTime(
             LocalDate inicio,
             LocalDate fin,
-            List<ProgramacionSecuenciaAgente> partTime,
+            List<GeneradorSecuencia> partTime,
             Map<Long, Map<String, Integer>> diasSemana,
             List<ConflictoProgramacionResponse> conflictos
     ) {
@@ -2707,8 +2698,8 @@ public class ProgramacionGeneradorService {
             String semana = claveSemana(lunes);
             LocalDate fechaReferencia = lunes.isBefore(inicio) ? inicio : lunes;
 
-            for (ProgramacionSecuenciaAgente secuencia : partTime) {
-                Trabajador agente = secuencia.getAgente();
+            for (GeneradorSecuencia secuencia : partTime) {
+                GeneradorTrabajador agente = secuencia.getAgente();
 
                 int total = diasSemana
                         .getOrDefault(agente.getId(), Map.of())
@@ -2731,9 +2722,9 @@ public class ProgramacionGeneradorService {
 
     private Map<Long, Map<String, Integer>>
     inicializarDiasSemanaPartTime(
-            List<ProgramacionSecuenciaAgente> partTime,
+            List<GeneradorSecuencia> partTime,
             LocalDate inicio,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> historico
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico
     ) {
 
         Map<Long, Map<String, Integer>> resultado = new HashMap<>();
@@ -2741,11 +2732,11 @@ public class ProgramacionGeneradorService {
         LocalDate lunes = inicio.with(
                 TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
 
-        for (ProgramacionSecuenciaAgente secuencia : partTime) {
+        for (GeneradorSecuencia secuencia : partTime) {
 
             Long trabajadorId = secuencia.getAgente().getId();
             Map<String, Integer> semanas = new HashMap<>();
-            Map<LocalDate, EstadoProgramacion> historial =
+            Map<LocalDate, ProgramacionEstado> historial =
                     historico.getOrDefault(trabajadorId, Map.of());
 
             /*
@@ -2756,7 +2747,7 @@ public class ProgramacionGeneradorService {
                  fecha.isBefore(inicio);
                  fecha = fecha.plusDays(1)) {
 
-                EstadoProgramacion estado = historial.get(fecha);
+                ProgramacionEstado estado = historial.get(fecha);
 
                 if (estado != null && estado.esOperativo()) {
                     semanas.merge(claveSemana(fecha), 1, Integer::sum);
@@ -2771,7 +2762,7 @@ public class ProgramacionGeneradorService {
 
     private record CandidatoPartTime(
             LocalDate fecha,
-            EstadoProgramacion turno,
+            ProgramacionEstado turno,
             int cubreDeficit,
             int exceso,
             int prioridadTurno
@@ -2786,7 +2777,7 @@ public class ProgramacionGeneradorService {
             GenerarProgramacionRequest request,
             LocalDate inicio,
             LocalDate fin,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta
     ) {
 
         List<CoberturaDiaResponse> resultado =
@@ -2808,21 +2799,21 @@ public class ProgramacionGeneradorService {
                     contar(
                             propuesta,
                             fecha,
-                            EstadoProgramacion.A
+                            ProgramacionEstado.A
                     );
 
             int asignadoB =
                     contar(
                             propuesta,
                             fecha,
-                            EstadoProgramacion.B
+                            ProgramacionEstado.B
                     );
 
             int asignadoC =
                     contar(
                             propuesta,
                             fecha,
-                            EstadoProgramacion.C
+                            ProgramacionEstado.C
                     );
 
             resultado.add(
@@ -2965,15 +2956,15 @@ public class ProgramacionGeneradorService {
     }
 
     private int contar(
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
             LocalDate fecha,
-            EstadoProgramacion estado
+            ProgramacionEstado estado
     ) {
 
         int total = 0;
 
         for (
-                Map<LocalDate, EstadoProgramacion> estados :
+                Map<LocalDate, ProgramacionEstado> estados :
                 propuesta.values()
         ) {
 
@@ -2992,7 +2983,7 @@ public class ProgramacionGeneradorService {
     private Map<Long, Map<LocalDate, NovedadProgramacionRequest>>
     construirNovedades(
             GenerarProgramacionRequest request,
-            Map<Long, Trabajador> agentes,
+            Map<Long, GeneradorTrabajador> agentes,
             LocalDate inicio,
             LocalDate fin
     ) {
@@ -3013,7 +3004,7 @@ public class ProgramacionGeneradorService {
                 request.novedades()
         ) {
 
-            Trabajador agente =
+            GeneradorTrabajador agente =
                     agentes.get(
                             novedad.trabajadorId()
                     );
@@ -3099,19 +3090,19 @@ public class ProgramacionGeneradorService {
     // ============================================================
 
     private void validarProteccionSemanalSinC(
-            List<ProgramacionSecuenciaAgente> fullTime,
+            List<GeneradorSecuencia> fullTime,
             LocalDate inicio,
             LocalDate fin,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
             Map<String, Long> protegidoSinCPorSecuenciaSemana,
             List<ConflictoProgramacionResponse> conflictos
     ) {
-        Map<Long, ProgramacionSecuenciaAgente> porId = fullTime.stream()
+        Map<Long, GeneradorSecuencia> porId = fullTime.stream()
                 .collect(Collectors.toMap(s -> s.getAgente().getId(), Function.identity()));
 
         for (Map.Entry<String, Long> entry : protegidoSinCPorSecuenciaSemana.entrySet()) {
             Long trabajadorId = entry.getValue();
-            ProgramacionSecuenciaAgente secuencia = porId.get(trabajadorId);
+            GeneradorSecuencia secuencia = porId.get(trabajadorId);
             if (secuencia == null) continue;
 
             String semanaClave = entry.getKey().substring(entry.getKey().indexOf('|') + 1);
@@ -3119,7 +3110,7 @@ public class ProgramacionGeneradorService {
                     .anyMatch(e -> !e.getKey().isBefore(inicio)
                             && !e.getKey().isAfter(fin)
                             && claveSemana(e.getKey()).equals(semanaClave)
-                            && e.getValue() == EstadoProgramacion.C);
+                            && e.getValue() == ProgramacionEstado.C);
 
             if (tieneC) {
                 conflictos.add(warning(
@@ -3134,20 +3125,20 @@ public class ProgramacionGeneradorService {
     }
 
     private List<ProgramacionAgentePropuesta> construirRespuestaAgentes(
-            List<ProgramacionSecuenciaAgente> secuencias,
-            Map<Long, Map<LocalDate, EstadoProgramacion>> propuesta,
+            List<GeneradorSecuencia> secuencias,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
             Map<Long, Map<LocalDate, Boolean>> patronLaboral,
-            Map<Long, AgenteProgramacionExcepcion> excepciones,
+            Map<Long, GeneradorExcepcion> excepciones,
             Map<Long, Map<LocalDate, NovedadProgramacionRequest>> novedades
     ) {
 
         List<ProgramacionAgentePropuesta> resultado =
                 new ArrayList<>();
 
-        List<ProgramacionSecuenciaAgente> ordenadas =
+        List<GeneradorSecuencia> ordenadas =
                 secuencias.stream()
                         .filter(
-                                (ProgramacionSecuenciaAgente s) ->
+                                (GeneradorSecuencia s) ->
                                         propuesta.containsKey(
                                                 s.getAgente().getId()
                                         )
@@ -3155,13 +3146,13 @@ public class ProgramacionGeneradorService {
                         .sorted(
                                 Comparator
                                         .comparing(
-                                                ProgramacionSecuenciaAgente::getGrupo,
+                                                GeneradorSecuencia::getGrupo,
                                                 Comparator.nullsLast(
                                                         Comparator.naturalOrder()
                                                 )
                                         )
                                         .thenComparingInt(
-                                                (ProgramacionSecuenciaAgente s) ->
+                                                (GeneradorSecuencia s) ->
                                                         Optional.ofNullable(
                                                                         s.getOrden()
                                                                 )
@@ -3170,7 +3161,7 @@ public class ProgramacionGeneradorService {
                                                                 )
                                         )
                                         .thenComparingInt(
-                                                (ProgramacionSecuenciaAgente s) ->
+                                                (GeneradorSecuencia s) ->
                                                         Optional.ofNullable(
                                                                         s.getAgente()
                                                                                 .getCodigo()
@@ -3182,16 +3173,16 @@ public class ProgramacionGeneradorService {
                         )
                         .toList();
 
-        for (ProgramacionSecuenciaAgente secuencia : ordenadas) {
+        for (GeneradorSecuencia secuencia : ordenadas) {
 
-            Trabajador agente =
+            GeneradorTrabajador agente =
                     secuencia.getAgente();
 
             boolean partTime =
                     secuencia.getGrupo()
-                            == GrupoProgramacion.PART_TIME;
+                            == ProgramacionGrupo.PART_TIME;
 
-            Map<LocalDate, EstadoProgramacion> estados =
+            Map<LocalDate, ProgramacionEstado> estados =
                     propuesta.get(
                             agente.getId()
                     );
@@ -3208,7 +3199,7 @@ public class ProgramacionGeneradorService {
                             Map.of()
                     );
 
-            AgenteProgramacionExcepcion excepcion =
+            GeneradorExcepcion excepcion =
                     excepciones.get(
                             agente.getId()
                     );
@@ -3217,14 +3208,14 @@ public class ProgramacionGeneradorService {
                     new ArrayList<>();
 
             for (
-                    Map.Entry<LocalDate, EstadoProgramacion> entry :
+                    Map.Entry<LocalDate, ProgramacionEstado> entry :
                     estados.entrySet()
             ) {
 
                 LocalDate fecha =
                         entry.getKey();
 
-                EstadoProgramacion estado =
+                ProgramacionEstado estado =
                         entry.getValue();
 
                 NovedadProgramacionRequest novedad =
@@ -3235,19 +3226,19 @@ public class ProgramacionGeneradorService {
                                 patron.get(fecha)
                         );
 
-                EstadoProgramacion estadoCiclo;
+                ProgramacionEstado estadoCiclo;
 
                 if (partTime) {
 
                     estadoCiclo =
-                            EstadoProgramacion.D;
+                            ProgramacionEstado.D;
 
                 } else {
 
                     estadoCiclo =
                             trabajaEstructural
-                                    ? EstadoProgramacion.A
-                                    : EstadoProgramacion.D;
+                                    ? ProgramacionEstado.A
+                                    : ProgramacionEstado.D;
                 }
 
                 String origen;
@@ -3345,15 +3336,15 @@ public class ProgramacionGeneradorService {
     // HISTÓRICO
     // ============================================================
 
-    private Map<Long, Map<LocalDate, EstadoProgramacion>>
+    private Map<Long, Map<LocalDate, ProgramacionEstado>>
     construirHistorico(
-            List<ProgramacionTurno> programaciones
+            List<GeneradorTurno> programaciones
     ) {
 
-        Map<Long, Map<LocalDate, EstadoProgramacion>> resultado =
+        Map<Long, Map<LocalDate, ProgramacionEstado>> resultado =
                 new HashMap<>();
 
-        for (ProgramacionTurno programacion : programaciones) {
+        for (GeneradorTurno programacion : programaciones) {
 
             resultado
                     .computeIfAbsent(
@@ -3376,8 +3367,8 @@ public class ProgramacionGeneradorService {
     // ============================================================
 
     private boolean permite(
-            AgenteProgramacionExcepcion excepcion,
-            EstadoProgramacion estado
+            GeneradorExcepcion excepcion,
+            ProgramacionEstado estado
     ) {
 
         if (excepcion == null) {
@@ -3531,13 +3522,13 @@ public class ProgramacionGeneradorService {
     // ============================================================
 
     private boolean esNovedad(
-            EstadoProgramacion estado
+            ProgramacionEstado estado
     ) {
 
-        return estado == EstadoProgramacion.V
-                || estado == EstadoProgramacion.COM
-                || estado == EstadoProgramacion.DM
-                || estado == EstadoProgramacion.LIC;
+        return estado == ProgramacionEstado.V
+                || estado == ProgramacionEstado.COM
+                || estado == ProgramacionEstado.DM
+                || estado == ProgramacionEstado.LIC;
     }
 
     private String claveSemana(
@@ -3566,7 +3557,7 @@ public class ProgramacionGeneradorService {
 
     private ConflictoProgramacionResponse warning(
             String tipo,
-            Trabajador trabajador,
+            GeneradorTrabajador trabajador,
             LocalDate fecha,
             String mensaje
     ) {
@@ -3582,7 +3573,7 @@ public class ProgramacionGeneradorService {
 
     private ConflictoProgramacionResponse error(
             String tipo,
-            Trabajador trabajador,
+            GeneradorTrabajador trabajador,
             LocalDate fecha,
             String mensaje
     ) {
@@ -3599,7 +3590,7 @@ public class ProgramacionGeneradorService {
     private ConflictoProgramacionResponse conflicto(
             String tipo,
             String nivel,
-            Trabajador trabajador,
+            GeneradorTrabajador trabajador,
             LocalDate fecha,
             String mensaje
     ) {
@@ -3625,35 +3616,10 @@ public class ProgramacionGeneradorService {
         );
     }
 
-    // ============================================================
-    // SEGURIDAD
-    // ============================================================
-
-    private Trabajador requireSupervisor() {
-
-        Trabajador trabajador =
-                currentUser.requireCurrent();
-
-        if (
-                trabajador.getRolSistema()
-                        != RolSistema.SUPERVISOR
-        ) {
-
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Solo el Supervisor puede generar una propuesta de programación"
-            );
-        }
-
-        return trabajador;
-    }
-
-    private ResponseStatusException bad(
+    private ProgramacionValidationException bad(
             String mensaje
     ) {
-
-        return new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
+        return new ProgramacionValidationException(
                 mensaje
         );
     }
