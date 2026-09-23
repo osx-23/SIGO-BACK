@@ -18,10 +18,9 @@ import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionTurno
 import com.sigo.programacion.infrastructure.persistence.repository.AgenteProgramacionExcepcionRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionSecuenciaAgenteRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionTurnoRepository;
+import com.sigo.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -44,8 +43,7 @@ public class ProgramacionGeneradorJpaAdapter
                 .filter(plaza -> Boolean.TRUE.equals(plaza.getActivo()))
                 .map(this::toPlaza)
                 .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.BAD_REQUEST,
+                        new BusinessException(
                                 "Plaza no válida o inactiva"
                         )
                 );
