@@ -281,15 +281,4 @@ public class AsistenciaController {
         return request;
     }
 
-    private Trabajador exigirRolAsistencia() {
-        Trabajador actual = currentUserService.requireCurrent();
-        if (actual.getRolSistema() != RolSistema.SUPERVISOR
-                && actual.getRolSistema() != RolSistema.CONTROLADOR) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Solo supervisores y controladores pueden gestionar asistencia"
-            );
-        }
-        return actual;
-    }
 }
