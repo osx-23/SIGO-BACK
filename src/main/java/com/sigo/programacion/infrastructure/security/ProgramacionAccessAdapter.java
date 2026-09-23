@@ -85,4 +85,9 @@ public class ProgramacionAccessAdapter
         return currentUserService.requireCurrent().getId();
     }
 
+    @Override
+    public Long currentUserId() {
+        return currentUserService.requireCurrent().getId();
+    }
+
 }
