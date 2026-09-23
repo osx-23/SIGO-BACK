@@ -1,16 +1,30 @@
 package com.sigo.inventario.application.service;
-import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
-import com.sigo.inventario.infrastructure.persistence.entity.InventarioAuditoria;
-import com.sigo.inventario.infrastructure.persistence.repository.InventarioAuditoriaRepository;
+
+import com.sigo.inventario.application.port.out.InventarioAuditoriaPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
 import java.util.Map;
-@Service @RequiredArgsConstructor
+
+@Service
+@RequiredArgsConstructor
 public class InventarioAuditoriaService {
-  private final InventarioAuditoriaRepository repository;
-  public void registrar(Trabajador u,String accion,String entidad,Long entidadId,Map<String,Object> detalle){
-    InventarioAuditoria a=new InventarioAuditoria();
-    a.setUsuario(u); a.setAccion(accion); a.setEntidad(entidad); a.setEntidadId(entidadId); a.setDetalle(detalle);
-    repository.save(a);
-  }
+
+    private final InventarioAuditoriaPort auditoriaPort;
+
+    public void registrar(
+            Long usuarioId,
+            String accion,
+            String entidad,
+            Long entidadId,
+            Map<String, Object> detalle
+    ) {
+        auditoriaPort.registrar(
+                usuarioId,
+                accion,
+                entidad,
+                entidadId,
+                detalle
+        );
+    }
 }
