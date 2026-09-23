@@ -5,7 +5,7 @@ import com.sigo.programacion.application.service.ProgramacionService;
 import com.sigo.programacion.application.service.ProgramacionService.AsignarSecuenciaRequest;
 import com.sigo.programacion.application.service.ProgramacionService.GrupoLiderRequest;
 import com.sigo.programacion.application.service.ProgramacionService.GrupoLiderResponse;
-import com.sigo.programacion.application.service.ProgramacionService.GuardarOrdenSecuenciaRequest;
+import com.sigo.programacion.api.dto.GuardarOrdenSecuenciaRequest;
 import com.sigo.programacion.application.service.ProgramacionService.GuardarProgramacionRequest;
 import com.sigo.programacion.application.service.ProgramacionService.MiHorarioResponse;
 import com.sigo.programacion.application.service.ProgramacionService.ProgramacionDiaResponse;
@@ -143,7 +143,7 @@ public class ProgramacionController {
         guardarOrdenSecuenciaUseCase.guardar(
                 new GuardarOrdenSecuenciaUseCase.Command(
                         request.plazaId(),
-                        request.grupo().name(),
+                        request.grupo(),
                         request.agentes()
                                 .stream()
                                 .map(item ->
