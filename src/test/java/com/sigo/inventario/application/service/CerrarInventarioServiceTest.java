@@ -7,7 +7,7 @@ import com.sigo.inventario.application.port.out.InventarioCierrePort;
 import com.sigo.inventario.application.port.out.InventarioConsultaPort;
 import com.sigo.inventario.domain.InventarioEstado;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.server.ResponseStatusException;
+import com.sigo.shared.exception.BusinessException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -61,7 +61,7 @@ class CerrarInventarioServiceTest {
                 );
 
         assertThrows(
-                ResponseStatusException.class,
+                BusinessException.class,
                 () -> service.finalizar(
                         new CerrarInventarioUseCase.Usuario(
                                 10L,
