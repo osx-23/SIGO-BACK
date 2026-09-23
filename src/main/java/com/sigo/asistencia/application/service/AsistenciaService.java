@@ -7,13 +7,10 @@ import com.sigo.shared.exception.ResourceNotFoundException;
 import com.sigo.personal.infrastructure.persistence.repository.*; import com.sigo.asistencia.infrastructure.persistence.repository.*; import com.sigo.relevo.infrastructure.persistence.repository.*;
 
 import lombok.RequiredArgsConstructor;
-import com.sigo.shared.storage.CloudinaryService;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -32,8 +29,6 @@ public class AsistenciaService {
     private final TurnoRepository turnoRepository;
     private final TrabajadorRepository trabajadorRepository;
     private final MotivoAusenciaRepository motivoRepository;
-
-    private final CloudinaryService cloudinaryService;
 
     /*
      * =========================================================
@@ -661,206 +656,6 @@ public class AsistenciaService {
          * DELETE /{id}/evidencias/{evidenciaId}
          */
         return obtenerPorId(id);
-    }
-
-    /*
-     * =========================================================
-     * SUBIR FOTO A CLOUDINARY
-     * =========================================================
-     */
-    @Transactional
-    public EvidenciaResponse guardarEvidencia(
-            Long asistenciaId,
-            MultipartFile archivo,
-            String tipo
-    ) throws IOException {
-
-        /*
-         * Buscar la asistencia.
-         */
-        AsistenciaRegistro asistencia =
-                asistenciaRepository
-                        .findById(asistenciaId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Asistencia no encontrada"
-                                )
-                        );
-
-        /*
-         * Validar archivo.
-         */
-        if (archivo == null || archivo.isEmpty()) {
-            throw new BusinessException(
-                    "Debe seleccionar una imagen"
-            );
-        }
-
-        /*
-         * =========================================================
-         * VALIDAR TIPO DE EVIDENCIA
-         * =========================================================
-         *
-         * Cada fotografía debe quedar identificada para que
-         * posteriormente el PDF no dependa del orden en que
-         * PostgreSQL devuelva las evidencias.
-         */
-        String tipoNormalizado =
-                tipo == null
-                        ? ""
-                        : tipo.trim().toUpperCase();
-
-        Set<String> tiposPermitidos =
-                Set.of(
-                        "CALENTAMIENTO",
-                        "INICIO_TURNO",
-                        "TAPONES_AUDITIVOS"
-                );
-
-        if (!tiposPermitidos.contains(tipoNormalizado)) {
-            throw new BusinessException(
-                    "Tipo de evidencia no válido: " + tipo
-            );
-        }
-
-        /*
-         * Subir imagen a Cloudinary.
-         */
-        Map<String, Object> resultado =
-                cloudinaryService
-                        .subirImagen(
-                                archivo,
-                                "sigo/asistencia"
-                        );
-
-        Object secureUrl =
-                resultado.get("secure_url");
-
-        Object publicId =
-                resultado.get("public_id");
-
-        if (secureUrl == null) {
-            throw new BusinessException(
-                    "Cloudinary no devolvió la URL de la imagen"
-            );
-        }
-
-        if (publicId == null) {
-            throw new BusinessException(
-                    "Cloudinary no devolvió el public_id de la imagen"
-            );
-        }
-
-        /*
-         * Crear evidencia.
-         */
-        AsistenciaEvidencia evidencia =
-                new AsistenciaEvidencia();
-
-        evidencia.setAsistencia(
-                asistencia
-        );
-
-        evidencia.setUrlArchivo(
-                secureUrl.toString()
-        );
-
-        evidencia.setPublicId(
-                publicId.toString()
-        );
-
-        /*
-         * IMPORTANTE:
-         *
-         * Antes:
-         *
-         * evidencia.setTipo("foto");
-         *
-         * Ahora guardamos el tipo real.
-         */
-        evidencia.setTipo(
-                tipoNormalizado
-        );
-
-        /*
-         * Guardar en PostgreSQL.
-         */
-        AsistenciaEvidencia guardada =
-                evidenciaRepository.save(
-                        evidencia
-                );
-
-        /*
-         * Retornar evidencia guardada.
-         */
-        return new EvidenciaResponse(
-                guardada.getId(),
-                guardada.getUrlArchivo(),
-                guardada.getTipo()
-        );
-    }
-
-    /*
-     *Eliminar evidencia
-     *
-     */
-    @Transactional
-    public void eliminarEvidencia(
-            Long asistenciaId,
-            Long evidenciaId
-    ) throws IOException {
-
-        AsistenciaEvidencia evidencia =
-                evidenciaRepository
-                        .findByIdAndAsistenciaId(
-                                evidenciaId,
-                                asistenciaId
-                        )
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Evidencia no encontrada"
-                                )
-                        );
-
-        /*
-         * Imágenes nuevas:
-         * eliminar también de Cloudinary.
-         */
-        if (evidencia.getPublicId() != null
-                && !evidencia
-                .getPublicId()
-                .isBlank()) {
-
-            Map<String, Object> resultado =
-                    cloudinaryService
-                            .eliminarImagen(
-                                    evidencia.getPublicId()
-                            );
-
-            Object estado =
-                    resultado.get("result");
-
-            if (estado != null
-                    && !"ok".equalsIgnoreCase(
-                    estado.toString()
-            )
-                    && !"not found".equalsIgnoreCase(
-                    estado.toString()
-            )) {
-
-                throw new BusinessException(
-                        "No se pudo eliminar la imagen de Cloudinary"
-                );
-            }
-        }
-
-        /*
-         * Finalmente eliminar la referencia
-         * de PostgreSQL.
-         */
-        evidenciaRepository.delete(
-                evidencia
-        );
     }
 
     /*
