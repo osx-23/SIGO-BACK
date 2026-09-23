@@ -56,8 +56,12 @@ jobs:
             exit 1
           fi
 
+          if grep -R --line-number --include='*.java' -E '^import com\.sigo\..*\.(api|infrastructure)\.' src/main/java/com/sigo/relevo/application/service; then
+            echo "relevo/application/service must not depend on api or infrastructure"
+            exit 1
+          fi
+
           files=(
-            src/main/java/com/sigo/relevo/application/service/ViaService.java
             src/main/java/com/sigo/inventario/application/service/InventarioCatalogoService.java
             src/main/java/com/sigo/inventario/application/service/InventarioStockService.java
             src/main/java/com/sigo/personal/application/service/TrabajadorService.java
