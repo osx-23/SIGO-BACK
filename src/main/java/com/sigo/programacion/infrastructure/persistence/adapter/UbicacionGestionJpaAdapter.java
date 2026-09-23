@@ -7,10 +7,10 @@ import com.sigo.programacion.application.port.out.UbicacionGestionPort;
 import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionUbicacion;
 import com.sigo.programacion.infrastructure.persistence.entity.TipoUbicacion;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionUbicacionRepository;
+import com.sigo.shared.exception.BusinessException;
+import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Objects;
@@ -199,17 +199,11 @@ public class UbicacionGestionJpaAdapter
         );
     }
 
-    private ResponseStatusException bad(String message) {
-        return new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                message
-        );
+    private BusinessException bad(String message) {
+        return new BusinessException(message);
     }
 
-    private ResponseStatusException notFound(String message) {
-        return new ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                message
-        );
+    private ResourceNotFoundException notFound(String message) {
+        return new ResourceNotFoundException(message);
     }
 }
