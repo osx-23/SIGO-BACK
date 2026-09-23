@@ -1,6 +1,7 @@
 package com.sigo.inventario.infrastructure.persistence.repository;
 
-import com.sigo.inventario.api.dto.response.StockActualResponse;
+import com.sigo.inventario.application.port.in.InventarioStockUseCase;
+import com.sigo.inventario.application.port.out.InventarioStockQueryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -11,10 +12,11 @@ import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
-public class InventarioStockRepository {
+public class InventarioStockRepository implements InventarioStockQueryPort {
   private final NamedParameterJdbcTemplate jdbc;
 
-  public List<StockActualResponse> buscar(Long plazaId, String texto) {
+  @Override
+  public List<InventarioStockUseCase.Stock> buscar(Long plazaId, String texto) {
     String sql = """
       SELECT s.plaza_id,s.plaza,s.producto_id,s.producto,s.unidad_medida,s.cantidad_actual,
              COALESCE(pp.stock_minimo,0) stock_minimo,
@@ -32,7 +34,7 @@ public class InventarioStockRepository {
       .addValue("plazaId", plazaId, Types.BIGINT)
       .addValue("texto", textoNormalizado, Types.VARCHAR);
 
-    return jdbc.query(sql, params, (rs, n) -> new StockActualResponse(
+    return jdbc.query(sql, params, (rs, n) -> new InventarioStockUseCase.Stock(
       rs.getLong("plaza_id"), rs.getString("plaza"), rs.getLong("producto_id"), rs.getString("producto"),
       rs.getString("unidad_medida"), rs.getBigDecimal("cantidad_actual"), rs.getInt("stock_minimo"),
       rs.getBoolean("bajo_minimo"), rs.getLong("inventario_id"),
