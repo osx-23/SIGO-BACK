@@ -6,6 +6,7 @@ import com.sigo.inventario.api.dto.response.InventarioDetalleItemResponse;
 import com.sigo.inventario.api.dto.response.InventarioDetalleResponse;
 import com.sigo.inventario.api.dto.response.InventarioResumenResponse;
 import com.sigo.inventario.api.dto.response.ProductoInventarioResponse;
+import com.sigo.inventario.application.port.in.GuardarConteoInventarioUseCase;
 import com.sigo.inventario.application.port.in.IniciarInventarioUseCase;
 import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
@@ -32,6 +33,7 @@ import java.util.List;
 public class InventarioController {
 
     private final InventarioService service;
+    private final GuardarConteoInventarioUseCase guardarConteoUseCase;
     private final IniciarInventarioUseCase iniciarUseCase;
     private final InventarioConsultaUseCase consultaUseCase;
     private final InventarioUsuarioContextService usuarios;
@@ -85,11 +87,29 @@ public class InventarioController {
             @PathVariable Long id,
             @Valid @RequestBody GuardarConteoRequest request
     ) {
-        return service.guardarDetalle(
-                usuarios.obtenerActual(),
+        InventarioUsuarioActual actual =
+                usuarios.obtenerActual();
+
+        var detalle = guardarConteoUseCase.guardar(
+                new GuardarConteoInventarioUseCase.Usuario(
+                        actual.trabajadorId(),
+                        actual.plazaId(),
+                        actual.rolId(),
+                        actual.rolCodigo()
+                ),
                 id,
-                request
+                request.productos()
+                        .stream()
+                        .map(item ->
+                                new GuardarConteoInventarioUseCase.Item(
+                                        item.productoId(),
+                                        item.cantidad()
+                                )
+                        )
+                        .toList()
         );
+
+        return toDetalleResponse(detalle);
     }
 
     @PostMapping("/{id}/finalizar")
