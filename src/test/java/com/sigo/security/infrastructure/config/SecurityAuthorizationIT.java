@@ -12,7 +12,10 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest
+@WebMvcTest(
+        controllers = SecurityAuthorizationIT.ProbeController.class,
+        properties = "app.jwt.secret=01234567890123456789012345678901"
+)
 @Import({
         SecurityConfig.class,
         SecurityAuthorizationIT.ProbeController.class
