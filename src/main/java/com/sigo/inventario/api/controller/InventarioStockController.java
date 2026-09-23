@@ -4,7 +4,6 @@ import com.sigo.inventario.api.dto.response.StockActualResponse;
 import com.sigo.inventario.application.port.in.InventarioStockUseCase;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
 import com.sigo.inventario.application.security.InventarioUsuarioContextService;
-import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -53,11 +52,8 @@ public class InventarioStockController {
     private void exigirGestion(
             InventarioUsuarioActual actual
     ) {
-        RolSistema rol =
-                actual.trabajador().getRolSistema();
-
-        if (rol != RolSistema.CONTROLADOR
-                && rol != RolSistema.SUPERVISOR) {
+        if (!actual.esControladorSistema()
+                && !actual.esSupervisorSistema()) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Solo controladores y supervisores pueden consultar el stock de inventario"
