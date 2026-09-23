@@ -123,8 +123,7 @@ public class InventarioConsultaService
             rolId = consultaPort
                     .rolActivoId(codigoRol)
                     .orElseThrow(() ->
-                            new ResponseStatusException(
-                                    HttpStatus.BAD_REQUEST,
+                            new BusinessException(
                                     "Rol inválido"
                             )
                     );
