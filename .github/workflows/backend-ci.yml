@@ -54,6 +54,7 @@ jobs:
           files=(
             src/main/java/com/sigo/asistencia/application/service/AsistenciaProgramacionService.java
             src/main/java/com/sigo/asistencia/application/service/DashboardAsistenciaService.java
+            src/main/java/com/sigo/asistencia/application/service/AsistenciaConsultaService.java
             src/main/java/com/sigo/relevo/application/service/ViaService.java
             src/main/java/com/sigo/inventario/application/service/InventarioCatalogoService.java
             src/main/java/com/sigo/inventario/application/service/InventarioStockService.java
