@@ -2,10 +2,9 @@ package com.sigo.relevo.application.service;
 
 import com.sigo.relevo.application.port.in.ConsultarRelevosUseCase;
 import com.sigo.relevo.application.port.in.RelevoHistorialUseCase;
+import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -84,8 +83,7 @@ public class RelevoHistorialAccesoService
                 relevo.plazaId(),
                 usuario.plazaId()
         ) || !dentroDeVentana(relevo, ventana)) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new ForbiddenException(
                     "El operador solo puede consultar relevos de su plaza correspondientes al turno actual y al turno inmediatamente anterior"
             );
         }
@@ -153,8 +151,7 @@ public class RelevoHistorialAccesoService
 
     private void exigirPlaza(Usuario usuario) {
         if (usuario.plazaId() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new ForbiddenException(
                     "El operador no tiene una plaza asignada"
             );
         }
