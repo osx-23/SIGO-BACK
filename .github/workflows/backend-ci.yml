@@ -92,3 +92,18 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Verify security architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep -R --line-number --include='*.java' -E '^import com\.sigo\.(personal\.infrastructure|security\.api)\.' src/main/java/com/sigo/security/application; then
+            echo "security/application must not depend on personal infrastructure or security api"
+            exit 1
+          fi
+
+          if grep -R --line-number --include='*.java' -E '^import (org\.springframework|jakarta\.|com\.sigo\..*\.infrastructure\.|com\.sigo\.security\.api\.)' src/main/java/com/sigo/security/domain; then
+            echo "security/domain must remain framework and adapter independent"
+            exit 1
+          fi
