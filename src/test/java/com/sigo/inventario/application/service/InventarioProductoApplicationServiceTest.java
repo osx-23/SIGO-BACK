@@ -4,7 +4,8 @@ import com.sigo.inventario.application.port.in.InventarioProductoUseCase;
 import com.sigo.inventario.application.port.out.InventarioAuditoriaPort;
 import com.sigo.inventario.application.port.out.InventarioProductoGestionPort;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.server.ResponseStatusException;
+import com.sigo.shared.exception.BusinessException;
+import com.sigo.shared.exception.ForbiddenException;
 
 import java.util.List;
 import java.util.Map;
@@ -68,7 +69,7 @@ class InventarioProductoApplicationServiceTest {
                 );
 
         assertThrows(
-                ResponseStatusException.class,
+                ForbiddenException.class,
                 () -> service.crear(
                         new InventarioProductoUseCase.Usuario(
                                 10L,
@@ -106,7 +107,7 @@ class InventarioProductoApplicationServiceTest {
                 );
 
         assertThrows(
-                ResponseStatusException.class,
+                BusinessException.class,
                 () -> service.crear(
                         new InventarioProductoUseCase.Usuario(
                                 10L,
