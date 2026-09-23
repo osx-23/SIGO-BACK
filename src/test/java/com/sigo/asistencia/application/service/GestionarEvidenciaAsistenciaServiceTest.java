@@ -5,7 +5,6 @@ import com.sigo.asistencia.application.port.out.AsistenciaEvidenciaPort;
 import com.sigo.asistencia.application.port.out.AsistenciaStoragePort;
 import com.sigo.shared.exception.BusinessException;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.IOException;
 
@@ -27,8 +26,7 @@ class GestionarEvidenciaAsistenciaServiceTest {
 
         var evidencia = service.guardar(
                 1L,
-                new MockMultipartFile(
-                        "file",
+                new GestionarEvidenciaAsistenciaUseCase.ArchivoEntrada(
                         "foto.png",
                         "image/png",
                         new byte[]{1, 2, 3}
@@ -53,8 +51,7 @@ class GestionarEvidenciaAsistenciaServiceTest {
                 BusinessException.class,
                 () -> service.guardar(
                         1L,
-                        new MockMultipartFile(
-                                "file",
+                        new GestionarEvidenciaAsistenciaUseCase.ArchivoEntrada(
                                 "foto.png",
                                 "image/png",
                                 new byte[]{1}
@@ -113,7 +110,7 @@ class GestionarEvidenciaAsistenciaServiceTest {
 
         @Override
         public ArchivoSubido subir(
-                org.springframework.web.multipart.MultipartFile archivo,
+                GestionarEvidenciaAsistenciaUseCase.ArchivoEntrada archivo,
                 String folder
         ) {
             return new ArchivoSubido(
