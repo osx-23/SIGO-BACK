@@ -3,7 +3,7 @@ package com.sigo.relevo.application.service;
 import com.sigo.relevo.application.port.in.GestionarRelevoUseCase;
 import com.sigo.relevo.application.port.out.RelevoUsuarioActualPort;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.server.ResponseStatusException;
+import com.sigo.shared.exception.ForbiddenException;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -62,7 +62,7 @@ class RelevoAccesoServiceTest {
                 );
 
         assertThrows(
-                ResponseStatusException.class,
+                ForbiddenException.class,
                 service::exigirPuedeActualizar
         );
     }
