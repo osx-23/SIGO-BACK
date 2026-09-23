@@ -45,3 +45,24 @@ jobs:
             echo "programacion/domain must remain framework and adapter independent"
             exit 1
           fi
+
+      - name: Verify migrated service boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          files=(
+            src/main/java/com/sigo/asistencia/application/service/AsistenciaProgramacionService.java
+            src/main/java/com/sigo/asistencia/application/service/DashboardAsistenciaService.java
+            src/main/java/com/sigo/relevo/application/service/ViaService.java
+            src/main/java/com/sigo/inventario/application/service/InventarioCatalogoService.java
+            src/main/java/com/sigo/inventario/application/service/InventarioStockService.java
+            src/main/java/com/sigo/personal/application/service/TrabajadorService.java
+          )
+
+          for file in "${files[@]}"; do
+            if grep -nE '^import com\.sigo\..*\.(api|infrastructure)\.' "$file"; then
+              echo "Migrated application service depends on api/infrastructure: $file"
+              exit 1
+            fi
+          done
