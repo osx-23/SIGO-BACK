@@ -57,6 +57,22 @@ public class SecurityConfig {
 
                         /*
                          * =====================================================
+                         * PROGRAMACIÓN - CONTEXTO MENSUAL
+                         * =====================================================
+                         */
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/programacion/contexto"
+                        )
+                        .hasAnyRole(
+                                "SUPERVISOR",
+                                "CONTROLADOR"
+                        )
+
+
+                        /*
+                         * =====================================================
                          * PROGRAMACIÓN - MI HORARIO
                          * =====================================================
                          */
