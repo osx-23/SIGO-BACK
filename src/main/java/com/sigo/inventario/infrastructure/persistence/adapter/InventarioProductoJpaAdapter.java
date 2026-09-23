@@ -16,10 +16,12 @@ import com.sigo.inventario.infrastructure.persistence.repository.InventarioProdu
 import com.sigo.inventario.infrastructure.persistence.repository.InventarioRolRepository;
 import com.sigo.personal.infrastructure.persistence.entity.Plaza;
 import com.sigo.personal.infrastructure.persistence.repository.PlazaRepository;
+import com.sigo.shared.exception.BusinessException;
+import com.sigo.shared.exception.ConflictException;
+import com.sigo.shared.exception.ForbiddenException;
+import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -358,8 +360,7 @@ public class InventarioProductoJpaAdapter
                                         .equals(productoId)
                 )
                 .ifPresent(existente -> {
-                    throw new ResponseStatusException(
-                            HttpStatus.CONFLICT,
+                    throw new ConflictException(
                             "Código de producto duplicado"
                     );
                 });
@@ -382,8 +383,7 @@ public class InventarioProductoJpaAdapter
                         .isPresent();
 
         if (!pertenece) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new ForbiddenException(
                     "No puede modificar productos de otra plaza"
             );
         }
@@ -393,8 +393,7 @@ public class InventarioProductoJpaAdapter
         return productos
                 .findById(id)
                 .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
+                        new ResourceNotFoundException(
                                 "Producto no encontrado"
                         )
                 );
@@ -477,10 +476,7 @@ public class InventarioProductoJpaAdapter
         );
     }
 
-    private ResponseStatusException bad(String mensaje) {
-        return new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                mensaje
-        );
+    private BusinessException bad(String mensaje) {
+        return new BusinessException(mensaje);
     }
 }
