@@ -140,6 +140,8 @@ public class InventarioService {
     auth.exigirPuedeModificarConteo(
             usuario,
             inventario
+                    .getResponsable()
+                    .getId()
     );
 
     if (inventario.getEstado()
@@ -184,6 +186,8 @@ public class InventarioService {
     auth.exigirPuedeModificarConteo(
             usuario,
             inventario
+                    .getResponsable()
+                    .getId()
     );
 
     if (inventario.getEstado()
