@@ -282,6 +282,344 @@ class ProgramacionGeneradorServiceTest {
     }
 
     @Test
+    void conservaContinuidad6x2UsandoHistorialDelMesAnterior() {
+        GeneradorTrabajador trabajador =
+                trabajador(10L, 1001, "Agente con historial");
+
+        List<GeneradorTurno> historial = List.of(
+                turno(trabajador, "2026-08-24", ProgramacionEstado.A),
+                turno(trabajador, "2026-08-25", ProgramacionEstado.A),
+                turno(trabajador, "2026-08-26", ProgramacionEstado.B),
+                turno(trabajador, "2026-08-27", ProgramacionEstado.B),
+                turno(trabajador, "2026-08-28", ProgramacionEstado.C),
+                turno(trabajador, "2026-08-29", ProgramacionEstado.C),
+                turno(trabajador, "2026-08-30", ProgramacionEstado.D),
+                turno(trabajador, "2026-08-31", ProgramacionEstado.D)
+        );
+
+        StubDataPort data = new StubDataPort(
+                List.of(trabajador),
+                List.of(
+                        new GeneradorSecuencia(
+                                trabajador,
+                                PLAZA,
+                                ProgramacionGrupo.SECUENCIA_1,
+                                1
+                        )
+                ),
+                List.of(),
+                historial
+        );
+
+        var resultado = service(data).generar(
+                request(
+                        2026,
+                        9,
+                        new GenerarProgramacionUseCase.CoberturaTurnosRequest(
+                                1,
+                                1,
+                                1
+                        ),
+                        List.of()
+                )
+        );
+
+        Map<LocalDate, ProgramacionEstado> porFecha =
+                resultado.agentes()
+                        .get(0)
+                        .dias()
+                        .stream()
+                        .collect(
+                                java.util.stream.Collectors.toMap(
+                                        GenerarProgramacionUseCase.ProgramacionDiaPropuesta::fecha,
+                                        GenerarProgramacionUseCase.ProgramacionDiaPropuesta::estado
+                                )
+                        );
+
+        assertNotEquals(
+                ProgramacionEstado.D,
+                porFecha.get(LocalDate.of(2026, 9, 1))
+        );
+
+        assertEquals(
+                ProgramacionEstado.D,
+                porFecha.get(LocalDate.of(2026, 9, 7))
+        );
+
+        assertEquals(
+                ProgramacionEstado.D,
+                porFecha.get(LocalDate.of(2026, 9, 8))
+        );
+    }
+
+    @Test
+    void noPermiteTransicionDirectaDeCHaciaAoBEntreMeses() {
+        GeneradorTrabajador trabajador =
+                trabajador(10L, 1001, "Agente transición C");
+
+        List<GeneradorTurno> historial = List.of(
+                turno(trabajador, "2026-08-31", ProgramacionEstado.C)
+        );
+
+        StubDataPort data = new StubDataPort(
+                List.of(trabajador),
+                List.of(
+                        new GeneradorSecuencia(
+                                trabajador,
+                                PLAZA,
+                                ProgramacionGrupo.SECUENCIA_1,
+                                1
+                        )
+                ),
+                List.of(),
+                historial
+        );
+
+        var resultado = service(data).generar(
+                request(
+                        2026,
+                        9,
+                        new GenerarProgramacionUseCase.CoberturaTurnosRequest(
+                                1,
+                                1,
+                                1
+                        ),
+                        List.of()
+                )
+        );
+
+        ProgramacionEstado primero =
+                resultado.agentes()
+                        .get(0)
+                        .dias()
+                        .get(0)
+                        .estado();
+
+        assertNotEquals(ProgramacionEstado.A, primero);
+        assertNotEquals(ProgramacionEstado.B, primero);
+    }
+
+    @Test
+    void usaCoberturaEspecialAntesQueDomingoYDomingoAntesQueNormal() {
+        GeneradorTrabajador trabajador =
+                trabajador(10L, 1001, "Agente cobertura");
+
+        StubDataPort data = new StubDataPort(
+                List.of(trabajador),
+                List.of(
+                        new GeneradorSecuencia(
+                                trabajador,
+                                PLAZA,
+                                ProgramacionGrupo.SECUENCIA_1,
+                                1
+                        )
+                ),
+                List.of(),
+                List.of()
+        );
+
+        LocalDate domingoEspecial =
+                LocalDate.of(2026, 9, 6);
+
+        var solicitud =
+                new GenerarProgramacionUseCase.GenerarProgramacionRequest(
+                        PLAZA.id(),
+                        2026,
+                        9,
+                        new GenerarProgramacionUseCase.CoberturaTurnosRequest(
+                                1,
+                                0,
+                                0
+                        ),
+                        new GenerarProgramacionUseCase.CoberturaTurnosRequest(
+                                0,
+                                1,
+                                0
+                        ),
+                        List.of(
+                                new GenerarProgramacionUseCase.DiaEspecialRequest(
+                                        domingoEspecial,
+                                        "Operación especial",
+                                        0,
+                                        0,
+                                        1
+                                )
+                        ),
+                        List.of()
+                );
+
+        var resultado = service(data).generar(solicitud);
+
+        var especial = resultado.cobertura()
+                .stream()
+                .filter(dia ->
+                        dia.fecha().equals(domingoEspecial)
+                )
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals("ESPECIAL", especial.tipoCobertura());
+        assertEquals(0, especial.requeridoA());
+        assertEquals(0, especial.requeridoB());
+        assertEquals(1, especial.requeridoC());
+
+        var domingoNormal = resultado.cobertura()
+                .stream()
+                .filter(dia ->
+                        dia.fecha().equals(
+                                LocalDate.of(2026, 9, 13)
+                        )
+                )
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals("DOMINGO", domingoNormal.tipoCobertura());
+        assertEquals(0, domingoNormal.requeridoA());
+        assertEquals(1, domingoNormal.requeridoB());
+        assertEquals(0, domingoNormal.requeridoC());
+
+        var diaNormal = resultado.cobertura()
+                .stream()
+                .filter(dia ->
+                        dia.fecha().equals(
+                                LocalDate.of(2026, 9, 14)
+                        )
+                )
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals("NORMAL", diaNormal.tipoCobertura());
+        assertEquals(1, diaNormal.requeridoA());
+    }
+
+    @Test
+    void generaLasCuatroSecuenciasFullTimeEnUnaMismaPropuesta() {
+        GeneradorTrabajador a =
+                trabajador(11L, 1101, "Secuencia 1");
+        GeneradorTrabajador b =
+                trabajador(12L, 1201, "Secuencia 2");
+        GeneradorTrabajador c =
+                trabajador(13L, 1301, "Secuencia 3");
+        GeneradorTrabajador d =
+                trabajador(14L, 1401, "Secuencia 4");
+
+        StubDataPort data = new StubDataPort(
+                List.of(a, b, c, d),
+                List.of(
+                        new GeneradorSecuencia(
+                                a, PLAZA,
+                                ProgramacionGrupo.SECUENCIA_1, 1
+                        ),
+                        new GeneradorSecuencia(
+                                b, PLAZA,
+                                ProgramacionGrupo.SECUENCIA_2, 1
+                        ),
+                        new GeneradorSecuencia(
+                                c, PLAZA,
+                                ProgramacionGrupo.SECUENCIA_3, 1
+                        ),
+                        new GeneradorSecuencia(
+                                d, PLAZA,
+                                ProgramacionGrupo.SECUENCIA_4, 1
+                        )
+                ),
+                List.of(),
+                List.of()
+        );
+
+        var resultado = service(data).generar(
+                request(
+                        2026,
+                        9,
+                        new GenerarProgramacionUseCase.CoberturaTurnosRequest(
+                                2,
+                                1,
+                                1
+                        ),
+                        List.of()
+                )
+        );
+
+        assertEquals(4, resultado.agentes().size());
+
+        assertEquals(
+                java.util.Set.of(
+                        ProgramacionGrupo.SECUENCIA_1,
+                        ProgramacionGrupo.SECUENCIA_2,
+                        ProgramacionGrupo.SECUENCIA_3,
+                        ProgramacionGrupo.SECUENCIA_4
+                ),
+                resultado.agentes()
+                        .stream()
+                        .map(
+                                GenerarProgramacionUseCase.ProgramacionAgentePropuesta::grupo
+                        )
+                        .collect(java.util.stream.Collectors.toSet())
+        );
+
+        assertTrue(
+                resultado.agentes()
+                        .stream()
+                        .allMatch(agente ->
+                                agente.dias().size() == 30
+                        )
+        );
+    }
+
+    @Test
+    void reportaDeficitCuandoLaCoberturaSuperaLaCapacidadDisponible() {
+        GeneradorTrabajador trabajador =
+                trabajador(10L, 1001, "Agente único");
+
+        StubDataPort data = new StubDataPort(
+                List.of(trabajador),
+                List.of(
+                        new GeneradorSecuencia(
+                                trabajador,
+                                PLAZA,
+                                ProgramacionGrupo.SECUENCIA_1,
+                                1
+                        )
+                ),
+                List.of(),
+                List.of()
+        );
+
+        var resultado = service(data).generar(
+                request(
+                        2026,
+                        9,
+                        new GenerarProgramacionUseCase.CoberturaTurnosRequest(
+                                5,
+                                5,
+                                5
+                        ),
+                        List.of()
+                )
+        );
+
+        assertTrue(
+                resultado.cobertura()
+                        .stream()
+                        .anyMatch(dia ->
+                                dia.deficitA() > 0
+                                        || dia.deficitB() > 0
+                                        || dia.deficitC() > 0
+                        )
+        );
+
+        assertTrue(
+                resultado.conflictos()
+                        .stream()
+                        .anyMatch(conflicto ->
+                                "DEFICIT_COBERTURA".equals(
+                                        conflicto.tipo()
+                                )
+                        )
+        );
+    }
+
+    @Test
     void rechazaDiaEspecialFueraDelMesSolicitado() {
         StubDataPort data = new StubDataPort(
                 List.of(),
@@ -316,6 +654,19 @@ class ProgramacionGeneradorServiceTest {
         assertThrows(
                 ProgramacionValidationException.class,
                 () -> service(data).generar(request)
+        );
+    }
+
+    private GeneradorTurno turno(
+            GeneradorTrabajador trabajador,
+            String fecha,
+            ProgramacionEstado estado
+    ) {
+        return new GeneradorTurno(
+                trabajador,
+                PLAZA,
+                LocalDate.parse(fecha),
+                estado
         );
     }
 
