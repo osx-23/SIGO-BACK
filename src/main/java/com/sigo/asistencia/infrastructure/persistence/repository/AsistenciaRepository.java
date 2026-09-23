@@ -12,6 +12,23 @@ import java.util.List;
 public interface AsistenciaRepository
         extends JpaRepository<AsistenciaRegistro, Long> {
 
+ interface HistorialResumen {
+     Long getId();
+     Long getPlazaId();
+     String getPlazaCodigo();
+     Long getTurnoId();
+     String getTurnoCodigo();
+     Long getControladorId();
+     String getControladorNombre();
+     LocalDate getFecha();
+     Integer getProgramados();
+     Integer getPresentes();
+     Integer getApoyoSolicitado();
+     String getDetalleApoyo();
+     java.math.BigDecimal getPorcentaje();
+     String getNotas();
+ }
+
  /*
   * ============================================================
   * VALIDACIONES DE REGISTRO
@@ -29,6 +46,69 @@ public interface AsistenciaRepository
          Long turnoId,
          LocalDate fecha,
          Long id
+ );
+
+ /*
+  * Proyección de solo lectura para historial.
+  * Evita hidratar entidades completas cuando la API solo necesita
+  * los campos que terminan en AsistenciaResponse.
+  */
+ @Query("""
+            SELECT
+                ar.id as id,
+                p.id as plazaId,
+                p.codigo as plazaCodigo,
+                t.id as turnoId,
+                t.codigo as turnoCodigo,
+                c.id as controladorId,
+                c.nombreCompleto as controladorNombre,
+                ar.fecha as fecha,
+                ar.programados as programados,
+                ar.presentes as presentes,
+                ar.apoyoSolicitado as apoyoSolicitado,
+                ar.detalleApoyo as detalleApoyo,
+                ar.porcentaje as porcentaje,
+                ar.notas as notas
+            FROM AsistenciaRegistro ar
+            JOIN ar.plaza p
+            JOIN ar.turno t
+            JOIN ar.controlador c
+            WHERE ar.fecha BETWEEN :inicio AND :fin
+            ORDER BY ar.fecha DESC, ar.id DESC
+            """)
+ List<HistorialResumen> listarHistorialResumen(
+         @Param("inicio") LocalDate inicio,
+         @Param("fin") LocalDate fin
+ );
+
+ @Query("""
+            SELECT
+                ar.id as id,
+                p.id as plazaId,
+                p.codigo as plazaCodigo,
+                t.id as turnoId,
+                t.codigo as turnoCodigo,
+                c.id as controladorId,
+                c.nombreCompleto as controladorNombre,
+                ar.fecha as fecha,
+                ar.programados as programados,
+                ar.presentes as presentes,
+                ar.apoyoSolicitado as apoyoSolicitado,
+                ar.detalleApoyo as detalleApoyo,
+                ar.porcentaje as porcentaje,
+                ar.notas as notas
+            FROM AsistenciaRegistro ar
+            JOIN ar.plaza p
+            JOIN ar.turno t
+            JOIN ar.controlador c
+            WHERE ar.fecha BETWEEN :inicio AND :fin
+              AND p.id = :plazaId
+            ORDER BY ar.fecha DESC, ar.id DESC
+            """)
+ List<HistorialResumen> listarHistorialPorPlazaResumen(
+         @Param("inicio") LocalDate inicio,
+         @Param("fin") LocalDate fin,
+         @Param("plazaId") Long plazaId
  );
 
  /*
