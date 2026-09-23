@@ -3,6 +3,9 @@ package com.sigo.asistencia.application.service;
 import com.sigo.asistencia.api.dto.AsistenciaRequest;
 import com.sigo.asistencia.api.dto.AsistenciaResponse;
 import com.sigo.asistencia.api.dto.AusenciaRequest;
+import com.sigo.asistencia.api.dto.AusenciaResponse;
+import com.sigo.asistencia.api.dto.EvidenciaResponse;
+import com.sigo.asistencia.application.port.in.ConsultarAsistenciasUseCase;
 import com.sigo.asistencia.infrastructure.persistence.entity.AsistenciaAusencia;
 import com.sigo.asistencia.infrastructure.persistence.entity.AsistenciaEvidencia;
 import com.sigo.asistencia.infrastructure.persistence.entity.AsistenciaRegistro;
@@ -43,7 +46,7 @@ public class AsistenciaExcepcionService {
     private final TrabajadorRepository trabajadorRepository;
     private final MotivoAusenciaRepository motivoRepository;
     private final CurrentUserService currentUserService;
-    private final AsistenciaService asistenciaService;
+    private final ConsultarAsistenciasUseCase consultaUseCase;
 
     @Transactional
     public AsistenciaResponse registrar(AsistenciaRequest request) {
@@ -123,7 +126,7 @@ public class AsistenciaExcepcionService {
             }
         }
 
-        return asistenciaService.obtenerPorId(asistencia.getId());
+        return toResponse(consultaUseCase.obtenerPorId(asistencia.getId()));
     }
 
     private void validarControlador(Trabajador controlador) {
@@ -135,6 +138,52 @@ public class AsistenciaExcepcionService {
                 || "Controlador".equalsIgnoreCase(puesto)
                 || "Controlador ATF".equalsIgnoreCase(puesto);
         if (!esControlador) throw new BusinessException("El trabajador seleccionado no es controlador");
+    }
+
+    private AsistenciaResponse toResponse(
+            ConsultarAsistenciasUseCase.Asistencia asistencia
+    ) {
+        return new AsistenciaResponse(
+                asistencia.id(),
+                asistencia.plazaId(),
+                asistencia.plaza(),
+                asistencia.turnoId(),
+                asistencia.turno(),
+                asistencia.controladorId(),
+                asistencia.controlador(),
+                asistencia.fecha(),
+                asistencia.programados(),
+                asistencia.presentes(),
+                asistencia.ausentes(),
+                asistencia.apoyoSolicitado(),
+                asistencia.detalleApoyo(),
+                asistencia.porcentaje(),
+                asistencia.notas(),
+                asistencia.ausencias()
+                        .stream()
+                        .map(ausencia ->
+                                new AusenciaResponse(
+                                        ausencia.id(),
+                                        ausencia.trabajadorId(),
+                                        ausencia.codigoTrabajador(),
+                                        ausencia.nombreTrabajador(),
+                                        ausencia.motivoId(),
+                                        ausencia.motivo(),
+                                        ausencia.observacion()
+                                )
+                        )
+                        .toList(),
+                asistencia.evidencias()
+                        .stream()
+                        .map(evidencia ->
+                                new EvidenciaResponse(
+                                        evidencia.id(),
+                                        evidencia.urlArchivo(),
+                                        evidencia.tipo()
+                                )
+                        )
+                        .toList()
+        );
     }
 
     private String limpiar(String texto) {
