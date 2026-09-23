@@ -8,7 +8,6 @@ import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Locale;
@@ -33,7 +32,7 @@ public class GestionarEvidenciaAsistenciaService
     @Transactional
     public Evidencia guardar(
             Long asistenciaId,
-            MultipartFile archivo,
+            ArchivoEntrada archivo,
             String tipo
     ) throws IOException {
         if (!evidenciaPort.existeAsistencia(asistenciaId)) {
@@ -42,7 +41,7 @@ public class GestionarEvidenciaAsistenciaService
             );
         }
 
-        if (archivo == null || archivo.isEmpty()) {
+        if (archivo == null || archivo.vacio()) {
             throw new BusinessException(
                     "Debe seleccionar una imagen"
             );
