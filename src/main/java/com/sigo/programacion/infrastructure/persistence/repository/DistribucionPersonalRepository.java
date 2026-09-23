@@ -4,12 +4,24 @@ import com.sigo.programacion.infrastructure.persistence.entity.DistribucionPerso
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-public interface DistribucionPersonalRepository extends JpaRepository<DistribucionPersonal,Long> {
-    Optional<DistribucionPersonal> findByProgramacionTurnoId(Long programacionTurnoId);
+public interface DistribucionPersonalRepository
+        extends JpaRepository<DistribucionPersonal, Long> {
+
+    interface DistribucionHorarioResumen {
+        Long getProgramacionTurnoId();
+        String getUbicacionCodigo();
+        String getUbicacionNombre();
+    }
+
+    Optional<DistribucionPersonal>
+    findByProgramacionTurnoId(
+            Long programacionTurnoId
+    );
 
     @Query("""
         select d from DistribucionPersonal d
@@ -17,18 +29,51 @@ public interface DistribucionPersonalRepository extends JpaRepository<Distribuci
         join fetch p.trabajador t
         join fetch p.plaza pl
         join fetch d.ubicacion u
-        where pl.id=:plazaId and p.fecha between :desde and :hasta
+        where pl.id=:plazaId
+          and p.fecha between :desde and :hasta
         order by t.nombreCompleto asc, p.fecha asc
     """)
-    List<DistribucionPersonal> findMes(@Param("plazaId") Long plazaId,@Param("desde") LocalDate desde,@Param("hasta") LocalDate hasta);
+    List<DistribucionPersonal> findMes(
+            @Param("plazaId") Long plazaId,
+            @Param("desde") LocalDate desde,
+            @Param("hasta") LocalDate hasta
+    );
 
     @Query("""
         select d from DistribucionPersonal d
         join fetch d.programacionTurno p
         join fetch p.trabajador t
         join fetch d.ubicacion u
-        where t.id=:trabajadorId and p.fecha between :desde and :hasta
+        where t.id=:trabajadorId
+          and p.fecha between :desde and :hasta
         order by p.fecha asc
     """)
-    List<DistribucionPersonal> findByTrabajadorMes(@Param("trabajadorId") Long trabajadorId,@Param("desde") LocalDate desde,@Param("hasta") LocalDate hasta);
+    List<DistribucionPersonal> findByTrabajadorMes(
+            @Param("trabajadorId") Long trabajadorId,
+            @Param("desde") LocalDate desde,
+            @Param("hasta") LocalDate hasta
+    );
+
+    /*
+     * Proyección para "Mi horario".
+     * Solo devuelve los tres campos necesarios para combinar
+     * ubicación con el turno del trabajador.
+     */
+    @Query("""
+        select
+            p.id as programacionTurnoId,
+            u.codigo as ubicacionCodigo,
+            u.nombre as ubicacionNombre
+        from DistribucionPersonal d
+        join d.programacionTurno p
+        join p.trabajador t
+        join d.ubicacion u
+        where t.id = :trabajadorId
+          and p.fecha between :desde and :hasta
+    """)
+    List<DistribucionHorarioResumen> findHorarioResumen(
+            @Param("trabajadorId") Long trabajadorId,
+            @Param("desde") LocalDate desde,
+            @Param("hasta") LocalDate hasta
+    );
 }
