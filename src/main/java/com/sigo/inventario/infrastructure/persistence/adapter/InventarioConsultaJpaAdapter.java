@@ -10,14 +10,13 @@ import com.sigo.inventario.infrastructure.persistence.repository.InventarioConte
 import com.sigo.inventario.infrastructure.persistence.repository.InventarioConteoRepository;
 import com.sigo.inventario.infrastructure.persistence.repository.InventarioProductoRepository;
 import com.sigo.inventario.infrastructure.persistence.repository.InventarioRolRepository;
+import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -37,8 +36,7 @@ public class InventarioConsultaJpaAdapter
         InventarioConteo inventario = conteos
                 .findConDetalleById(inventarioId)
                 .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
+                        new ResourceNotFoundException(
                                 "Inventario no encontrado"
                         )
                 );
