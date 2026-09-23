@@ -9,10 +9,9 @@ import com.sigo.programacion.application.port.out.SecuenciaGestionPort;
 import com.sigo.programacion.infrastructure.persistence.entity.GrupoProgramacion;
 import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionSecuenciaAgente;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionSecuenciaAgenteRepository;
+import com.sigo.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Objects;
@@ -205,10 +204,7 @@ public class SecuenciaGestionJpaAdapter
         );
     }
 
-    private ResponseStatusException bad(String message) {
-        return new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                message
-        );
+    private BusinessException bad(String message) {
+        return new BusinessException(message);
     }
 }
