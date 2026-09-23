@@ -1,9 +1,24 @@
 package com.sigo.inventario.application.security;
-import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
-import com.sigo.inventario.infrastructure.persistence.entity.InventarioRol;
-public record InventarioUsuarioActual(Trabajador trabajador,InventarioRol rol){
-  public Long trabajadorId(){return trabajador.getId();}
-  public Long plazaId(){return trabajador.getPlaza()==null?null:trabajador.getPlaza().getId();}
-  public String rolCodigo(){return rol.getCodigo();}
-  public Long rolId(){return rol.getId();}
+
+public record InventarioUsuarioActual(
+        Long trabajadorId,
+        Integer codigo,
+        String nombre,
+        Long plazaId,
+        String plazaCodigo,
+        Long rolId,
+        String rolCodigo,
+        String rolSistema
+) {
+    public boolean esSupervisorSistema() {
+        return "SUPERVISOR".equalsIgnoreCase(rolSistema);
+    }
+
+    public boolean esControladorSistema() {
+        return "CONTROLADOR".equalsIgnoreCase(rolSistema);
+    }
+
+    public boolean esOperadorSistema() {
+        return "OPERADOR".equalsIgnoreCase(rolSistema);
+    }
 }
