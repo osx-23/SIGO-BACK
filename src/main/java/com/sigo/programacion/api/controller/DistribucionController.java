@@ -1,7 +1,13 @@
 package com.sigo.programacion.api.controller;
 
-import com.sigo.programacion.application.service.ProgramacionService;
-import com.sigo.programacion.application.service.ProgramacionService.*;
+import com.sigo.programacion.api.dto.CoberturaUbicacionResponse;
+import com.sigo.programacion.api.dto.DistribucionDiaResponse;
+import com.sigo.programacion.api.dto.GuardarDistribucionRequest;
+import com.sigo.programacion.api.dto.GuardarUbicacionRequest;
+import com.sigo.programacion.api.dto.ResumenTrabajadorResponse;
+import com.sigo.programacion.api.dto.UbicacionResponse;
+import com.sigo.programacion.application.port.in.DistribucionUseCase;
+import com.sigo.programacion.application.port.in.UbicacionUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -15,15 +21,18 @@ import java.util.List;
 @PreAuthorize("hasAnyRole('SUPERVISOR','CONTROLADOR')")
 public class DistribucionController {
 
-    private final ProgramacionService service;
+    private final UbicacionUseCase ubicacionUseCase;
+    private final DistribucionUseCase distribucionUseCase;
 
     @GetMapping("/ubicaciones")
     public List<UbicacionResponse> ubicaciones(
             @RequestParam Long plazaId
     ) {
-        return service.ubicaciones(
-                plazaId
-        );
+        return ubicacionUseCase
+                .listarActivas(plazaId)
+                .stream()
+                .map(this::toUbicacionResponse)
+                .toList();
     }
 
     @GetMapping("/ubicaciones/configuracion")
@@ -31,20 +40,23 @@ public class DistribucionController {
     public List<UbicacionResponse> ubicacionesConfiguracion(
             @RequestParam Long plazaId
     ) {
-        return service.ubicacionesConfiguracion(
-                plazaId
-        );
+        return ubicacionUseCase
+                .listarConfiguracion(plazaId)
+                .stream()
+                .map(this::toUbicacionResponse)
+                .toList();
     }
 
     @PostMapping("/ubicaciones")
     @PreAuthorize("hasRole('SUPERVISOR')")
     public UbicacionResponse crearUbicacion(
             @Valid
-            @RequestBody
-            GuardarUbicacionRequest request
+            @RequestBody GuardarUbicacionRequest request
     ) {
-        return service.crearUbicacion(
-                request
+        return toUbicacionResponse(
+                ubicacionUseCase.crear(
+                        toUbicacionCommand(request)
+                )
         );
     }
 
@@ -53,12 +65,13 @@ public class DistribucionController {
     public UbicacionResponse actualizarUbicacion(
             @PathVariable Long ubicacionId,
             @Valid
-            @RequestBody
-            GuardarUbicacionRequest request
+            @RequestBody GuardarUbicacionRequest request
     ) {
-        return service.actualizarUbicacion(
-                ubicacionId,
-                request
+        return toUbicacionResponse(
+                ubicacionUseCase.actualizar(
+                        ubicacionId,
+                        toUbicacionCommand(request)
+                )
         );
     }
 
@@ -68,9 +81,11 @@ public class DistribucionController {
             @PathVariable Long ubicacionId,
             @RequestParam boolean activo
     ) {
-        return service.cambiarEstadoUbicacion(
-                ubicacionId,
-                activo
+        return toUbicacionResponse(
+                ubicacionUseCase.cambiarEstado(
+                        ubicacionId,
+                        activo
+                )
         );
     }
 
@@ -80,22 +95,38 @@ public class DistribucionController {
             @RequestParam int anio,
             @RequestParam int mes
     ) {
-        return service.listarDistribucion(
-                plazaId,
-                anio,
-                mes
-        );
+        return distribucionUseCase
+                .listar(plazaId, anio, mes)
+                .stream()
+                .map(this::toDistribucionResponse)
+                .toList();
     }
 
     @PutMapping
     public List<DistribucionDiaResponse> guardar(
             @Valid
-            @RequestBody
-            GuardarDistribucionRequest request
+            @RequestBody GuardarDistribucionRequest request
     ) {
-        return service.guardarDistribucion(
-                request
-        );
+        DistribucionUseCase.Command command =
+                new DistribucionUseCase.Command(
+                        request.plazaId(),
+                        request.distribuciones()
+                                .stream()
+                                .map(item ->
+                                        new DistribucionUseCase.Item(
+                                                item.programacionTurnoId(),
+                                                item.ubicacionId(),
+                                                item.observacion()
+                                        )
+                                )
+                                .toList()
+                );
+
+        return distribucionUseCase
+                .guardar(command)
+                .stream()
+                .map(this::toDistribucionResponse)
+                .toList();
     }
 
     @GetMapping("/resumen-trabajador/{trabajadorId}")
@@ -104,10 +135,12 @@ public class DistribucionController {
             @RequestParam int anio,
             @RequestParam int mes
     ) {
-        return service.resumen(
-                trabajadorId,
-                anio,
-                mes
+        return toResumenResponse(
+                distribucionUseCase.resumen(
+                        trabajadorId,
+                        anio,
+                        mes
+                )
         );
     }
 
@@ -117,10 +150,83 @@ public class DistribucionController {
             @RequestParam int anio,
             @RequestParam int mes
     ) {
-        return service.cobertura(
-                plazaId,
-                anio,
-                mes
+        return distribucionUseCase
+                .cobertura(plazaId, anio, mes)
+                .stream()
+                .map(item ->
+                        new CoberturaUbicacionResponse(
+                                item.ubicacionId(),
+                                item.codigo(),
+                                item.nombre(),
+                                item.porDia()
+                        )
+                )
+                .toList();
+    }
+
+    private UbicacionUseCase.Command toUbicacionCommand(
+            GuardarUbicacionRequest request
+    ) {
+        return new UbicacionUseCase.Command(
+                request.plazaId(),
+                request.codigo(),
+                request.nombre(),
+                request.tipo(),
+                request.orden()
+        );
+    }
+
+    private UbicacionResponse toUbicacionResponse(
+            UbicacionUseCase.Ubicacion ubicacion
+    ) {
+        return new UbicacionResponse(
+                ubicacion.id(),
+                ubicacion.plazaId(),
+                ubicacion.codigo(),
+                ubicacion.nombre(),
+                ubicacion.tipo(),
+                ubicacion.viaId(),
+                ubicacion.activo(),
+                ubicacion.orden()
+        );
+    }
+
+    private DistribucionDiaResponse toDistribucionResponse(
+            DistribucionUseCase.Distribucion distribucion
+    ) {
+        return new DistribucionDiaResponse(
+                distribucion.distribucionId(),
+                distribucion.programacionTurnoId(),
+                distribucion.trabajadorId(),
+                distribucion.codigoTrabajador(),
+                distribucion.nombreTrabajador(),
+                distribucion.fecha(),
+                distribucion.estado(),
+                distribucion.ubicacionId(),
+                distribucion.ubicacionCodigo(),
+                distribucion.ubicacionNombre(),
+                distribucion.ubicacionTipo(),
+                distribucion.observacion()
+        );
+    }
+
+    private ResumenTrabajadorResponse toResumenResponse(
+            DistribucionUseCase.ResumenTrabajador resumen
+    ) {
+        return new ResumenTrabajadorResponse(
+                resumen.trabajadorId(),
+                resumen.codigo(),
+                resumen.nombre(),
+                resumen.ubicaciones()
+                        .stream()
+                        .map(ubicacion ->
+                                new ResumenTrabajadorResponse.ResumenUbicacionResponse(
+                                        ubicacion.codigo(),
+                                        ubicacion.nombre(),
+                                        ubicacion.veces()
+                                )
+                        )
+                        .toList()
         );
     }
 }
