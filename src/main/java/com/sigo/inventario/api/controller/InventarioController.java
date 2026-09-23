@@ -11,7 +11,7 @@ import com.sigo.inventario.application.port.in.GuardarConteoInventarioUseCase;
 import com.sigo.inventario.application.port.in.IniciarInventarioUseCase;
 import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
-import com.sigo.inventario.application.security.InventarioUsuarioContextService;
+import com.sigo.inventario.application.port.in.ObtenerInventarioUsuarioUseCase;
 import com.sigo.inventario.domain.InventarioEstado;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +35,7 @@ public class InventarioController {
     private final GuardarConteoInventarioUseCase guardarConteoUseCase;
     private final IniciarInventarioUseCase iniciarUseCase;
     private final InventarioConsultaUseCase consultaUseCase;
-    private final InventarioUsuarioContextService usuarios;
+    private final ObtenerInventarioUsuarioUseCase usuarios;
 
     @PostMapping
     public InventarioResumenResponse iniciar() {
