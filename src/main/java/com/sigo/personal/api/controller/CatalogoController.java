@@ -43,7 +43,7 @@ public class CatalogoController {
                         new TurnoCatalogoResponse(
                                 item.id(),
                                 item.codigo(),
-                                item.descripcion()
+                                item.nombre()
                         )
                 )
                 .toList();
