@@ -76,7 +76,7 @@ class JwtTokenSeguridadAdapterTest {
         );
         assertEquals(
                 10L,
-                jwt.getClaimAsLong("trabajadorId")
+                ((Number) jwt.getClaim("trabajadorId")).longValue()
         );
         assertEquals(
                 "Supervisor Test",
@@ -84,7 +84,7 @@ class JwtTokenSeguridadAdapterTest {
         );
         assertEquals(
                 4L,
-                jwt.getClaimAsLong("plazaId")
+                ((Number) jwt.getClaim("plazaId")).longValue()
         );
 
         var modulos = jwt.getClaimAsStringList("modulos");
