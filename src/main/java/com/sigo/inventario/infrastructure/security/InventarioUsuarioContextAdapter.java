@@ -5,9 +5,7 @@ import com.sigo.inventario.application.security.InventarioUsuarioActual;
 import com.sigo.inventario.infrastructure.persistence.entity.InventarioRol;
 import com.sigo.inventario.infrastructure.persistence.repository.InventarioPuestoRolRepository;
 import com.sigo.inventario.infrastructure.persistence.repository.InventarioRolRepository;
-import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
-import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
-import com.sigo.security.application.service.CurrentUserService;
+import com.sigo.security.application.port.in.UsuarioActualUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -18,48 +16,42 @@ import org.springframework.web.server.ResponseStatusException;
 public class InventarioUsuarioContextAdapter
         implements InventarioUsuarioContextPort {
 
-    private final CurrentUserService currentUserService;
+    private final UsuarioActualUseCase usuarioActualUseCase;
     private final InventarioPuestoRolRepository puestoRolRepository;
     private final InventarioRolRepository inventarioRolRepository;
 
     @Override
     public InventarioUsuarioActual obtenerActual() {
-        Trabajador trabajador =
-                currentUserService.requireCurrent();
+        UsuarioActualUseCase.UsuarioActual trabajador =
+                usuarioActualUseCase.requireActual();
 
         InventarioRol rolInventario =
                 resolverRolInventario(trabajador);
 
         return new InventarioUsuarioActual(
-                trabajador.getId(),
-                trabajador.getCodigo(),
-                trabajador.getNombreCompleto(),
-                trabajador.getPlaza() == null
-                        ? null
-                        : trabajador.getPlaza().getId(),
-                trabajador.getPlaza() == null
-                        ? null
-                        : trabajador.getPlaza().getCodigo(),
+                trabajador.id(),
+                trabajador.codigo(),
+                trabajador.nombre(),
+                trabajador.plazaId(),
+                trabajador.plazaCodigo(),
                 rolInventario.getId(),
                 rolInventario.getCodigo(),
-                trabajador.getRolSistema().name()
+                trabajador.rol()
         );
     }
 
     private InventarioRol resolverRolInventario(
-            Trabajador trabajador
+            UsuarioActualUseCase.UsuarioActual trabajador
     ) {
-        if (trabajador.getRolSistema()
-                == RolSistema.SUPERVISOR) {
+        if ("SUPERVISOR".equals(trabajador.rol())) {
             return rolActivo("SUPERVISOR");
         }
 
-        if (trabajador.getRolSistema()
-                == RolSistema.CONTROLADOR) {
+        if ("CONTROLADOR".equals(trabajador.rol())) {
             return rolActivo("CONTROLADOR");
         }
 
-        if (trabajador.getPuesto() == null) {
+        if (trabajador.puestoId() == null) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Trabajador sin puesto asignado"
@@ -68,7 +60,7 @@ public class InventarioUsuarioContextAdapter
 
         var puestoRol = puestoRolRepository
                 .findByPuestoId(
-                        trabajador.getPuesto().getId()
+                        trabajador.puestoId()
                 )
                 .orElseThrow(() ->
                         new ResponseStatusException(
