@@ -1,5 +1,6 @@
 package com.sigo.asistencia.infrastructure.storage;
 
+import com.sigo.asistencia.application.port.in.GestionarEvidenciaAsistenciaUseCase;
 import com.sigo.asistencia.application.port.out.AsistenciaStoragePort;
 import com.sigo.shared.exception.BusinessException;
 import com.sigo.shared.storage.CloudinaryService;
