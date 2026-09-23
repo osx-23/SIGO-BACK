@@ -1,10 +1,9 @@
 package com.sigo.inventario.application.security;
 
 import com.sigo.inventario.application.port.out.InventarioProductoVisibilidadPort;
+import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -19,9 +18,7 @@ public class InventarioAuthorizationService {
 
     if (u.plazaId() == null) {
 
-      throw new ResponseStatusException(
-              HttpStatus.FORBIDDEN,
-              "Trabajador sin plaza asignada"
+      throw new ForbiddenException("Trabajador sin plaza asignada"
       );
     }
   }
@@ -49,9 +46,7 @@ public class InventarioAuthorizationService {
 
     if (!permitido) {
 
-      throw new ResponseStatusException(
-              HttpStatus.FORBIDDEN,
-              "No tiene permisos para administrar productos"
+      throw new ForbiddenException("No tiene permisos para administrar productos"
       );
     }
 
@@ -96,9 +91,7 @@ public class InventarioAuthorizationService {
             u.trabajadorId()
     )) {
 
-      throw new ResponseStatusException(
-              HttpStatus.FORBIDDEN,
-              "El inventario pertenece a otro trabajador"
+      throw new ForbiddenException("El inventario pertenece a otro trabajador"
       );
     }
   }
@@ -120,9 +113,7 @@ public class InventarioAuthorizationService {
 
     if (!visible) {
 
-      throw new ResponseStatusException(
-              HttpStatus.FORBIDDEN,
-              "Producto no autorizado para el rol o plaza"
+      throw new ForbiddenException("Producto no autorizado para el rol o plaza"
       );
     }
   }
@@ -144,9 +135,7 @@ public class InventarioAuthorizationService {
                     plazaId
             )) {
 
-      throw new ResponseStatusException(
-              HttpStatus.FORBIDDEN,
-              "No puede consultar otra plaza"
+      throw new ForbiddenException("No puede consultar otra plaza"
       );
     }
   }
@@ -171,9 +160,7 @@ public class InventarioAuthorizationService {
 
     if (!u.plazaId().equals(plazaId)) {
 
-      throw new ResponseStatusException(
-              HttpStatus.FORBIDDEN,
-              "El controlador solo puede administrar productos de su propia plaza"
+      throw new ForbiddenException("El controlador solo puede administrar productos de su propia plaza"
       );
     }
   }
