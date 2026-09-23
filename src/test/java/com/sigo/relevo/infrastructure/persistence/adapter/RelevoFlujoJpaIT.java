@@ -380,6 +380,51 @@ class RelevoFlujoJpaIT {
     }
 
     @Test
+    void actualizarDespuesDeDesactivarElementoEliminaChecklistObsoleto() {
+        var inicial = gestionarService.registrar(
+                command(
+                        checklistOperativo(),
+                        List.of()
+                )
+        );
+
+        assertEquals(2, inicial.checklist().size());
+
+        conos.setActivo(false);
+        entityManager.persistAndFlush(conos);
+
+        var actualizado = gestionarService.actualizar(
+                inicial.id(),
+                command(
+                        List.of(
+                                new GestionarRelevoUseCase.ChecklistItem(
+                                        banos.getId(),
+                                        EstadoRelevo.OPERATIVO,
+                                        null,
+                                        null
+                                )
+                        ),
+                        List.of()
+                )
+        );
+
+        assertEquals(1, actualizado.checklist().size());
+        assertEquals(
+                banos.getId(),
+                actualizado.checklist().get(0).elementoId()
+        );
+
+        assertEquals(
+                1,
+                checklistRepository
+                        .findByRelevoIdOrderByElementoCategoriaAscElementoOrdenAsc(
+                                inicial.id()
+                        )
+                        .size()
+        );
+    }
+
+    @Test
     void rechazaChecklistIncompletoSinPersistirRelevo() {
         var incompleto = command(
                 List.of(
