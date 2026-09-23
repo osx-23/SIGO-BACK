@@ -6,9 +6,9 @@ import com.sigo.asistencia.api.dto.AsistenciaUpdateRequest;
 import com.sigo.asistencia.api.dto.EvidenciaResponse;
 import com.sigo.asistencia.application.service.AsistenciaExcepcionService;
 import com.sigo.asistencia.application.port.in.ConsultarAsistenciasUseCase;
+import com.sigo.asistencia.application.port.in.GestionarAsistenciaUseCase;
 import com.sigo.asistencia.application.port.in.GestionarEvidenciaAsistenciaUseCase;
 import com.sigo.asistencia.application.port.in.ObtenerProgramadosAsistenciaUseCase;
-import com.sigo.asistencia.application.service.AsistenciaService;
 import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
 import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
 import com.sigo.security.application.service.CurrentUserService;
@@ -32,7 +32,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AsistenciaController {
 
-    private final AsistenciaService asistenciaService;
+    private final GestionarAsistenciaUseCase gestionarUseCase;
     private final GestionarEvidenciaAsistenciaUseCase evidenciaUseCase;
     private final ConsultarAsistenciasUseCase consultaUseCase;
     private final AsistenciaExcepcionService asistenciaExcepcionService;
@@ -52,8 +52,14 @@ public class AsistenciaController {
             );
         }
 
+        asegurarIdentidad(request);
+
         return ResponseEntity.ok(
-                asistenciaService.registrar(asegurarIdentidad(request))
+                toResponse(
+                        gestionarUseCase.registrar(
+                                toCommand(request)
+                        )
+                )
         );
     }
 
@@ -62,8 +68,15 @@ public class AsistenciaController {
             @PathVariable Long id,
             @Valid @RequestBody AsistenciaUpdateRequest request
     ) {
+        asegurarIdentidad(request);
+
         return ResponseEntity.ok(
-                asistenciaService.actualizar(id, asegurarIdentidad(request))
+                toResponse(
+                        gestionarUseCase.actualizar(
+                                id,
+                                toCommand(request)
+                        )
+                )
         );
     }
 
@@ -140,6 +153,64 @@ public class AsistenciaController {
         exigirRolAsistencia();
         evidenciaUseCase.eliminar(asistenciaId, evidenciaId);
         return ResponseEntity.noContent().build();
+    }
+
+    private GestionarAsistenciaUseCase.Command toCommand(
+            AsistenciaRequest request
+    ) {
+        return new GestionarAsistenciaUseCase.Command(
+                request.plazaId(),
+                request.turnoId(),
+                request.controladorId(),
+                request.fecha(),
+                request.programados(),
+                request.presentes(),
+                request.apoyoSolicitado(),
+                request.detalleApoyo(),
+                request.notas(),
+                request.ausencias() == null
+                        ? List.of()
+                        : request.ausencias()
+                                .stream()
+                                .map(ausencia ->
+                                        new GestionarAsistenciaUseCase.AusenciaCommand(
+                                                ausencia.trabajadorId(),
+                                                ausencia.motivoId(),
+                                                ausencia.observacion()
+                                        )
+                                )
+                                .toList(),
+                request.evidencias()
+        );
+    }
+
+    private GestionarAsistenciaUseCase.Command toCommand(
+            AsistenciaUpdateRequest request
+    ) {
+        return new GestionarAsistenciaUseCase.Command(
+                request.plazaId(),
+                request.turnoId(),
+                request.controladorId(),
+                request.fecha(),
+                request.programados(),
+                request.presentes(),
+                request.apoyoSolicitado(),
+                request.detalleApoyo(),
+                request.notas(),
+                request.ausencias() == null
+                        ? List.of()
+                        : request.ausencias()
+                                .stream()
+                                .map(ausencia ->
+                                        new GestionarAsistenciaUseCase.AusenciaCommand(
+                                                ausencia.trabajadorId(),
+                                                ausencia.motivoId(),
+                                                ausencia.observacion()
+                                        )
+                                )
+                                .toList(),
+                List.of()
+        );
     }
 
     private AsistenciaResponse toResponse(
