@@ -9,6 +9,8 @@ import com.sigo.programacion.application.port.in.ListarLideresUseCase;
 import com.sigo.programacion.application.port.in.ListarSecuenciasUseCase;
 import com.sigo.programacion.application.port.in.ListarTurnosUseCase;
 import com.sigo.programacion.application.port.in.MiHorarioUseCase;
+import com.sigo.programacion.application.port.in.AgenteProgramacionExcepcionUseCase;
+import com.sigo.personal.application.port.in.TrabajadorUseCase;
 import com.sigo.security.infrastructure.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,6 +78,12 @@ class ProgramacionApiAuthorizationIT {
 
     @MockBean
     private GenerarProgramacionUseCase generarProgramacionUseCase;
+
+    @MockBean
+    private TrabajadorUseCase trabajadorUseCase;
+
+    @MockBean
+    private AgenteProgramacionExcepcionUseCase excepcionUseCase;
 
     @Test
     void anonimoNoPuedeConsultarMiHorario() throws Exception {
