@@ -2,11 +2,11 @@ package com.sigo.inventario.application.service;
 
 import com.sigo.inventario.application.port.in.IniciarInventarioUseCase;
 import com.sigo.inventario.application.port.out.IniciarInventarioPort;
+import com.sigo.shared.exception.ConflictException;
+import com.sigo.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
@@ -26,8 +26,7 @@ public class IniciarInventarioService
                 || usuario.plazaId() == null
                 || usuario.rolId() == null
                 || usuario.rolCodigo() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new ForbiddenException(
                     "Trabajador sin plaza o rol de inventario asignado"
             );
         }
@@ -37,8 +36,7 @@ public class IniciarInventarioService
                         usuario.trabajadorId()
                 )
                 .ifPresent(id -> {
-                    throw new ResponseStatusException(
-                            HttpStatus.CONFLICT,
+                    throw new ConflictException(
                             "Ya existe un inventario EN_PROCESO: "
                                     + id
                     );
