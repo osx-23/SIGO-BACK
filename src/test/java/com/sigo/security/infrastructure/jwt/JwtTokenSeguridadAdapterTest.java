@@ -69,7 +69,7 @@ class JwtTokenSeguridadAdapterTest {
         var jwt = decoder.decode(token);
 
         assertEquals("287", jwt.getSubject());
-        assertEquals("sigo-api", jwt.getIssuer().toString());
+        assertEquals("sigo-api", jwt.getClaimAsString("iss"));
         assertEquals(
                 "SUPERVISOR",
                 jwt.getClaimAsString("rol")
