@@ -1,2 +1,65 @@
-package com.sigo.personal.api.controller; import com.sigo.personal.infrastructure.persistence.entity.*; import com.sigo.asistencia.infrastructure.persistence.entity.*; import com.sigo.relevo.infrastructure.persistence.entity.*; import com.sigo.personal.infrastructure.persistence.repository.*; import com.sigo.asistencia.infrastructure.persistence.repository.*; import com.sigo.relevo.infrastructure.persistence.repository.*; import lombok.RequiredArgsConstructor; import org.springframework.web.bind.annotation.*; import java.util.List;
-@RestController @RequestMapping("/api") @RequiredArgsConstructor public class CatalogoController{private final PlazaRepository p;private final TurnoRepository t;private final MotivoAusenciaRepository m; @GetMapping("/plazas") public List<Plaza> plazas(){return p.findByActivoTrueOrderByCodigoAsc();}@GetMapping("/turnos") public List<Turno> turnos(){return t.findAll();}@GetMapping("/motivos-ausencia") public List<MotivoAusencia> motivos(){return m.findAll();}}
+package com.sigo.personal.api.controller;
+
+import com.sigo.asistencia.application.port.in.MotivoAusenciaCatalogoUseCase;
+import com.sigo.personal.api.dto.MotivoAusenciaCatalogoResponse;
+import com.sigo.personal.api.dto.PlazaCatalogoResponse;
+import com.sigo.personal.api.dto.TurnoCatalogoResponse;
+import com.sigo.personal.application.port.in.CatalogoPersonalUseCase;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api")
+@RequiredArgsConstructor
+public class CatalogoController {
+
+    private final CatalogoPersonalUseCase catalogoPersonalUseCase;
+    private final MotivoAusenciaCatalogoUseCase motivoAusenciaUseCase;
+
+    @GetMapping("/plazas")
+    public List<PlazaCatalogoResponse> plazas() {
+        return catalogoPersonalUseCase
+                .plazas()
+                .stream()
+                .map(item ->
+                        new PlazaCatalogoResponse(
+                                item.id(),
+                                item.codigo(),
+                                item.descripcion(),
+                                item.activo()
+                        )
+                )
+                .toList();
+    }
+
+    @GetMapping("/turnos")
+    public List<TurnoCatalogoResponse> turnos() {
+        return catalogoPersonalUseCase
+                .turnos()
+                .stream()
+                .map(item ->
+                        new TurnoCatalogoResponse(
+                                item.id(),
+                                item.codigo(),
+                                item.descripcion()
+                        )
+                )
+                .toList();
+    }
+
+    @GetMapping("/motivos-ausencia")
+    public List<MotivoAusenciaCatalogoResponse> motivos() {
+        return motivoAusenciaUseCase
+                .listar()
+                .stream()
+                .map(item ->
+                        new MotivoAusenciaCatalogoResponse(
+                                item.id(),
+                                item.nombre()
+                        )
+                )
+                .toList();
+    }
+}
