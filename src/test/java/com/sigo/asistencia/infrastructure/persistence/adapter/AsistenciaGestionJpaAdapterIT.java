@@ -12,7 +12,7 @@ import com.sigo.personal.infrastructure.persistence.entity.RolSistema;
 import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
 import com.sigo.personal.infrastructure.persistence.entity.Turno;
 import com.sigo.personal.infrastructure.persistence.repository.PlazaRepository;
-import com.sigo.personal.infrastructure.persistence.repository.PuestoRepository;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import com.sigo.personal.infrastructure.persistence.repository.TrabajadorRepository;
 import com.sigo.personal.infrastructure.persistence.repository.TurnoRepository;
 import org.junit.jupiter.api.Test;
@@ -76,7 +76,7 @@ class AsistenciaGestionJpaAdapterIT {
     private TurnoRepository turnoRepository;
 
     @Autowired
-    private PuestoRepository puestoRepository;
+    private TestEntityManager entityManager;
 
     @Autowired
     private TrabajadorRepository trabajadorRepository;
@@ -115,7 +115,7 @@ class AsistenciaGestionJpaAdapterIT {
                 "Controlador"
         );
         puestoControlador =
-                puestoRepository.saveAndFlush(
+                entityManager.persistAndFlush(
                         puestoControlador
                 );
 
@@ -124,7 +124,7 @@ class AsistenciaGestionJpaAdapterIT {
                 "Agente de Recaudación"
         );
         puestoAgente =
-                puestoRepository.saveAndFlush(
+                entityManager.persistAndFlush(
                         puestoAgente
                 );
 
