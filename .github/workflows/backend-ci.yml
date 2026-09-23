@@ -146,3 +146,33 @@ jobs:
             echo "api layers must not expose persistence entities"
             exit 1
           fi
+
+      - name: Verify strict architecture boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep -R --line-number --include='*.java' -E '^import com\.sigo\..*\.infrastructure\.' src/main/java/com/sigo/*/api; then
+            echo "api layers must not depend on infrastructure"
+            exit 1
+          fi
+
+          if grep -R --line-number --include='*.java' -E '^import com\.sigo\..*\.api\.' src/main/java/com/sigo/*/infrastructure; then
+            echo "infrastructure layers must not depend on api"
+            exit 1
+          fi
+
+          if grep -R --line-number --include='*.java' -E '^import org\.springframework\.web\.server\.ResponseStatusException;' src/main/java/com/sigo/*/application src/main/java/com/sigo/*/infrastructure; then
+            echo "application/infrastructure must not translate errors to HTTP"
+            exit 1
+          fi
+
+          if grep -R --line-number --include='*.java' -E '^import com\.sigo\.programacion\.infrastructure\.' src/main/java/com/sigo/personal/infrastructure; then
+            echo "personal infrastructure must not depend on programacion infrastructure"
+            exit 1
+          fi
+
+          if grep -R --line-number --include='*.java' -E '^import com\.sigo\.relevo\.infrastructure\.' src/main/java/com/sigo/programacion/infrastructure; then
+            echo "programacion infrastructure must not depend on relevo infrastructure"
+            exit 1
+          fi
