@@ -18,6 +18,18 @@ public interface TrabajadorGestionPort {
             Long plazaId
     );
 
+    List<TrabajadorUseCase.PuestoData> listarPuestosAgente();
+
+    boolean existeCodigo(Integer codigo);
+
+    TrabajadorUseCase.TrabajadorData crearAgente(
+            Integer codigo,
+            String nombreCompleto,
+            Long puestoId,
+            Long plazaId,
+            String passwordInicial
+    );
+
     PreparacionActualizacion prepararActualizacion(
             Long trabajadorId,
             Long nuevaPlazaId,
