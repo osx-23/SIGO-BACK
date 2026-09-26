@@ -18,11 +18,11 @@ public interface TrabajadorGestionPort {
             Long plazaId
     );
 
-    List<TrabajadorUseCase.PuestoData> listarPuestosAgente();
+    List<TrabajadorUseCase.PuestoData> listarPuestosAdministrables();
 
     boolean existeCodigo(Integer codigo);
 
-    TrabajadorUseCase.TrabajadorData crearAgente(
+    TrabajadorUseCase.TrabajadorData crearUsuario(
             Integer codigo,
             String nombreCompleto,
             Long puestoId,
@@ -33,12 +33,14 @@ public interface TrabajadorGestionPort {
     PreparacionActualizacion prepararActualizacion(
             Long trabajadorId,
             Long nuevaPlazaId,
+            Long nuevoPuestoId,
             Boolean activo
     );
 
     TrabajadorUseCase.TrabajadorData aplicarActualizacion(
             Long trabajadorId,
             Long nuevaPlazaId,
+            Long nuevoPuestoId,
             Boolean activo
     );
 
@@ -47,7 +49,9 @@ public interface TrabajadorGestionPort {
             Long plazaAnteriorId,
             Long nuevaPlazaId,
             boolean cambioPlaza,
-            boolean quedaraInactivo
+            boolean cambioPuesto,
+            boolean quedaraInactivo,
+            boolean nuevoEsOperador
     ) {
     }
 }
