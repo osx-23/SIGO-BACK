@@ -19,7 +19,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -61,7 +64,7 @@ public class RelevoConsultaJpaAdapter
                         )
                 );
 
-        return mapRelevo(relevo);
+        return mapRelevos(List.of(relevo)).getFirst();
     }
 
     @Override
@@ -69,37 +72,185 @@ public class RelevoConsultaJpaAdapter
             LocalDate inicio,
             LocalDate fin
     ) {
-        return relevoRepository
+        List<Relevo> relevos = relevoRepository
                 .findByFechaBetweenOrderByFechaDescHoraDesc(
                         inicio,
                         fin
-                )
+                );
+
+        return mapRelevos(relevos);
+    }
+
+    /**
+     * Carga el detalle de todos los relevos en consultas por lote.
+     *
+     * Antes, cada relevo disparaba consultas adicionales para checklist,
+     * vías y evidencias (patrón N+1). Con este método el costo queda
+     * prácticamente constante:
+     *
+     * 1 consulta de relevos
+     * 1 consulta de checklist
+     * 1 consulta de vías
+     * 1 consulta de evidencias de checklist
+     * 1 consulta de evidencias de vías
+     */
+    private List<ConsultarRelevosUseCase.Relevo> mapRelevos(
+            List<Relevo> relevos
+    ) {
+        if (relevos == null || relevos.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> relevoIds = relevos
                 .stream()
-                .map(this::mapRelevo)
+                .map(Relevo::getId)
+                .toList();
+
+        List<RelevoChecklist> checklist = checklistRepository
+                .findByRelevoIdInOrderByRelevoIdAscElementoCategoriaAscElementoOrdenAsc(
+                        relevoIds
+                );
+
+        List<RelevoVia> vias = relevoViaRepository
+                .findByRelevoIdInOrderByRelevoIdAscViaNumeroAsc(
+                        relevoIds
+                );
+
+        List<Long> checklistIds = checklist
+                .stream()
+                .map(RelevoChecklist::getId)
+                .toList();
+
+        List<Long> relevoViaIds = vias
+                .stream()
+                .map(RelevoVia::getId)
+                .toList();
+
+        List<RelevoChecklistEvidencia> evidenciasChecklist =
+                checklistIds.isEmpty()
+                        ? List.of()
+                        : checklistEvidenciaRepository
+                                .findByChecklistIdInOrderByChecklistIdAscIdAsc(
+                                        checklistIds
+                                );
+
+        List<RelevoViaEvidencia> evidenciasVia =
+                relevoViaIds.isEmpty()
+                        ? List.of()
+                        : viaEvidenciaRepository
+                                .findByRelevoViaIdInOrderByRelevoViaIdAscIdAsc(
+                                        relevoViaIds
+                                );
+
+        Map<Long, List<RelevoChecklist>> checklistPorRelevo =
+                agruparChecklistPorRelevo(checklist);
+
+        Map<Long, List<RelevoVia>> viasPorRelevo =
+                agruparViasPorRelevo(vias);
+
+        Map<Long, List<RelevoChecklistEvidencia>> evidenciasPorChecklist =
+                agruparEvidenciasPorChecklist(evidenciasChecklist);
+
+        Map<Long, List<RelevoViaEvidencia>> evidenciasPorVia =
+                agruparEvidenciasPorVia(evidenciasVia);
+
+        return relevos
+                .stream()
+                .map(relevo ->
+                        mapRelevo(
+                                relevo,
+                                checklistPorRelevo.getOrDefault(
+                                        relevo.getId(),
+                                        List.of()
+                                ),
+                                viasPorRelevo.getOrDefault(
+                                        relevo.getId(),
+                                        List.of()
+                                ),
+                                evidenciasPorChecklist,
+                                evidenciasPorVia
+                        )
+                )
                 .toList();
     }
 
-    private ConsultarRelevosUseCase.Relevo mapRelevo(
-            Relevo relevo
+    private Map<Long, List<RelevoChecklist>> agruparChecklistPorRelevo(
+            List<RelevoChecklist> items
     ) {
-        List<ConsultarRelevosUseCase.Checklist> checklist =
-                checklistRepository
-                        .findByRelevoIdOrderByElementoCategoriaAscElementoOrdenAsc(
-                                relevo.getId()
-                        )
-                        .stream()
-                        .map(this::mapChecklist)
-                        .toList();
+        Map<Long, List<RelevoChecklist>> resultado = new HashMap<>();
 
-        List<ConsultarRelevosUseCase.Via> vias =
-                relevoViaRepository
-                        .findByRelevoIdOrderByViaNumeroAsc(
-                                relevo.getId()
-                        )
-                        .stream()
-                        .map(this::mapVia)
-                        .toList();
+        for (RelevoChecklist item : items) {
+            resultado
+                    .computeIfAbsent(
+                            item.getRelevo().getId(),
+                            key -> new ArrayList<>()
+                    )
+                    .add(item);
+        }
 
+        return resultado;
+    }
+
+    private Map<Long, List<RelevoVia>> agruparViasPorRelevo(
+            List<RelevoVia> items
+    ) {
+        Map<Long, List<RelevoVia>> resultado = new HashMap<>();
+
+        for (RelevoVia item : items) {
+            resultado
+                    .computeIfAbsent(
+                            item.getRelevo().getId(),
+                            key -> new ArrayList<>()
+                    )
+                    .add(item);
+        }
+
+        return resultado;
+    }
+
+    private Map<Long, List<RelevoChecklistEvidencia>> agruparEvidenciasPorChecklist(
+            List<RelevoChecklistEvidencia> items
+    ) {
+        Map<Long, List<RelevoChecklistEvidencia>> resultado =
+                new HashMap<>();
+
+        for (RelevoChecklistEvidencia item : items) {
+            resultado
+                    .computeIfAbsent(
+                            item.getChecklist().getId(),
+                            key -> new ArrayList<>()
+                    )
+                    .add(item);
+        }
+
+        return resultado;
+    }
+
+    private Map<Long, List<RelevoViaEvidencia>> agruparEvidenciasPorVia(
+            List<RelevoViaEvidencia> items
+    ) {
+        Map<Long, List<RelevoViaEvidencia>> resultado =
+                new HashMap<>();
+
+        for (RelevoViaEvidencia item : items) {
+            resultado
+                    .computeIfAbsent(
+                            item.getRelevoVia().getId(),
+                            key -> new ArrayList<>()
+                    )
+                    .add(item);
+        }
+
+        return resultado;
+    }
+
+    private ConsultarRelevosUseCase.Relevo mapRelevo(
+            Relevo relevo,
+            List<RelevoChecklist> checklist,
+            List<RelevoVia> vias,
+            Map<Long, List<RelevoChecklistEvidencia>> evidenciasPorChecklist,
+            Map<Long, List<RelevoViaEvidencia>> evidenciasPorVia
+    ) {
         return new ConsultarRelevosUseCase.Relevo(
                 relevo.getId(),
                 relevo.getPlaza().getId(),
@@ -117,23 +268,37 @@ public class RelevoConsultaJpaAdapter
                 relevo.getResumen(),
                 relevo.getCreatedAt(),
                 relevo.getUpdatedAt(),
-                checklist,
+                checklist
+                        .stream()
+                        .map(item ->
+                                mapChecklist(
+                                        item,
+                                        evidenciasPorChecklist.getOrDefault(
+                                                item.getId(),
+                                                List.of()
+                                        )
+                                )
+                        )
+                        .toList(),
                 vias
+                        .stream()
+                        .map(item ->
+                                mapVia(
+                                        item,
+                                        evidenciasPorVia.getOrDefault(
+                                                item.getId(),
+                                                List.of()
+                                        )
+                                )
+                        )
+                        .toList()
         );
     }
 
     private ConsultarRelevosUseCase.Checklist mapChecklist(
-            RelevoChecklist checklist
+            RelevoChecklist checklist,
+            List<RelevoChecklistEvidencia> evidencias
     ) {
-        List<ConsultarRelevosUseCase.Evidencia> evidencias =
-                checklistEvidenciaRepository
-                        .findByChecklistIdOrderByIdAsc(
-                                checklist.getId()
-                        )
-                        .stream()
-                        .map(this::mapEvidencia)
-                        .toList();
-
         return new ConsultarRelevosUseCase.Checklist(
                 checklist.getId(),
                 checklist.getElemento().getId(),
@@ -146,21 +311,16 @@ public class RelevoConsultaJpaAdapter
                 checklist.getDetalle(),
                 checklist.getCantidad(),
                 evidencias
+                        .stream()
+                        .map(this::mapEvidencia)
+                        .toList()
         );
     }
 
     private ConsultarRelevosUseCase.Via mapVia(
-            RelevoVia relevoVia
+            RelevoVia relevoVia,
+            List<RelevoViaEvidencia> evidencias
     ) {
-        List<ConsultarRelevosUseCase.Evidencia> evidencias =
-                viaEvidenciaRepository
-                        .findByRelevoViaIdOrderByIdAsc(
-                                relevoVia.getId()
-                        )
-                        .stream()
-                        .map(this::mapEvidencia)
-                        .toList();
-
         return new ConsultarRelevosUseCase.Via(
                 relevoVia.getId(),
                 relevoVia.getVia().getId(),
@@ -171,6 +331,9 @@ public class RelevoConsultaJpaAdapter
                 ),
                 relevoVia.getDetalle(),
                 evidencias
+                        .stream()
+                        .map(this::mapEvidencia)
+                        .toList()
         );
     }
 
