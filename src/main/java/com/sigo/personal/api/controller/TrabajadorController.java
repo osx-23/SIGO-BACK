@@ -1,11 +1,13 @@
 package com.sigo.personal.api.controller;
 
+import com.sigo.personal.api.dto.TrabajadorAdminCreateRequest;
 import com.sigo.personal.api.dto.TrabajadorAdminUpdateRequest;
 import com.sigo.personal.api.dto.TrabajadorPublicResponse;
 import com.sigo.personal.api.dto.TrabajadorResponse;
 import com.sigo.personal.application.port.in.TrabajadorUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -53,6 +55,32 @@ public class TrabajadorController {
                         .stream()
                         .map(this::toAdminResponse)
                         .toList()
+        );
+    }
+
+    @GetMapping("/admin/puestos-agente")
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    public ResponseEntity<List<TrabajadorUseCase.PuestoData>> listarPuestosAgente() {
+        return ResponseEntity.ok(
+                useCase.listarPuestosAgente()
+        );
+    }
+
+    @PostMapping("/admin/agentes")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    public TrabajadorResponse crearAgente(
+            @Valid
+            @RequestBody TrabajadorAdminCreateRequest request
+    ) {
+        return toAdminResponse(
+                useCase.crearAgente(
+                        request.codigo(),
+                        request.nombreCompleto(),
+                        request.puestoId(),
+                        request.plazaId(),
+                        request.passwordInicial()
+                )
         );
     }
 
