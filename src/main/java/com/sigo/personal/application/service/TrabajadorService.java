@@ -43,13 +43,13 @@ public class TrabajadorService implements TrabajadorUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PuestoData> listarPuestosAgente() {
-        return gestionPort.listarPuestosAgente();
+    public List<PuestoData> listarPuestosAdministrables() {
+        return gestionPort.listarPuestosAdministrables();
     }
 
     @Override
     @Transactional
-    public TrabajadorData crearAgente(
+    public TrabajadorData crearUsuario(
             Integer codigo,
             String nombreCompleto,
             Long puestoId,
@@ -58,7 +58,7 @@ public class TrabajadorService implements TrabajadorUseCase {
     ) {
         if (codigo == null || codigo <= 0) {
             throw new BusinessException(
-                    "El código del agente es obligatorio"
+                    "El código del trabajador es obligatorio"
             );
         }
 
@@ -69,7 +69,7 @@ public class TrabajadorService implements TrabajadorUseCase {
 
         if (nombre.length() < 3) {
             throw new BusinessException(
-                    "Ingresa el nombre completo del agente"
+                    "Ingresa el nombre completo del trabajador"
             );
         }
 
@@ -96,7 +96,7 @@ public class TrabajadorService implements TrabajadorUseCase {
             );
         }
 
-        return gestionPort.crearAgente(
+        return gestionPort.crearUsuario(
                 codigo,
                 nombre,
                 puestoId,
@@ -110,11 +110,12 @@ public class TrabajadorService implements TrabajadorUseCase {
     public TrabajadorData actualizarAdministracion(
             Long trabajadorId,
             Long plazaId,
+            Long puestoId,
             Boolean activo
     ) {
-        if (plazaId == null || activo == null) {
+        if (plazaId == null || puestoId == null || activo == null) {
             throw new IllegalArgumentException(
-                    "Plaza y estado son obligatorios"
+                    "Plaza, puesto y estado son obligatorios"
             );
         }
 
@@ -122,12 +123,17 @@ public class TrabajadorService implements TrabajadorUseCase {
                 gestionPort.prepararActualizacion(
                         trabajadorId,
                         plazaId,
+                        puestoId,
                         activo
                 );
 
+        boolean cambioConfiguracion =
+                preparacion.cambioPlaza() ||
+                preparacion.cambioPuesto();
+
         programacionPort.cerrarRelacionesAntesDeCambio(
                 trabajadorId,
-                preparacion.cambioPlaza(),
+                cambioConfiguracion,
                 preparacion.quedaraInactivo()
         );
 
@@ -135,13 +141,15 @@ public class TrabajadorService implements TrabajadorUseCase {
                 gestionPort.aplicarActualizacion(
                         trabajadorId,
                         plazaId,
+                        puestoId,
                         activo
                 );
 
         programacionPort.sincronizarSecuenciaDespuesDeCambio(
                 trabajadorId,
-                preparacion.cambioPlaza(),
-                plazaId
+                cambioConfiguracion,
+                plazaId,
+                preparacion.nuevoEsOperador()
         );
 
         return actualizado;
