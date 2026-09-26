@@ -5,6 +5,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
-public interface IncidenciaEvidenciaRepository extends JpaRepository<IncidenciaEvidencia, Long> {
-    List<IncidenciaEvidencia> findByIncidenciaIdOrderByIdAsc(Long incidenciaId);
+public interface IncidenciaEvidenciaRepository
+        extends JpaRepository<IncidenciaEvidencia, Long> {
+
+    List<IncidenciaEvidencia>
+    findByIncidenciaIdOrderByIdAsc(
+            Long incidenciaId
+    );
+
+    long countByIncidenciaId(
+            Long incidenciaId
+    );
 }
