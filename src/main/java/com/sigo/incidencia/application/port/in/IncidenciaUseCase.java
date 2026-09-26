@@ -30,6 +30,18 @@ public interface IncidenciaUseCase {
             String contentType
     );
 
+    Evidencia reemplazarEvidencia(
+            Long incidenciaId,
+            Long evidenciaId,
+            byte[] contenido,
+            String contentType
+    );
+
+    void eliminarEvidencia(
+            Long incidenciaId,
+            Long evidenciaId
+    );
+
     long contarPendientes();
 
     record Command(

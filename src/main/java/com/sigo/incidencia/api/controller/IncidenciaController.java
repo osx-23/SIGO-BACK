@@ -109,6 +109,40 @@ public class IncidenciaController {
         }
     }
 
+    @PutMapping("/{id}/evidencias/{evidenciaId}")
+    public IncidenciaResponse.Evidencia reemplazarEvidencia(
+            @PathVariable Long id,
+            @PathVariable Long evidenciaId,
+            @RequestParam("file") MultipartFile file
+    ) {
+        try {
+            return map(
+                    useCase.reemplazarEvidencia(
+                            id,
+                            evidenciaId,
+                            file.getBytes(),
+                            file.getContentType()
+                    )
+            );
+        } catch (IOException e) {
+            throw new BusinessException(
+                    "No se pudo leer la evidencia"
+            );
+        }
+    }
+
+    @DeleteMapping("/{id}/evidencias/{evidenciaId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void eliminarEvidencia(
+            @PathVariable Long id,
+            @PathVariable Long evidenciaId
+    ) {
+        useCase.eliminarEvidencia(
+                id,
+                evidenciaId
+        );
+    }
+
     @PatchMapping("/{id}/atender")
     @PreAuthorize(
             "hasAnyRole('SUPERVISOR','CONTROLADOR')"
