@@ -5,9 +5,7 @@ import com.sigo.inventario.application.port.in.InventarioStockUseCase;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
 import com.sigo.inventario.application.port.in.ObtenerInventarioUsuarioUseCase;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -24,13 +22,16 @@ public class InventarioStockController {
             @RequestParam(required = false) Long plazaId,
             @RequestParam(required = false) String buscar
     ) {
+
         InventarioUsuarioActual actual =
                 usuarios.obtenerActual();
 
-        exigirGestion(actual);
-
         return useCase
-                .consultar(actual, plazaId, buscar)
+                .consultar(
+                        actual,
+                        plazaId,
+                        buscar
+                )
                 .stream()
                 .map(stock ->
                         new StockActualResponse(
@@ -47,17 +48,5 @@ public class InventarioStockController {
                         )
                 )
                 .toList();
-    }
-
-    private void exigirGestion(
-            InventarioUsuarioActual actual
-    ) {
-        if (!actual.esControladorSistema()
-                && !actual.esSupervisorSistema()) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Solo controladores y supervisores pueden consultar el stock de inventario"
-            );
-        }
     }
 }
