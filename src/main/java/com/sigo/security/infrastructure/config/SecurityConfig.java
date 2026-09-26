@@ -363,6 +363,22 @@ public class SecurityConfig {
 
                         /*
                          * =====================================================
+                         * INCIDENCIAS
+                         * =====================================================
+                         */
+
+                        .requestMatchers(
+                                "/api/incidencias/**"
+                        )
+                        .hasAnyRole(
+                                "SUPERVISOR",
+                                "CONTROLADOR",
+                                "OPERADOR"
+                        )
+
+
+                        /*
+                         * =====================================================
                          * INVENTARIO OPERATIVO
                          * =====================================================
                          */
