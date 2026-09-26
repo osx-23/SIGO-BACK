@@ -166,6 +166,63 @@ public class IncidenciaJpaAdapter implements IncidenciaPersistencePort {
         return mapEvidencia(evidenciaRepository.saveAndFlush(evidencia));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<EvidenciaData> obtenerEvidencia(
+            Long incidenciaId,
+            Long evidenciaId
+    ) {
+        return evidenciaRepository
+                .findByIdAndIncidenciaId(
+                        evidenciaId,
+                        incidenciaId
+                )
+                .map(this::mapEvidencia);
+    }
+
+    @Override
+    @Transactional
+    public EvidenciaData actualizarEvidencia(
+            Long incidenciaId,
+            Long evidenciaId,
+            String urlArchivo,
+            String publicId
+    ) {
+        IncidenciaEvidencia evidencia =
+                evidenciaRepository
+                        .findByIdAndIncidenciaId(
+                                evidenciaId,
+                                incidenciaId
+                        )
+                        .orElseThrow();
+
+        evidencia.setUrlArchivo(urlArchivo);
+        evidencia.setPublicId(publicId);
+
+        return mapEvidencia(
+                evidenciaRepository.saveAndFlush(evidencia)
+        );
+    }
+
+    @Override
+    @Transactional
+    public Optional<String> eliminarEvidencia(
+            Long incidenciaId,
+            Long evidenciaId
+    ) {
+        return evidenciaRepository
+                .findByIdAndIncidenciaId(
+                        evidenciaId,
+                        incidenciaId
+                )
+                .map(evidencia -> {
+                    String publicId = evidencia.getPublicId();
+                    evidenciaRepository.delete(evidencia);
+                    evidenciaRepository.flush();
+                    return publicId;
+                });
+    }
+
     private IncidenciaData map(Incidencia i) {
         Via via = i.getVia();
 
