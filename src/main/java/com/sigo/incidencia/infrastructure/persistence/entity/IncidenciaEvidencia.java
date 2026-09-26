@@ -2,6 +2,7 @@ package com.sigo.incidencia.infrastructure.persistence.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.OffsetDateTime;
 
@@ -30,6 +31,7 @@ public class IncidenciaEvidencia {
     @Column(nullable = false, length = 20)
     private String tipo = "foto";
 
-    @Column(name = "fecha_creacion", insertable = false, updatable = false)
+    @CreationTimestamp
+    @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private OffsetDateTime fechaCreacion;
 }
