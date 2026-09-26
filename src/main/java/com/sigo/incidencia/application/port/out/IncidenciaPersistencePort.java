@@ -56,6 +56,23 @@ public interface IncidenciaPersistencePort {
             String publicId
     );
 
+    Optional<EvidenciaData> obtenerEvidencia(
+            Long incidenciaId,
+            Long evidenciaId
+    );
+
+    EvidenciaData actualizarEvidencia(
+            Long incidenciaId,
+            Long evidenciaId,
+            String urlArchivo,
+            String publicId
+    );
+
+    Optional<String> eliminarEvidencia(
+            Long incidenciaId,
+            Long evidenciaId
+    );
+
     record TipoData(Long id, String nombre) {
     }
 
