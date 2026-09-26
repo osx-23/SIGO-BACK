@@ -9,6 +9,7 @@ public class ModuloAccesoPolicy {
             case SUPERVISOR -> List.of(
                     "DASHBOARD",
                     "RELEVOS",
+                    "INCIDENCIAS",
                     "ASISTENCIA",
                     "INVENTARIO",
                     "ADMIN_PRODUCTOS",
@@ -32,6 +33,7 @@ public class ModuloAccesoPolicy {
 
             case OPERADOR -> List.of(
                     "RELEVOS",
+                    "INCIDENCIAS",
                     "INVENTARIO",
                     "MI_HORARIO"
             );
