@@ -149,6 +149,67 @@ public class IncidenciaService implements IncidenciaUseCase {
 
     @Override
     @Transactional
+    public Incidencia actualizar(
+            Long id,
+            Command command
+    ) {
+        UsuarioActualUseCase.UsuarioActual actual =
+                usuarioActualUseCase.requireActual();
+
+        IncidenciaPersistencePort.IncidenciaData existente =
+                persistence.obtener(id)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Incidencia no encontrada"
+                                )
+                        );
+
+        validarLectura(
+                actual,
+                existente.plazaId()
+        );
+
+        Long plazaId =
+                resolverPlazaRegistro(
+                        actual,
+                        command.plazaId()
+                );
+
+        validarCatalogos(
+                plazaId,
+                command.turnoId(),
+                command.tipoId(),
+                command.viaId(),
+                actual.id()
+        );
+
+        String descripcion =
+                command.descripcion() == null
+                        ? ""
+                        : command.descripcion().trim();
+
+        if (descripcion.length() < 3) {
+            throw new BusinessException(
+                    "Describe la incidencia con al menos 3 caracteres"
+            );
+        }
+
+        return map(
+                persistence.actualizar(
+                        id,
+                        plazaId,
+                        command.turnoId(),
+                        command.tipoId(),
+                        command.viaId(),
+                        command.fecha(),
+                        command.hora(),
+                        descripcion
+                )
+        );
+    }
+
+    @Override
+    @Transactional
     public Incidencia atender(Long id) {
         UsuarioActualUseCase.UsuarioActual actual =
                 usuarioActualUseCase.requireActual();
