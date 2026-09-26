@@ -219,7 +219,7 @@ public class IncidenciaJpaAdapter implements IncidenciaPersistencePort {
                     String publicId = evidencia.getPublicId();
                     evidenciaRepository.delete(evidencia);
                     evidenciaRepository.flush();
-                    return publicId;
+                    return publicId == null ? "" : publicId;
                 });
     }
 
