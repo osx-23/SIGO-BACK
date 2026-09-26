@@ -58,23 +58,23 @@ public class TrabajadorController {
         );
     }
 
-    @GetMapping("/admin/puestos-agente")
+    @GetMapping("/admin/puestos")
     @PreAuthorize("hasRole('SUPERVISOR')")
-    public ResponseEntity<List<TrabajadorUseCase.PuestoData>> listarPuestosAgente() {
+    public ResponseEntity<List<TrabajadorUseCase.PuestoData>> listarPuestos() {
         return ResponseEntity.ok(
-                useCase.listarPuestosAgente()
+                useCase.listarPuestosAdministrables()
         );
     }
 
-    @PostMapping("/admin/agentes")
+    @PostMapping("/admin")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('SUPERVISOR')")
-    public TrabajadorResponse crearAgente(
+    public TrabajadorResponse crearUsuario(
             @Valid
             @RequestBody TrabajadorAdminCreateRequest request
     ) {
         return toAdminResponse(
-                useCase.crearAgente(
+                useCase.crearUsuario(
                         request.codigo(),
                         request.nombreCompleto(),
                         request.puestoId(),
@@ -96,6 +96,7 @@ public class TrabajadorController {
                         useCase.actualizarAdministracion(
                                 id,
                                 request.plazaId(),
+                                request.puestoId(),
                                 request.activo()
                         )
                 )
