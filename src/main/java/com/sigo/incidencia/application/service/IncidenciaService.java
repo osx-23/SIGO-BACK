@@ -215,6 +215,99 @@ public class IncidenciaService implements IncidenciaUseCase {
     }
 
     @Override
+    @Transactional
+    public Evidencia reemplazarEvidencia(
+            Long incidenciaId,
+            Long evidenciaId,
+            byte[] contenido,
+            String contentType
+    ) {
+        UsuarioActualUseCase.UsuarioActual actual =
+                usuarioActualUseCase.requireActual();
+
+        IncidenciaPersistencePort.IncidenciaData item =
+                persistence.obtener(incidenciaId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Incidencia no encontrada"
+                                )
+                        );
+
+        validarLectura(
+                actual,
+                item.plazaId()
+        );
+
+        IncidenciaPersistencePort.EvidenciaData anterior =
+                persistence
+                        .obtenerEvidencia(
+                                incidenciaId,
+                                evidenciaId
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Evidencia no encontrada"
+                                )
+                        );
+
+        IncidenciaStoragePort.UploadResult subida =
+                storage.subir(
+                        contenido,
+                        contentType
+                );
+
+        IncidenciaPersistencePort.EvidenciaData actualizada =
+                persistence.actualizarEvidencia(
+                        incidenciaId,
+                        evidenciaId,
+                        subida.urlArchivo(),
+                        subida.publicId()
+                );
+
+        storage.eliminar(
+                anterior.publicId()
+        );
+
+        return map(actualizada);
+    }
+
+    @Override
+    @Transactional
+    public void eliminarEvidencia(
+            Long incidenciaId,
+            Long evidenciaId
+    ) {
+        UsuarioActualUseCase.UsuarioActual actual =
+                usuarioActualUseCase.requireActual();
+
+        IncidenciaPersistencePort.IncidenciaData item =
+                persistence.obtener(incidenciaId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Incidencia no encontrada"
+                                )
+                        );
+
+        validarLectura(
+                actual,
+                item.plazaId()
+        );
+
+        String publicId =
+                persistence.eliminarEvidencia(
+                        incidenciaId,
+                        evidenciaId
+                )
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Evidencia no encontrada"
+                        )
+                );
+
+        storage.eliminar(publicId);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public long contarPendientes() {
         UsuarioActualUseCase.UsuarioActual actual =
