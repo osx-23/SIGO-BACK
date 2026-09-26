@@ -73,11 +73,9 @@ public class TrabajadorGestionJpaAdapter
 
     @Override
     @Transactional(readOnly = true)
-    public List<TrabajadorUseCase.PuestoData> listarPuestosAgente() {
+    public List<TrabajadorUseCase.PuestoData> listarPuestosAdministrables() {
         return puestoRepository
-                .findByNombreStartingWithIgnoreCaseOrderByNombreAsc(
-                        "Agente de Recaud"
-                )
+                .findAllByOrderByNombreAsc()
                 .stream()
                 .map(puesto ->
                         new TrabajadorUseCase.PuestoData(
@@ -96,7 +94,7 @@ public class TrabajadorGestionJpaAdapter
 
     @Override
     @Transactional
-    public TrabajadorUseCase.TrabajadorData crearAgente(
+    public TrabajadorUseCase.TrabajadorData crearUsuario(
             Integer codigo,
             String nombreCompleto,
             Long puestoId,
@@ -114,17 +112,8 @@ public class TrabajadorGestionJpaAdapter
                                 )
                         );
 
-        String nombrePuesto =
-                puesto.getNombre() == null
-                        ? ""
-                        : puesto.getNombre();
-
-        if (!nombrePuesto.toLowerCase()
-                .startsWith("agente de recaud")) {
-            throw new BusinessException(
-                    "El puesto seleccionado no corresponde a un agente"
-            );
-        }
+        RolSistema rolSistema =
+                resolverRolPorPuesto(puesto);
 
         if (trabajadorRepository.findByCodigo(codigo).isPresent()) {
             throw new BusinessException(
@@ -142,7 +131,7 @@ public class TrabajadorGestionJpaAdapter
         trabajador.setPuesto(puesto);
         trabajador.setPlaza(plaza);
         trabajador.setRolSistema(
-                RolSistema.OPERADOR
+                rolSistema
         );
         trabajador.setPasswordHash(
                 passwordEncoder.encode(
@@ -166,15 +155,31 @@ public class TrabajadorGestionJpaAdapter
     public PreparacionActualizacion prepararActualizacion(
             Long trabajadorId,
             Long nuevaPlazaId,
+            Long nuevoPuestoId,
             Boolean activo
     ) {
         Trabajador trabajador = requireTrabajador(trabajadorId);
         Plaza nuevaPlaza = requirePlazaActiva(nuevaPlazaId);
+        Puesto nuevoPuesto =
+                puestoRepository.findById(nuevoPuestoId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Puesto no encontrado"
+                                )
+                        );
+
+        RolSistema nuevoRol =
+                resolverRolPorPuesto(nuevoPuesto);
 
         Long plazaAnteriorId =
                 trabajador.getPlaza() == null
                         ? null
                         : trabajador.getPlaza().getId();
+
+        Long puestoAnteriorId =
+                trabajador.getPuesto() == null
+                        ? null
+                        : trabajador.getPuesto().getId();
 
         return new PreparacionActualizacion(
                 trabajador.getId(),
@@ -184,7 +189,12 @@ public class TrabajadorGestionJpaAdapter
                         plazaAnteriorId,
                         nuevaPlaza.getId()
                 ),
-                !Boolean.TRUE.equals(activo)
+                !Objects.equals(
+                        puestoAnteriorId,
+                        nuevoPuesto.getId()
+                ),
+                !Boolean.TRUE.equals(activo),
+                nuevoRol == RolSistema.OPERADOR
         );
     }
 
@@ -193,16 +203,53 @@ public class TrabajadorGestionJpaAdapter
     public TrabajadorUseCase.TrabajadorData aplicarActualizacion(
             Long trabajadorId,
             Long nuevaPlazaId,
+            Long nuevoPuestoId,
             Boolean activo
     ) {
         Trabajador trabajador = requireTrabajador(trabajadorId);
         Plaza nuevaPlaza = requirePlazaActiva(nuevaPlazaId);
+        Puesto nuevoPuesto =
+                puestoRepository.findById(nuevoPuestoId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Puesto no encontrado"
+                                )
+                        );
 
         trabajador.setPlaza(nuevaPlaza);
+        trabajador.setPuesto(nuevoPuesto);
+        trabajador.setRolSistema(
+                resolverRolPorPuesto(nuevoPuesto)
+        );
         trabajador.setActivo(activo);
 
         return toData(
                 trabajadorRepository.saveAndFlush(trabajador)
+        );
+    }
+
+    private RolSistema resolverRolPorPuesto(Puesto puesto) {
+        String nombre =
+                puesto == null || puesto.getNombre() == null
+                        ? ""
+                        : puesto.getNombre()
+                                .trim()
+                                .toLowerCase();
+
+        if (nombre.startsWith("agente de recaud")) {
+            return RolSistema.OPERADOR;
+        }
+
+        if (nombre.startsWith("controlador")) {
+            return RolSistema.CONTROLADOR;
+        }
+
+        if (nombre.equals("supervisor")) {
+            return RolSistema.SUPERVISOR;
+        }
+
+        throw new BusinessException(
+                "El puesto seleccionado no tiene un rol de sistema válido"
         );
     }
 
