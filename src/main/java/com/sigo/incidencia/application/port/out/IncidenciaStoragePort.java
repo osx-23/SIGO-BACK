@@ -7,6 +7,8 @@ public interface IncidenciaStoragePort {
             String contentType
     );
 
+    void eliminar(String publicId);
+
     record UploadResult(
             String urlArchivo,
             String publicId
