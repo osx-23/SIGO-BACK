@@ -10,9 +10,20 @@ public interface TrabajadorUseCase {
 
     List<TrabajadorData> listarAdministracion(Long plazaId);
 
+    List<PuestoData> listarPuestosAdministrables();
+
+    TrabajadorData crearUsuario(
+            Integer codigo,
+            String nombreCompleto,
+            Long puestoId,
+            Long plazaId,
+            String passwordInicial
+    );
+
     TrabajadorData actualizarAdministracion(
             Long trabajadorId,
             Long plazaId,
+            Long puestoId,
             Boolean activo
     );
 

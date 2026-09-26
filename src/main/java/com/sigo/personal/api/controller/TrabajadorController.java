@@ -1,11 +1,13 @@
 package com.sigo.personal.api.controller;
 
+import com.sigo.personal.api.dto.TrabajadorAdminCreateRequest;
 import com.sigo.personal.api.dto.TrabajadorAdminUpdateRequest;
 import com.sigo.personal.api.dto.TrabajadorPublicResponse;
 import com.sigo.personal.api.dto.TrabajadorResponse;
 import com.sigo.personal.application.port.in.TrabajadorUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -56,6 +58,32 @@ public class TrabajadorController {
         );
     }
 
+    @GetMapping("/admin/puestos")
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    public ResponseEntity<List<TrabajadorUseCase.PuestoData>> listarPuestos() {
+        return ResponseEntity.ok(
+                useCase.listarPuestosAdministrables()
+        );
+    }
+
+    @PostMapping("/admin")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    public TrabajadorResponse crearUsuario(
+            @Valid
+            @RequestBody TrabajadorAdminCreateRequest request
+    ) {
+        return toAdminResponse(
+                useCase.crearUsuario(
+                        request.codigo(),
+                        request.nombreCompleto(),
+                        request.puestoId(),
+                        request.plazaId(),
+                        request.passwordInicial()
+                )
+        );
+    }
+
     @PutMapping("/admin/{id}")
     @PreAuthorize("hasRole('SUPERVISOR')")
     public ResponseEntity<TrabajadorResponse> actualizarAdministracion(
@@ -68,6 +96,7 @@ public class TrabajadorController {
                         useCase.actualizarAdministracion(
                                 id,
                                 request.plazaId(),
+                                request.puestoId(),
                                 request.activo()
                         )
                 )

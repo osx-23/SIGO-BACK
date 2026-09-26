@@ -4,13 +4,14 @@ public interface TrabajadorProgramacionPort {
 
     void cerrarRelacionesAntesDeCambio(
             Long trabajadorId,
-            boolean cambioPlaza,
+            boolean cambioConfiguracion,
             boolean quedaraInactivo
     );
 
     void sincronizarSecuenciaDespuesDeCambio(
             Long trabajadorId,
-            boolean cambioPlaza,
-            Long nuevaPlazaId
+            boolean cambioConfiguracion,
+            Long nuevaPlazaId,
+            boolean esOperador
     );
 }

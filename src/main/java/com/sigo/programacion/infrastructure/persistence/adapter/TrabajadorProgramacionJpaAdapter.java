@@ -2,6 +2,8 @@ package com.sigo.programacion.infrastructure.persistence.adapter;
 
 import com.sigo.personal.application.port.out.TrabajadorProgramacionPort;
 import com.sigo.personal.infrastructure.persistence.repository.PlazaRepository;
+import com.sigo.personal.infrastructure.persistence.repository.TrabajadorRepository;
+import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionSecuenciaAgente;
 import com.sigo.programacion.infrastructure.persistence.repository.AgenteControladorLiderRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionSecuenciaAgenteRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ public class TrabajadorProgramacionJpaAdapter
     private final AgenteControladorLiderRepository liderRepository;
     private final ProgramacionSecuenciaAgenteRepository secuenciaRepository;
     private final PlazaRepository plazaRepository;
+    private final TrabajadorRepository trabajadorRepository;
 
     @Override
     public void cerrarRelacionesAntesDeCambio(
@@ -56,10 +59,18 @@ public class TrabajadorProgramacionJpaAdapter
     @Override
     public void sincronizarSecuenciaDespuesDeCambio(
             Long trabajadorId,
-            boolean cambioPlaza,
-            Long nuevaPlazaId
+            boolean cambioConfiguracion,
+            Long nuevaPlazaId,
+            boolean esOperador
     ) {
-        if (!cambioPlaza) {
+        if (!cambioConfiguracion) {
+            return;
+        }
+
+        if (!esOperador) {
+            secuenciaRepository
+                    .findByAgenteId(trabajadorId)
+                    .ifPresent(secuenciaRepository::delete);
             return;
         }
 
@@ -67,13 +78,22 @@ public class TrabajadorProgramacionJpaAdapter
                 .findById(nuevaPlazaId)
                 .orElseThrow();
 
-        secuenciaRepository
-                .findByAgenteId(trabajadorId)
-                .ifPresent(secuencia -> {
-                    secuencia.setPlaza(nuevaPlaza);
-                    secuencia.setGrupo(null);
-                    secuencia.setOrden(null);
-                    secuenciaRepository.save(secuencia);
-                });
+        var trabajador = trabajadorRepository
+                .findById(trabajadorId)
+                .orElseThrow();
+
+        ProgramacionSecuenciaAgente secuencia =
+                secuenciaRepository
+                        .findByAgenteId(trabajadorId)
+                        .orElseGet(
+                                ProgramacionSecuenciaAgente::new
+                        );
+
+        secuencia.setAgente(trabajador);
+        secuencia.setPlaza(nuevaPlaza);
+        secuencia.setGrupo(null);
+        secuencia.setOrden(null);
+
+        secuenciaRepository.save(secuencia);
     }
 }

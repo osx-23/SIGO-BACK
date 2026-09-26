@@ -3,6 +3,7 @@ package com.sigo.personal.application.service;
 import com.sigo.personal.application.port.in.TrabajadorUseCase;
 import com.sigo.personal.application.port.out.TrabajadorGestionPort;
 import com.sigo.personal.application.port.out.TrabajadorProgramacionPort;
+import com.sigo.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,15 +42,80 @@ public class TrabajadorService implements TrabajadorUseCase {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<PuestoData> listarPuestosAdministrables() {
+        return gestionPort.listarPuestosAdministrables();
+    }
+
+    @Override
+    @Transactional
+    public TrabajadorData crearUsuario(
+            Integer codigo,
+            String nombreCompleto,
+            Long puestoId,
+            Long plazaId,
+            String passwordInicial
+    ) {
+        if (codigo == null || codigo <= 0) {
+            throw new BusinessException(
+                    "El código del trabajador es obligatorio"
+            );
+        }
+
+        String nombre =
+                nombreCompleto == null
+                        ? ""
+                        : nombreCompleto.trim();
+
+        if (nombre.length() < 3) {
+            throw new BusinessException(
+                    "Ingresa el nombre completo del trabajador"
+            );
+        }
+
+        if (puestoId == null || plazaId == null) {
+            throw new BusinessException(
+                    "Puesto y plaza son obligatorios"
+            );
+        }
+
+        String password =
+                passwordInicial == null
+                        ? ""
+                        : passwordInicial.trim();
+
+        if (password.length() < 5) {
+            throw new BusinessException(
+                    "La contraseña inicial debe tener al menos 5 caracteres"
+            );
+        }
+
+        if (gestionPort.existeCodigo(codigo)) {
+            throw new BusinessException(
+                    "Ya existe un trabajador con el código " + codigo
+            );
+        }
+
+        return gestionPort.crearUsuario(
+                codigo,
+                nombre,
+                puestoId,
+                plazaId,
+                password
+        );
+    }
+
+    @Override
     @Transactional
     public TrabajadorData actualizarAdministracion(
             Long trabajadorId,
             Long plazaId,
+            Long puestoId,
             Boolean activo
     ) {
-        if (plazaId == null || activo == null) {
+        if (plazaId == null || puestoId == null || activo == null) {
             throw new IllegalArgumentException(
-                    "Plaza y estado son obligatorios"
+                    "Plaza, puesto y estado son obligatorios"
             );
         }
 
@@ -57,12 +123,17 @@ public class TrabajadorService implements TrabajadorUseCase {
                 gestionPort.prepararActualizacion(
                         trabajadorId,
                         plazaId,
+                        puestoId,
                         activo
                 );
 
+        boolean cambioConfiguracion =
+                preparacion.cambioPlaza() ||
+                preparacion.cambioPuesto();
+
         programacionPort.cerrarRelacionesAntesDeCambio(
                 trabajadorId,
-                preparacion.cambioPlaza(),
+                cambioConfiguracion,
                 preparacion.quedaraInactivo()
         );
 
@@ -70,13 +141,15 @@ public class TrabajadorService implements TrabajadorUseCase {
                 gestionPort.aplicarActualizacion(
                         trabajadorId,
                         plazaId,
+                        puestoId,
                         activo
                 );
 
         programacionPort.sincronizarSecuenciaDespuesDeCambio(
                 trabajadorId,
-                preparacion.cambioPlaza(),
-                plazaId
+                cambioConfiguracion,
+                plazaId,
+                preparacion.nuevoEsOperador()
         );
 
         return actualizado;
