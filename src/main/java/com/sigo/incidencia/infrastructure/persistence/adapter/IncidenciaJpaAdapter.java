@@ -128,6 +128,44 @@ public class IncidenciaJpaAdapter implements IncidenciaPersistencePort {
 
     @Override
     @Transactional
+    public IncidenciaData actualizar(
+            Long id,
+            Long plazaId,
+            Long turnoId,
+            Long tipoId,
+            Long viaId,
+            LocalDate fecha,
+            LocalTime hora,
+            String descripcion
+    ) {
+        Incidencia incidencia = incidenciaRepository.findById(id)
+                .orElseThrow();
+
+        incidencia.setPlaza(
+                plazaRepository.getReferenceById(plazaId)
+        );
+        incidencia.setTurno(
+                turnoRepository.getReferenceById(turnoId)
+        );
+        incidencia.setTipo(
+                tipoRepository.getReferenceById(tipoId)
+        );
+        incidencia.setVia(
+                viaId == null
+                        ? null
+                        : viaRepository.getReferenceById(viaId)
+        );
+        incidencia.setFecha(fecha);
+        incidencia.setHora(hora);
+        incidencia.setDescripcion(descripcion);
+
+        return map(
+                incidenciaRepository.saveAndFlush(incidencia)
+        );
+    }
+
+    @Override
+    @Transactional
     public IncidenciaData marcarAtendido(
             Long id,
             OffsetDateTime fechaAtendido
