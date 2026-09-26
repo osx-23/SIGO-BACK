@@ -22,6 +22,11 @@ public interface IncidenciaUseCase {
 
     Incidencia obtener(Long id);
 
+    Incidencia actualizar(
+            Long id,
+            Command command
+    );
+
     Incidencia atender(Long id);
 
     Evidencia subirEvidencia(

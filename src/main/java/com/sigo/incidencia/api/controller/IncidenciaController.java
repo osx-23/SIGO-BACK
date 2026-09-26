@@ -88,6 +88,30 @@ public class IncidenciaController {
         );
     }
 
+    @PutMapping("/{id}")
+    public IncidenciaResponse actualizar(
+            @PathVariable Long id,
+            @Valid @RequestBody IncidenciaRequest request
+    ) {
+        IncidenciaUseCase.Command command =
+                new IncidenciaUseCase.Command(
+                        request.plazaId(),
+                        request.turnoId(),
+                        request.tipoId(),
+                        request.viaId(),
+                        request.fecha(),
+                        request.hora(),
+                        request.descripcion()
+                );
+
+        return map(
+                useCase.actualizar(
+                        id,
+                        command
+                )
+        );
+    }
+
     @PostMapping("/{id}/evidencias")
     @ResponseStatus(HttpStatus.CREATED)
     public IncidenciaResponse.Evidencia subirEvidencia(

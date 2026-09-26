@@ -41,6 +41,17 @@ public interface IncidenciaPersistencePort {
 
     Optional<IncidenciaData> obtener(Long id);
 
+    IncidenciaData actualizar(
+            Long id,
+            Long plazaId,
+            Long turnoId,
+            Long tipoId,
+            Long viaId,
+            LocalDate fecha,
+            LocalTime hora,
+            String descripcion
+    );
+
     IncidenciaData marcarAtendido(
             Long id,
             OffsetDateTime fechaAtendido
