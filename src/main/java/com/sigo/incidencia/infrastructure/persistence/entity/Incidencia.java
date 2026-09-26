@@ -7,6 +7,7 @@ import com.sigo.personal.infrastructure.persistence.entity.Turno;
 import com.sigo.relevo.infrastructure.persistence.entity.Via;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -57,7 +58,8 @@ public class Incidencia {
     @Column(nullable = false, length = 20)
     private EstadoIncidencia estado = EstadoIncidencia.OBSERVACION;
 
-    @Column(name = "fecha_creacion", insertable = false, updatable = false)
+    @CreationTimestamp
+    @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private OffsetDateTime fechaCreacion;
 
     @Column(name = "fecha_atendido")
