@@ -10,6 +10,7 @@ import com.sigo.inventario.application.service.GuardarConteoInventarioService;
 import com.sigo.inventario.application.service.IniciarInventarioService;
 import com.sigo.inventario.application.service.InventarioConsultaService;
 import com.sigo.inventario.domain.InventarioEstado;
+import com.sigo.inventario.infrastructure.persistence.entity.InventarioAmbito;
 import com.sigo.inventario.infrastructure.persistence.entity.InventarioProducto;
 import com.sigo.inventario.infrastructure.persistence.entity.InventarioProductoPlaza;
 import com.sigo.inventario.infrastructure.persistence.entity.InventarioProductoRol;
@@ -112,6 +113,8 @@ class InventarioFlujoJpaIT {
     private InventarioRol rol;
     private InventarioProducto producto1;
     private InventarioProducto producto2;
+    private InventarioAmbito ambitoRecurrente;
+    private InventarioAmbito ambitoNoRecurrente;
 
     private IniciarInventarioService iniciarService;
     private GuardarConteoInventarioService guardarService;
@@ -157,16 +160,38 @@ class InventarioFlujoJpaIT {
                 )
         );
 
+        ambitoRecurrente = entityManager.persistAndFlush(
+                new InventarioAmbito(
+                        null,
+                        "RECURRENTES",
+                        "RECURRENTES",
+                        null,
+                        true
+                )
+        );
+
+        ambitoNoRecurrente = entityManager.persistAndFlush(
+                new InventarioAmbito(
+                        null,
+                        "NO_RECURRENTES",
+                        "NO RECURRENTES",
+                        null,
+                        true
+                )
+        );
+
         producto1 = producto(
                 "CONO",
                 "Cono de seguridad",
-                "UND"
+                "UND",
+                ambitoRecurrente
         );
 
         producto2 = producto(
                 "PILA",
                 "Pila",
-                "UND"
+                "UND",
+                ambitoRecurrente
         );
 
         autorizar(producto1);
@@ -484,10 +509,45 @@ class InventarioFlujoJpaIT {
         );
     }
 
+    @Test
+    void agenteSoloVeProductosRecurrentes() {
+        InventarioProducto noRecurrente = producto(
+                "BATERIA",
+                "Batería 9V",
+                "UND",
+                ambitoNoRecurrente
+        );
+
+        autorizar(noRecurrente);
+
+        var permitidos = consultaAdapter.productosPermitidos(
+                rol.getId(),
+                plaza.getId()
+        );
+
+        assertEquals(2, permitidos.size());
+
+        assertTrue(
+                permitidos.stream().allMatch(
+                        item ->
+                                !"BATERIA".equals(item.codigo())
+                )
+        );
+
+        assertFalse(
+                visibilidadAdapter.esVisiblePara(
+                        noRecurrente.getId(),
+                        rol.getId(),
+                        plaza.getId()
+                )
+        );
+    }
+
     private InventarioProducto producto(
             String codigo,
             String nombre,
-            String unidad
+            String unidad,
+            InventarioAmbito ambito
     ) {
         InventarioProducto producto =
                 new InventarioProducto();
@@ -495,6 +555,7 @@ class InventarioFlujoJpaIT {
         producto.setCodigo(codigo);
         producto.setNombre(nombre);
         producto.setUnidadMedida(unidad);
+        producto.setAmbito(ambito);
         producto.setActivo(true);
 
         return entityManager.persistAndFlush(
