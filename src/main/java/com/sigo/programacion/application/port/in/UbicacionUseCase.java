@@ -19,7 +19,10 @@ public interface UbicacionUseCase {
             String codigo,
             String nombre,
             String tipo,
-            Integer orden
+            Integer orden,
+            Boolean permiteTurnoA,
+            Boolean permiteTurnoB,
+            Boolean permiteTurnoC
     ) {
     }
 
@@ -31,7 +34,10 @@ public interface UbicacionUseCase {
             String tipo,
             Long viaId,
             Boolean activo,
-            Integer orden
+            Integer orden,
+            Boolean permiteTurnoA,
+            Boolean permiteTurnoB,
+            Boolean permiteTurnoC
     ) {
     }
 }
