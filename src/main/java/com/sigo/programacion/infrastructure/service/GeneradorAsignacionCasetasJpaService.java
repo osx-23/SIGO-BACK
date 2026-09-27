@@ -455,7 +455,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         conteoSemana,
                         flujo,
                         asignacionPorDiaAgente,
-                        asignacionPorDiaTurnoAgente
+                        asignacionPorDiaTurnoAgente,
+                        true
                 );
 
         Set<Long> trabajadoresConConflicto =
@@ -482,7 +483,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         conteoSemana,
                         flujo,
                         asignacionPorDiaAgente,
-                        asignacionPorDiaTurnoAgente
+                        asignacionPorDiaTurnoAgente,
+                        false
                 );
 
         IntentoGeneracion mejorIntento =
@@ -517,7 +519,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<String, Integer> conteoSemanaBase,
             Map<Long, int[]> flujoBase,
             Map<String, Long> asignacionPorDiaAgenteBase,
-            Map<String, Long> asignacionPorDiaTurnoAgenteBase
+            Map<String, Long> asignacionPorDiaTurnoAgenteBase,
+            boolean flujoEstricto
     ) {
         Map<String, Integer> conteoMes =
                 new HashMap<>(conteoMesBase);
@@ -769,7 +772,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         );
 
                 if (
-                        !turnoC
+                        flujoEstricto
+                                && !turnoC
                                 && grupo != GrupoFlujoCaseta.SIN_CLASIFICAR
                                 && grupoDiaAnterior != GrupoFlujoCaseta.SIN_CLASIFICAR
                                 && grupo == grupoDiaAnterior
@@ -789,6 +793,12 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                         grupo,
                                         turnoC,
                                         config.balancearFlujo()
+                                )
+                                + penalizacionRecuperacionFlujo(
+                                        flujoEstricto,
+                                        turnoC,
+                                        grupoDiaAnterior,
+                                        grupo
                                 )
                                 + penalizacionFlujo(
                                         flujo,
@@ -1128,6 +1138,29 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         return penalizacionSemana
                 + penalizacionMes
                 + penalizacionConsecutiva;
+    }
+
+    private int penalizacionRecuperacionFlujo(
+            boolean flujoEstricto,
+            boolean turnoC,
+            GrupoFlujoCaseta grupoAnterior,
+            GrupoFlujoCaseta grupoActual
+    ) {
+        if (flujoEstricto
+                || turnoC
+                || grupoAnterior == GrupoFlujoCaseta.SIN_CLASIFICAR
+                || grupoActual == GrupoFlujoCaseta.SIN_CLASIFICAR
+                || grupoAnterior != grupoActual) {
+            return 0;
+        }
+
+        /*
+         * Segunda pasada: repetir ALTO/ALTO o BAJO/BAJO sigue siendo
+         * una opción de último recurso. La penalización es muy alta,
+         * pero evita dejar a un agente sin caseta cuando no existe
+         * una combinación alternada posible.
+         */
+        return 500;
     }
 
     private int penalizacionAlternanciaFlujo(
