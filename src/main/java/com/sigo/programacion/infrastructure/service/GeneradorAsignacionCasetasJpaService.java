@@ -545,25 +545,30 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 new ArrayList<>(turnosBase);
 
         Collections.shuffle(turnos);
-
         turnos.sort(
                 Comparator.comparing(
                                 ProgramacionTurno::getFecha
                         )
                         .thenComparing(
                                 item ->
-                                        item.getEstado()
-                                                .name()
-                        )
-                        .thenComparingInt(
-                                item ->
-                                        trabajadoresPrioritarios.contains(
-                                                item.getTrabajador().getId()
-                                        )
-                                                ? 0
-                                                : 1
+                                        item.getEstado().name()
                         )
         );
+
+        Map<String, List<ProgramacionTurno>> grupos =
+                new LinkedHashMap<>();
+
+        for (ProgramacionTurno turno : turnos) {
+            String clave =
+                    turno.getFecha()
+                            + "|"
+                            + turno.getEstado().name();
+
+            grupos.computeIfAbsent(
+                    clave,
+                    ignored -> new ArrayList<>()
+            ).add(turno);
+        }
 
         List<ItemPropuesta> asignaciones =
                 new ArrayList<>();
@@ -571,191 +576,571 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         List<Conflicto> conflictos =
                 new ArrayList<>();
 
-        Map<String, Set<Long>> ocupadasPorFechaTurno =
-                new HashMap<>();
+        for (List<ProgramacionTurno> grupoTurno :
+                grupos.values()) {
+            ResultadoGrupoBacktracking resultado =
+                    resolverGrupoBacktracking(
+                            grupoTurno,
+                            trabajadoresPrioritarios,
+                            ubicaciones,
+                            configCaseta,
+                            restricciones,
+                            config,
+                            conteoMes,
+                            conteoSemana,
+                            flujo,
+                            asignacionPorDiaAgente,
+                            asignacionPorDiaTurnoAgente,
+                            flujoEstricto
+                    );
 
-        for (ProgramacionTurno turno : turnos) {
-            Long trabajadorId =
-                    turno.getTrabajador().getId();
+            for (ProgramacionTurno turno :
+                    grupoTurno) {
+                Candidate elegido =
+                        resultado.asignaciones()
+                                .get(turno.getId());
 
-            int semanaActual =
-                    semanaDelMes(turno.getFecha());
-
-            Candidate mejor = null;
-
-            List<ProgramacionUbicacion> ubicacionesAleatorias =
-                    new ArrayList<>(ubicaciones);
-
-            Collections.shuffle(
-                    ubicacionesAleatorias
-            );
-
-            for (ProgramacionUbicacion ubicacion :
-                    ubicacionesAleatorias) {
-                if (!permiteTurno(
-                        ubicacion,
-                        turno.getEstado()
-                )) {
+                if (elegido == null) {
+                    conflictos.add(
+                            new Conflicto(
+                                    turno.getId(),
+                                    turno.getTrabajador().getId(),
+                                    turno.getTrabajador()
+                                            .getNombreCompleto(),
+                                    turno.getFecha(),
+                                    turno.getEstado().name(),
+                                    "No se encontró una combinación válida para cubrir este agente sin romper las restricciones"
+                            )
+                    );
                     continue;
                 }
 
-                if (restricciones.contains(
+                Long trabajadorId =
+                        turno.getTrabajador().getId();
+
+                ProgramacionUbicacion ubicacion =
+                        elegido.ubicacion();
+
+                asignaciones.add(
+                        new ItemPropuesta(
+                                turno.getId(),
+                                trabajadorId,
+                                turno.getTrabajador().getCodigo(),
+                                turno.getTrabajador()
+                                    .getNombreCompleto(),
+                                turno.getFecha(),
+                                turno.getEstado().name(),
+                                ubicacion.getId(),
+                                ubicacion.getCodigo(),
+                                ubicacion.getNombre(),
+                                elegido.grupo(),
+                                elegido.score()
+                        )
+                );
+
+                incrementar(
+                        conteoMes,
                         key(
                                 trabajadorId,
                                 ubicacion.getId()
                         )
-                )) {
-                    continue;
-                }
+                );
 
-                ConfiguracionCaseta especifica =
-                        configCaseta.get(
-                                ubicacion.getId()
-                        );
-
-                int maxSemana =
-                        especifica != null
-                                && especifica.getMaxSemana() != null
-                                ? especifica.getMaxSemana()
-                                : config.maxMismaCasetaSemana();
-
-                int maxMes =
-                        especifica != null
-                                && especifica.getMaxMes() != null
-                                ? especifica.getMaxMes()
-                                : config.maxMismaCasetaMes();
-
-                int vecesSemana =
-                        conteoSemana.getOrDefault(
-                                keySemana(
-                                        trabajadorId,
-                                        ubicacion.getId(),
-                                        semanaActual
-                                ),
-                                0
-                        );
-
-                int vecesMes =
-                        conteoMes.getOrDefault(
-                                key(
-                                        trabajadorId,
-                                        ubicacion.getId()
-                                ),
-                                0
-                        );
-
-                if (vecesSemana >= maxSemana
-                        || vecesMes >= maxMes) {
-                    continue;
-                }
-
-                String ocupacionKey =
-                        turno.getFecha()
-                                + "|"
-                                + turno.getEstado().name();
-
-                Set<Long> ocupadasTurno =
-                        ocupadasPorFechaTurno
-                                .getOrDefault(
-                                        ocupacionKey,
-                                        Set.of()
-                                );
-
-                if (ocupadasTurno.contains(
-                        ubicacion.getId()
-                )) {
-                    continue;
-                }
-
-                if (!viasCompletasAntesDeAuxiliar(
-                        ubicacion,
-                        ubicaciones,
-                        turno.getEstado(),
-                        ocupadasTurno
-                )) {
-                    continue;
-                }
-
-                if (!cumpleOrdenSecuencial(
-                        ubicacion,
-                        ubicaciones,
-                        turno.getEstado(),
-                        ocupadasTurno
-                )) {
-                    continue;
-                }
-
-                int consecutivos =
-                        consecutivosAnteriores(
+                incrementar(
+                        conteoSemana,
+                        keySemana(
                                 trabajadorId,
                                 ubicacion.getId(),
-                                turno.getFecha(),
-                                asignacionPorDiaAgente
-                        );
+                                semanaDelMes(
+                                        turno.getFecha()
+                                )
+                        )
+                );
 
-                if (consecutivos
-                        >= config.maxConsecutivos()) {
-                    continue;
-                }
+                incrementarFlujo(
+                        flujo,
+                        trabajadorId,
+                        elegido.grupo()
+                );
 
-                Long ubicacionMismoTurnoDiaAnterior =
-                        asignacionPorDiaTurnoAgente
-                                .get(
-                                        keyDiaTurno(
-                                                trabajadorId,
-                                                turno.getFecha()
-                                                        .minusDays(1),
-                                                turno.getEstado()
-                                        )
-                                );
-
-                if (Objects.equals(
-                        ubicacionMismoTurnoDiaAnterior,
+                asignacionPorDiaAgente.put(
+                        keyDia(
+                                trabajadorId,
+                                turno.getFecha()
+                        ),
                         ubicacion.getId()
-                )) {
-                    continue;
-                }
+                );
 
-                boolean turnoC =
-                        turno.getEstado()
-                                == EstadoProgramacion.C;
+                asignacionPorDiaTurnoAgente.put(
+                        keyDiaTurno(
+                                trabajadorId,
+                                turno.getFecha(),
+                                turno.getEstado()
+                        ),
+                        ubicacion.getId()
+                );
+            }
+        }
 
-                if (!turnoC) {
-                    Long ubicacionAyer =
-                            asignacionPorDiaAgente
-                                    .get(
-                                            keyDia(
-                                                    trabajadorId,
-                                                    turno.getFecha()
-                                                            .minusDays(1)
-                                            )
-                                    );
+        return new IntentoGeneracion(
+                asignaciones,
+                conflictos
+        );
+    }
 
-                    Long ubicacionAnteayer =
-                            asignacionPorDiaAgente
-                                    .get(
-                                            keyDia(
-                                                    trabajadorId,
-                                                    turno.getFecha()
-                                                            .minusDays(2)
-                                            )
-                                    );
+    private ResultadoGrupoBacktracking resolverGrupoBacktracking(
+            List<ProgramacionTurno> grupoTurno,
+            Set<Long> trabajadoresPrioritarios,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta,
+            Set<String> restricciones,
+            Configuracion config,
+            Map<String, Integer> conteoMes,
+            Map<String, Integer> conteoSemana,
+            Map<Long, int[]> flujo,
+            Map<String, Long> asignacionPorDiaAgente,
+            Map<String, Long> asignacionPorDiaTurnoAgente,
+            boolean flujoEstricto
+    ) {
+        BusquedaBacktracking busqueda =
+                new BusquedaBacktracking(
+                        250_000
+                );
 
-                    if (Objects.equals(
-                            ubicacionAyer,
+        List<ProgramacionTurno> pendientes =
+                new ArrayList<>(grupoTurno);
+
+        Collections.shuffle(pendientes);
+
+        backtrackingGrupo(
+                pendientes,
+                new HashMap<>(),
+                new HashSet<>(),
+                0,
+                trabajadoresPrioritarios,
+                ubicaciones,
+                configCaseta,
+                restricciones,
+                config,
+                conteoMes,
+                conteoSemana,
+                flujo,
+                asignacionPorDiaAgente,
+                asignacionPorDiaTurnoAgente,
+                flujoEstricto,
+                busqueda
+        );
+
+        return new ResultadoGrupoBacktracking(
+                busqueda.mejorAsignacion,
+                busqueda.mejorPuntaje
+        );
+    }
+
+    private void backtrackingGrupo(
+            List<ProgramacionTurno> pendientes,
+            Map<Long, Candidate> actuales,
+            Set<Long> ocupadas,
+            int puntajeActual,
+            Set<Long> trabajadoresPrioritarios,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta,
+            Set<String> restricciones,
+            Configuracion config,
+            Map<String, Integer> conteoMes,
+            Map<String, Integer> conteoSemana,
+            Map<Long, int[]> flujo,
+            Map<String, Long> asignacionPorDiaAgente,
+            Map<String, Long> asignacionPorDiaTurnoAgente,
+            boolean flujoEstricto,
+            BusquedaBacktracking busqueda
+    ) {
+        if (++busqueda.nodos
+                > busqueda.maxNodos) {
+            actualizarMejorBacktracking(
+                    actuales,
+                    puntajeActual,
+                    busqueda
+            );
+            return;
+        }
+
+        if (actuales.size()
+                + pendientes.size()
+                < busqueda.mejorAsignados) {
+            return;
+        }
+
+        if (pendientes.isEmpty()) {
+            actualizarMejorBacktracking(
+                    actuales,
+                    puntajeActual,
+                    busqueda
+            );
+            return;
+        }
+
+        ProgramacionTurno seleccionado = null;
+        List<Candidate> opcionesSeleccionado =
+                List.of();
+
+        List<ProgramacionTurno> ordenEvaluacion =
+                new ArrayList<>(pendientes);
+
+        Collections.shuffle(ordenEvaluacion);
+
+        int menorCantidad =
+                Integer.MAX_VALUE;
+
+        for (ProgramacionTurno turno :
+                ordenEvaluacion) {
+            List<Candidate> opciones =
+                    candidatosValidos(
+                            turno,
+                            ocupadas,
+                            ubicaciones,
+                            configCaseta,
+                            restricciones,
+                            config,
+                            conteoMes,
+                            conteoSemana,
+                            flujo,
+                            asignacionPorDiaAgente,
+                            asignacionPorDiaTurnoAgente,
+                            flujoEstricto
+                    );
+
+            if (opciones.isEmpty()) {
+                /*
+                 * Puede ser un AUXILIAR que todavía no es elegible
+                 * porque faltan vías. No lo descartamos aún.
+                 */
+                continue;
+            }
+
+            boolean prioritario =
+                    trabajadoresPrioritarios.contains(
+                            turno.getTrabajador().getId()
+                    );
+
+            boolean seleccionadoPrioritario =
+                    seleccionado != null
+                            && trabajadoresPrioritarios.contains(
+                                    seleccionado
+                                            .getTrabajador()
+                                            .getId()
+                            );
+
+            if (seleccionado == null
+                    || opciones.size()
+                    < menorCantidad
+                    || opciones.size()
+                    == menorCantidad
+                    && prioritario
+                    && !seleccionadoPrioritario) {
+                seleccionado =
+                        turno;
+                opcionesSeleccionado =
+                        opciones;
+                menorCantidad =
+                        opciones.size();
+            }
+        }
+
+        if (seleccionado == null) {
+            actualizarMejorBacktracking(
+                    actuales,
+                    puntajeActual,
+                    busqueda
+            );
+            return;
+        }
+
+        List<ProgramacionTurno> restantes =
+                new ArrayList<>(pendientes);
+
+        restantes.remove(seleccionado);
+
+        List<Candidate> opcionesOrdenadas =
+                new ArrayList<>(
+                        opcionesSeleccionado
+                );
+
+        opcionesOrdenadas.sort(
+                Comparator.comparingInt(
+                        Candidate::score
+                )
+        );
+
+        for (Candidate candidato :
+                opcionesOrdenadas) {
+            Long ubicacionId =
+                    candidato.ubicacion().getId();
+
+            actuales.put(
+                    seleccionado.getId(),
+                    candidato
+            );
+
+            ocupadas.add(
+                    ubicacionId
+            );
+
+            backtrackingGrupo(
+                    restantes,
+                    actuales,
+                    ocupadas,
+                    puntajeActual
+                            + candidato.score(),
+                    trabajadoresPrioritarios,
+                    ubicaciones,
+                    configCaseta,
+                    restricciones,
+                    config,
+                    conteoMes,
+                    conteoSemana,
+                    flujo,
+                    asignacionPorDiaAgente,
+                    asignacionPorDiaTurnoAgente,
+                    flujoEstricto,
+                    busqueda
+            );
+
+            ocupadas.remove(
+                    ubicacionId
+            );
+
+            actuales.remove(
+                    seleccionado.getId()
+            );
+
+            if (busqueda.mejorAsignados
+                    == grupoObjetivoMaximo(
+                            pendientes,
+                            actuales
+                    )
+                    && busqueda.mejorPuntaje == 0) {
+                break;
+            }
+        }
+
+        /*
+         * Rama de recuperación: permitimos dejar temporalmente sin
+         * asignación al agente seleccionado para comprobar si eso
+         * permite cubrir a más personas del grupo.
+         */
+        backtrackingGrupo(
+                restantes,
+                actuales,
+                ocupadas,
+                puntajeActual,
+                trabajadoresPrioritarios,
+                ubicaciones,
+                configCaseta,
+                restricciones,
+                config,
+                conteoMes,
+                conteoSemana,
+                flujo,
+                asignacionPorDiaAgente,
+                asignacionPorDiaTurnoAgente,
+                flujoEstricto,
+                busqueda
+        );
+    }
+
+    private int grupoObjetivoMaximo(
+            List<ProgramacionTurno> pendientes,
+            Map<Long, Candidate> actuales
+    ) {
+        return actuales.size()
+                + pendientes.size();
+    }
+
+    private void actualizarMejorBacktracking(
+            Map<Long, Candidate> actuales,
+            int puntajeActual,
+            BusquedaBacktracking busqueda
+    ) {
+        int asignados =
+                actuales.size();
+
+        if (asignados
+                < busqueda.mejorAsignados) {
+            return;
+        }
+
+        if (asignados
+                == busqueda.mejorAsignados
+                && puntajeActual
+                >= busqueda.mejorPuntaje) {
+            return;
+        }
+
+        busqueda.mejorAsignados =
+                asignados;
+
+        busqueda.mejorPuntaje =
+                puntajeActual;
+
+        busqueda.mejorAsignacion =
+                new HashMap<>(
+                        actuales
+                );
+    }
+
+    private List<Candidate> candidatosValidos(
+            ProgramacionTurno turno,
+            Set<Long> ocupadasTurno,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta,
+            Set<String> restricciones,
+            Configuracion config,
+            Map<String, Integer> conteoMes,
+            Map<String, Integer> conteoSemana,
+            Map<Long, int[]> flujo,
+            Map<String, Long> asignacionPorDiaAgente,
+            Map<String, Long> asignacionPorDiaTurnoAgente,
+            boolean flujoEstricto
+    ) {
+        Long trabajadorId =
+                turno.getTrabajador().getId();
+
+        int semanaActual =
+                semanaDelMes(
+                        turno.getFecha()
+                );
+
+        List<ProgramacionUbicacion> ubicacionesAleatorias =
+                new ArrayList<>(ubicaciones);
+
+        Collections.shuffle(
+                ubicacionesAleatorias
+        );
+
+        List<Candidate> candidatos =
+                new ArrayList<>();
+
+        for (ProgramacionUbicacion ubicacion :
+                ubicacionesAleatorias) {
+            if (!permiteTurno(
+                    ubicacion,
+                    turno.getEstado()
+            )) {
+                continue;
+            }
+
+            if (restricciones.contains(
+                    key(
+                            trabajadorId,
                             ubicacion.getId()
-                    ) || Objects.equals(
-                            ubicacionAnteayer,
+                    )
+            )) {
+                continue;
+            }
+
+            if (ocupadasTurno.contains(
+                    ubicacion.getId()
+            )) {
+                continue;
+            }
+
+            ConfiguracionCaseta especifica =
+                    configCaseta.get(
                             ubicacion.getId()
-                    )) {
-                        continue;
-                    }
-                }
+                    );
 
-                GrupoFlujoCaseta grupo =
-                        grupo(especifica);
+            int maxSemana =
+                    especifica != null
+                            && especifica.getMaxSemana() != null
+                            ? especifica.getMaxSemana()
+                            : config.maxMismaCasetaSemana();
 
-                Long ubicacionDiaAnterior =
+            int maxMes =
+                    especifica != null
+                            && especifica.getMaxMes() != null
+                            ? especifica.getMaxMes()
+                            : config.maxMismaCasetaMes();
+
+            int vecesSemana =
+                    conteoSemana.getOrDefault(
+                            keySemana(
+                                    trabajadorId,
+                                    ubicacion.getId(),
+                                    semanaActual
+                            ),
+                            0
+                    );
+
+            int vecesMes =
+                    conteoMes.getOrDefault(
+                            key(
+                                    trabajadorId,
+                                    ubicacion.getId()
+                            ),
+                            0
+                    );
+
+            if (vecesSemana >= maxSemana
+                    || vecesMes >= maxMes) {
+                continue;
+            }
+
+            if (!viasCompletasAntesDeAuxiliar(
+                    ubicacion,
+                    ubicaciones,
+                    turno.getEstado(),
+                    ocupadasTurno
+            )) {
+                continue;
+            }
+
+            if (!cumpleOrdenSecuencial(
+                    ubicacion,
+                    ubicaciones,
+                    turno.getEstado(),
+                    ocupadasTurno
+            )) {
+                continue;
+            }
+
+            int consecutivos =
+                    consecutivosAnteriores(
+                            trabajadorId,
+                            ubicacion.getId(),
+                            turno.getFecha(),
+                            asignacionPorDiaAgente
+                    );
+
+            if (consecutivos
+                    >= config.maxConsecutivos()) {
+                continue;
+            }
+
+            Long ubicacionMismoTurnoDiaAnterior =
+                    asignacionPorDiaTurnoAgente
+                            .get(
+                                    keyDiaTurno(
+                                            trabajadorId,
+                                            turno.getFecha()
+                                                    .minusDays(1),
+                                            turno.getEstado()
+                                    )
+                            );
+
+            if (Objects.equals(
+                    ubicacionMismoTurnoDiaAnterior,
+                    ubicacion.getId()
+            )) {
+                continue;
+            }
+
+            boolean turnoC =
+                    turno.getEstado()
+                            == EstadoProgramacion.C;
+
+            if (!turnoC) {
+                Long ubicacionAyer =
                         asignacionPorDiaAgente
                                 .get(
                                         keyDia(
@@ -765,163 +1150,119 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                         )
                                 );
 
-                GrupoFlujoCaseta grupoDiaAnterior =
-                        grupoDeUbicacion(
-                                ubicacionDiaAnterior,
-                                configCaseta
-                        );
+                Long ubicacionAnteayer =
+                        asignacionPorDiaAgente
+                                .get(
+                                        keyDia(
+                                                trabajadorId,
+                                                turno.getFecha()
+                                                        .minusDays(2)
+                                        )
+                                );
 
-                if (
-                        flujoEstricto
-                                && !turnoC
-                                && grupo != GrupoFlujoCaseta.SIN_CLASIFICAR
-                                && grupoDiaAnterior != GrupoFlujoCaseta.SIN_CLASIFICAR
-                                && grupo == grupoDiaAnterior
-                ) {
+                if (Objects.equals(
+                        ubicacionAyer,
+                        ubicacion.getId()
+                ) || Objects.equals(
+                        ubicacionAnteayer,
+                        ubicacion.getId()
+                )) {
                     continue;
-                }
-
-                int score =
-                        penalizacionRepeticionCaseta(
-                                vecesMes,
-                                vecesSemana,
-                                consecutivos,
-                                turnoC
-                        )
-                                + penalizacionAlternanciaFlujo(
-                                        grupoDiaAnterior,
-                                        grupo,
-                                        turnoC,
-                                        config.balancearFlujo()
-                                )
-                                + penalizacionRecuperacionFlujo(
-                                        flujoEstricto,
-                                        turnoC,
-                                        grupoDiaAnterior,
-                                        grupo
-                                )
-                                + penalizacionFlujo(
-                                        flujo,
-                                        trabajadorId,
-                                        grupo,
-                                        config.balancearFlujo()
-                                )
-                                + Math.max(
-                                        0,
-                                        ubicacion.getOrden()
-                                )
-                                + penalizacionAleatoria();
-
-                Candidate candidate =
-                        new Candidate(
-                                ubicacion,
-                                grupo,
-                                score
-                        );
-
-                if (mejor == null
-                        || candidate.score()
-                        < mejor.score()) {
-                    mejor = candidate;
                 }
             }
 
-            if (mejor == null) {
-                conflictos.add(
-                        new Conflicto(
-                                turno.getId(),
-                                trabajadorId,
-                                turno.getTrabajador()
-                                        .getNombreCompleto(),
-                                turno.getFecha(),
-                                turno.getEstado()
-                                        .name(),
-                                "No existe una caseta válida con las restricciones y máximos actuales"
-                        )
-                );
+            GrupoFlujoCaseta grupo =
+                    grupo(especifica);
+
+            Long ubicacionDiaAnterior =
+                    asignacionPorDiaAgente
+                            .get(
+                                    keyDia(
+                                            trabajadorId,
+                                            turno.getFecha()
+                                                    .minusDays(1)
+                                    )
+                            );
+
+            GrupoFlujoCaseta grupoDiaAnterior =
+                    grupoDeUbicacion(
+                            ubicacionDiaAnterior,
+                            configCaseta
+                    );
+
+            if (flujoEstricto
+                    && !turnoC
+                    && grupo != GrupoFlujoCaseta.SIN_CLASIFICAR
+                    && grupoDiaAnterior != GrupoFlujoCaseta.SIN_CLASIFICAR
+                    && grupo == grupoDiaAnterior) {
                 continue;
             }
 
-            ProgramacionUbicacion ubicacion =
-                    mejor.ubicacion();
+            int score =
+                    penalizacionRepeticionCaseta(
+                            vecesMes,
+                            vecesSemana,
+                            consecutivos,
+                            turnoC
+                    )
+                            + penalizacionAlternanciaFlujo(
+                                    grupoDiaAnterior,
+                                    grupo,
+                                    turnoC,
+                                    config.balancearFlujo()
+                            )
+                            + penalizacionRecuperacionFlujo(
+                                    flujoEstricto,
+                                    turnoC,
+                                    grupoDiaAnterior,
+                                    grupo
+                            )
+                            + penalizacionFlujo(
+                                    flujo,
+                                    trabajadorId,
+                                    grupo,
+                                    config.balancearFlujo()
+                            )
+                            + Math.max(
+                                    0,
+                                    ubicacion.getOrden()
+                            )
+                            + penalizacionAleatoria();
 
-            asignaciones.add(
-                    new ItemPropuesta(
-                            turno.getId(),
-                            trabajadorId,
-                            turno.getTrabajador()
-                                    .getCodigo(),
-                            turno.getTrabajador()
-                                    .getNombreCompleto(),
-                            turno.getFecha(),
-                            turno.getEstado()
-                                    .name(),
-                            ubicacion.getId(),
-                            ubicacion.getCodigo(),
-                            ubicacion.getNombre(),
-                            mejor.grupo(),
-                            mejor.score()
+            candidatos.add(
+                    new Candidate(
+                            ubicacion,
+                            grupo,
+                            score
                     )
             );
-
-            incrementar(
-                    conteoMes,
-                    key(
-                            trabajadorId,
-                            ubicacion.getId()
-                    )
-            );
-
-            incrementar(
-                    conteoSemana,
-                    keySemana(
-                            trabajadorId,
-                            ubicacion.getId(),
-                            semanaActual
-                    )
-            );
-
-            incrementarFlujo(
-                    flujo,
-                    trabajadorId,
-                    mejor.grupo()
-            );
-
-            asignacionPorDiaAgente.put(
-                    keyDia(
-                            trabajadorId,
-                            turno.getFecha()
-                    ),
-                    ubicacion.getId()
-            );
-
-            asignacionPorDiaTurnoAgente.put(
-                    keyDiaTurno(
-                            trabajadorId,
-                            turno.getFecha(),
-                            turno.getEstado()
-                    ),
-                    ubicacion.getId()
-            );
-
-            ocupadasPorFechaTurno
-                    .computeIfAbsent(
-                            turno.getFecha()
-                                    + "|"
-                                    + turno.getEstado()
-                                            .name(),
-                            ignored ->
-                                    new HashSet<>()
-                    )
-                    .add(
-                            ubicacion.getId()
-                    );
         }
 
-        return new IntentoGeneracion(
-                asignaciones,
-                conflictos
-        );
+        return candidatos;
+    }
+
+    private static final class BusquedaBacktracking {
+
+        private final long maxNodos;
+        private long nodos = 0;
+        private int mejorAsignados = -1;
+        private int mejorPuntaje =
+                Integer.MAX_VALUE;
+        private Map<Long, Candidate> mejorAsignacion =
+                new HashMap<>();
+
+        private BusquedaBacktracking(
+                long maxNodos
+        ) {
+            this.maxNodos =
+                    maxNodos;
+        }
+    }
+
+    private record ResultadoGrupoBacktracking(
+            Map<Long, Candidate> asignaciones,
+            int puntaje
+    ) {
     }
 
     private boolean esMejorIntento(
