@@ -1,7 +1,7 @@
 package com.sigo.programacion.api.controller;
 
-import com.sigo.programacion.application.service.GeneradorAsignacionCasetasService;
-import com.sigo.programacion.infrastructure.persistence.entity.GrupoFlujoCaseta;
+import com.sigo.programacion.application.port.in.GeneradorAsignacionCasetasUseCase;
+import com.sigo.programacion.domain.GrupoFlujoCaseta;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -17,17 +17,17 @@ import java.util.List;
 @PreAuthorize("hasRole('SUPERVISOR')")
 public class GeneradorAsignacionCasetasController {
 
-    private final GeneradorAsignacionCasetasService service;
+    private final GeneradorAsignacionCasetasUseCase service;
 
     @GetMapping("/configuracion")
-    public GeneradorAsignacionCasetasService.Configuracion configuracion(
+    public GeneradorAsignacionCasetasUseCase.Configuracion configuracion(
             @RequestParam Long plazaId
     ) {
         return service.obtenerConfiguracion(plazaId);
     }
 
     @PutMapping("/configuracion")
-    public GeneradorAsignacionCasetasService.Configuracion guardarConfiguracion(
+    public GeneradorAsignacionCasetasUseCase.Configuracion guardarConfiguracion(
             @Valid
             @RequestBody ConfiguracionRequest request
     ) {
@@ -41,14 +41,14 @@ public class GeneradorAsignacionCasetasController {
     }
 
     @GetMapping("/casetas")
-    public List<GeneradorAsignacionCasetasService.CasetaConfig> casetas(
+    public List<GeneradorAsignacionCasetasUseCase.CasetaConfig> casetas(
             @RequestParam Long plazaId
     ) {
         return service.listarCasetas(plazaId);
     }
 
     @PutMapping("/casetas/{ubicacionId}")
-    public GeneradorAsignacionCasetasService.CasetaConfig guardarCaseta(
+    public GeneradorAsignacionCasetasUseCase.CasetaConfig guardarCaseta(
             @PathVariable Long ubicacionId,
             @Valid
             @RequestBody CasetaRequest request
@@ -63,14 +63,14 @@ public class GeneradorAsignacionCasetasController {
     }
 
     @GetMapping("/restricciones")
-    public List<GeneradorAsignacionCasetasService.Restriccion> restricciones(
+    public List<GeneradorAsignacionCasetasUseCase.Restriccion> restricciones(
             @RequestParam Long plazaId
     ) {
         return service.listarRestricciones(plazaId);
     }
 
     @PutMapping("/restricciones")
-    public GeneradorAsignacionCasetasService.Restriccion guardarRestriccion(
+    public GeneradorAsignacionCasetasUseCase.Restriccion guardarRestriccion(
             @Valid
             @RequestBody RestriccionRequest request
     ) {
@@ -91,7 +91,7 @@ public class GeneradorAsignacionCasetasController {
     }
 
     @PostMapping("/propuesta")
-    public GeneradorAsignacionCasetasService.Propuesta generar(
+    public GeneradorAsignacionCasetasUseCase.Propuesta generar(
             @Valid
             @RequestBody GenerarRequest request
     ) {
@@ -131,7 +131,7 @@ public class GeneradorAsignacionCasetasController {
             @NotNull Long plazaId,
             int anio,
             int mes,
-            @NotNull GeneradorAsignacionCasetasService.TipoPeriodo periodo,
+            @NotNull GeneradorAsignacionCasetasUseCase.TipoPeriodo periodo,
             Integer semana
     ) {}
 }
