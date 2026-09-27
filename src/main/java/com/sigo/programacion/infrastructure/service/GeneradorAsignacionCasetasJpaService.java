@@ -768,6 +768,15 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                 configCaseta
                         );
 
+                if (
+                        !turnoC
+                                && grupo != GrupoFlujoCaseta.SIN_CLASIFICAR
+                                && grupoDiaAnterior != GrupoFlujoCaseta.SIN_CLASIFICAR
+                                && grupo == grupoDiaAnterior
+                ) {
+                    continue;
+                }
+
                 int score =
                         penalizacionRepeticionCaseta(
                                 vecesMes,
