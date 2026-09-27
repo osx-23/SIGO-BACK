@@ -263,6 +263,76 @@ public class DistribucionGestionJpaAdapter
             }
         }
 
+        Map<String, Long> asignacionPorAgenteDiaTurno =
+                new HashMap<>();
+
+        for (DistribucionPersonal existente :
+                distribucionRepository.findMes(
+                        plazaId,
+                        desde.minusDays(1),
+                        hasta
+                )) {
+            if (programacionesModificadas.contains(
+                    existente.getProgramacionTurno().getId()
+            )) {
+                continue;
+            }
+
+            ProgramacionTurno turnoExistente =
+                    existente.getProgramacionTurno();
+
+            if (!turnoExistente.getEstado().esOperativo()) {
+                continue;
+            }
+
+            asignacionPorAgenteDiaTurno.put(
+                    claveAgenteDiaTurno(
+                            turnoExistente
+                    ),
+                    existente.getUbicacion().getId()
+            );
+        }
+
+        for (ItemResuelto resuelto : resueltos) {
+            asignacionPorAgenteDiaTurno.put(
+                    claveAgenteDiaTurno(
+                            resuelto.programacion()
+                    ),
+                    resuelto.ubicacion().getId()
+            );
+        }
+
+        for (ItemResuelto resuelto : resueltos) {
+            ProgramacionTurno actual =
+                    resuelto.programacion();
+
+            String claveAnterior =
+                    actual.getTrabajador().getId()
+                            + "|"
+                            + actual.getFecha().minusDays(1)
+                            + "|"
+                            + actual.getEstado().name();
+
+            Long ubicacionAnterior =
+                    asignacionPorAgenteDiaTurno.get(
+                            claveAnterior
+                    );
+
+            if (Objects.equals(
+                    ubicacionAnterior,
+                    resuelto.ubicacion().getId()
+            )) {
+                throw bad(
+                        "El agente "
+                                + actual.getTrabajador().getNombreCompleto()
+                                + " no puede repetir la ubicación "
+                                + resuelto.ubicacion().getCodigo()
+                                + " en días consecutivos manteniendo el turno "
+                                + actual.getEstado().name()
+                );
+            }
+        }
+
         List<ProgramacionUbicacion> ubicacionesActivas =
                 ubicacionRepository
                         .findByPlazaIdAndActivoTrueOrderByOrdenAscCodigoAsc(
@@ -398,6 +468,16 @@ public class DistribucionGestionJpaAdapter
             ProgramacionTurno programacion
     ) {
         return programacion.getFecha()
+                + "|"
+                + programacion.getEstado().name();
+    }
+
+    private String claveAgenteDiaTurno(
+            ProgramacionTurno programacion
+    ) {
+        return programacion.getTrabajador().getId()
+                + "|"
+                + programacion.getFecha()
                 + "|"
                 + programacion.getEstado().name();
     }

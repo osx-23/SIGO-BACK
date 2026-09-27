@@ -366,6 +366,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         Map<String, Integer> conteoSemana = new HashMap<>();
         Map<Long, int[]> flujo = new HashMap<>();
         Map<String, Long> asignacionPorDiaAgente = new HashMap<>();
+        Map<String, Long> asignacionPorDiaTurnoAgente = new HashMap<>();
 
         for (DistribucionPersonal existente : existentesMes) {
             ProgramacionTurno turno = existente.getProgramacionTurno();
@@ -394,6 +395,42 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             asignacionPorDiaAgente.put(
                     keyDia(trabajadorId, turno.getFecha()),
                     ubicacionId
+            );
+
+            asignacionPorDiaTurnoAgente.put(
+                    keyDiaTurno(
+                            trabajadorId,
+                            turno.getFecha(),
+                            turno.getEstado()
+                    ),
+                    ubicacionId
+            );
+        }
+
+        /*
+         * Para el primer día del mes también necesitamos conocer
+         * la asignación del día anterior, aunque pertenezca al mes previo.
+         */
+        for (DistribucionPersonal anterior :
+                distribucionRepository.findMes(
+                        plazaId,
+                        ym.atDay(1).minusDays(1),
+                        ym.atDay(1).minusDays(1)
+                )) {
+            ProgramacionTurno turnoAnterior =
+                    anterior.getProgramacionTurno();
+
+            if (!turnoAnterior.getEstado().esOperativo()) {
+                continue;
+            }
+
+            asignacionPorDiaTurnoAgente.put(
+                    keyDiaTurno(
+                            turnoAnterior.getTrabajador().getId(),
+                            turnoAnterior.getFecha(),
+                            turnoAnterior.getEstado()
+                    ),
+                    anterior.getUbicacion().getId()
             );
         }
 
@@ -494,6 +531,22 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         );
 
                 if (consecutivos >= config.maxConsecutivos()) {
+                    continue;
+                }
+
+                Long ubicacionMismoTurnoDiaAnterior =
+                        asignacionPorDiaTurnoAgente.get(
+                                keyDiaTurno(
+                                        trabajadorId,
+                                        turno.getFecha().minusDays(1),
+                                        turno.getEstado()
+                                )
+                        );
+
+                if (Objects.equals(
+                        ubicacionMismoTurnoDiaAnterior,
+                        ubicacion.getId()
+                )) {
                     continue;
                 }
 
@@ -600,6 +653,15 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
             asignacionPorDiaAgente.put(
                     keyDia(trabajadorId, turno.getFecha()),
+                    ubicacion.getId()
+            );
+
+            asignacionPorDiaTurnoAgente.put(
+                    keyDiaTurno(
+                            trabajadorId,
+                            turno.getFecha(),
+                            turno.getEstado()
+                    ),
                     ubicacion.getId()
             );
 
@@ -905,6 +967,18 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             LocalDate fecha
     ) {
         return trabajadorId + "|" + fecha;
+    }
+
+    private String keyDiaTurno(
+            Long trabajadorId,
+            LocalDate fecha,
+            EstadoProgramacion turno
+    ) {
+        return trabajadorId
+                + "|"
+                + fecha
+                + "|"
+                + turno.name();
     }
 
     private record Candidate(
