@@ -169,15 +169,27 @@ class InventarioApiAuthorizationIT {
     }
 
     @Test
-    void operadorNoPuedeConsultarStockDeGestion() throws Exception {
+    void operadorPuedeConsultarStockDeSuPlaza() throws Exception {
         when(usuarios.obtenerActual())
                 .thenReturn(operador);
+
+        when(stockUseCase.consultar(
+                any(InventarioUsuarioActual.class),
+                isNull(),
+                isNull()
+        )).thenReturn(List.of());
 
         mockMvc.perform(
                         get("/api/inventario/stock")
                                 .with(jwtRol("OPERADOR"))
                 )
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
+
+        verify(stockUseCase).consultar(
+                operador,
+                null,
+                null
+        );
     }
 
     @Test

@@ -248,6 +248,20 @@ public class SecurityConfig {
 
                         /*
                          * =====================================================
+                         * GENERADOR DE ASIGNACIÓN DE CASETAS
+                         * =====================================================
+                         */
+
+                        .requestMatchers(
+                                "/api/distribucion/generador/**"
+                        )
+                        .hasRole(
+                                "SUPERVISOR"
+                        )
+
+
+                        /*
+                         * =====================================================
                          * DISTRIBUCIÓN
                          * =====================================================
                          */
