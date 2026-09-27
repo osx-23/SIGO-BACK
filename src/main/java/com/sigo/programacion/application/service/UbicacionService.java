@@ -43,7 +43,10 @@ public class UbicacionService implements UbicacionUseCase {
                 normalizado.codigo(),
                 normalizado.nombre(),
                 normalizado.tipo(),
-                normalizado.orden()
+                normalizado.orden(),
+                normalizado.permiteTurnoA(),
+                normalizado.permiteTurnoB(),
+                normalizado.permiteTurnoC()
         );
     }
 
@@ -62,7 +65,10 @@ public class UbicacionService implements UbicacionUseCase {
                 normalizado.codigo(),
                 normalizado.nombre(),
                 normalizado.tipo(),
-                normalizado.orden()
+                normalizado.orden(),
+                normalizado.permiteTurnoA(),
+                normalizado.permiteTurnoB(),
+                normalizado.permiteTurnoC()
         );
     }
 
@@ -129,7 +135,10 @@ public class UbicacionService implements UbicacionUseCase {
                 codigo,
                 nombre,
                 tipo,
-                command.orden()
+                command.orden(),
+                command.permiteTurnoA() == null ? Boolean.TRUE : command.permiteTurnoA(),
+                command.permiteTurnoB() == null ? Boolean.TRUE : command.permiteTurnoB(),
+                command.permiteTurnoC() == null ? Boolean.TRUE : command.permiteTurnoC()
         );
     }
 }
