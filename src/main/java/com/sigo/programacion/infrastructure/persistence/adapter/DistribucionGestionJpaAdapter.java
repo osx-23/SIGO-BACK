@@ -119,18 +119,6 @@ public class DistribucionGestionJpaAdapter
                 );
             }
 
-            if (!permiteTurno(
-                    ubicacion,
-                    programacion.getEstado()
-            )) {
-                throw bad(
-                        "La ubicación "
-                                + ubicacion.getCodigo()
-                                + " no está habilitada para el turno "
-                                + programacion.getEstado().name()
-                );
-            }
-
             resueltos.add(
                     new ItemResuelto(
                             item,
@@ -139,6 +127,11 @@ public class DistribucionGestionJpaAdapter
                     )
             );
         }
+
+        validarHabilitacionTurnos(
+                plazaId,
+                resueltos
+        );
 
         validarOcupacionFinal(
                 plazaId,
@@ -184,6 +177,186 @@ public class DistribucionGestionJpaAdapter
                 .stream()
                 .map(this::toData)
                 .toList();
+    }
+
+    private void validarHabilitacionTurnos(
+            Long plazaId,
+            List<ItemResuelto> resueltos
+    ) {
+        if (resueltos.isEmpty()) {
+            return;
+        }
+
+        LocalDate desde = resueltos.stream()
+                .map(item -> item.programacion().getFecha())
+                .min(LocalDate::compareTo)
+                .orElseThrow();
+
+        LocalDate hasta = resueltos.stream()
+                .map(item -> item.programacion().getFecha())
+                .max(LocalDate::compareTo)
+                .orElseThrow();
+
+        List<ProgramacionUbicacion> ubicacionesActivas =
+                ubicacionRepository
+                        .findByPlazaIdAndActivoTrueOrderByOrdenAscCodigoAsc(
+                                plazaId
+                        );
+
+        Map<EstadoProgramacion, Integer> capacidadPorTurno =
+                new java.util.EnumMap<>(
+                        EstadoProgramacion.class
+                );
+
+        for (EstadoProgramacion estado :
+                List.of(
+                        EstadoProgramacion.A,
+                        EstadoProgramacion.B,
+                        EstadoProgramacion.C
+                )) {
+            int capacidad =
+                    (int) ubicacionesActivas.stream()
+                            .filter(item ->
+                                    permiteTurno(
+                                            item,
+                                            estado
+                                    )
+                            )
+                            .count();
+
+            capacidadPorTurno.put(
+                    estado,
+                    capacidad
+            );
+        }
+
+        Map<String, Integer> demandaPorTurno =
+                new HashMap<>();
+
+        Map<String, EstadoProgramacion> estadoPorClave =
+                new HashMap<>();
+
+        for (ProgramacionTurno programacion :
+                programacionRepository.findMes(
+                        plazaId,
+                        desde,
+                        hasta
+                )) {
+            if (!programacion.getEstado().esOperativo()) {
+                continue;
+            }
+
+            String clave =
+                    claveTurno(programacion);
+
+            demandaPorTurno.merge(
+                    clave,
+                    1,
+                    Integer::sum
+            );
+
+            estadoPorClave.put(
+                    clave,
+                    programacion.getEstado()
+            );
+        }
+
+        Set<Long> programacionesModificadas =
+                resueltos.stream()
+                        .map(item ->
+                                item.programacion().getId()
+                        )
+                        .collect(
+                                java.util.stream.Collectors.toSet()
+                        );
+
+        Map<String, Integer> overflowUsado =
+                new HashMap<>();
+
+        for (DistribucionPersonal existente :
+                distribucionRepository.findMes(
+                        plazaId,
+                        desde,
+                        hasta
+                )) {
+            if (programacionesModificadas.contains(
+                    existente.getProgramacionTurno().getId()
+            )) {
+                continue;
+            }
+
+            ProgramacionTurno programacion =
+                    existente.getProgramacionTurno();
+
+            if (!permiteTurno(
+                    existente.getUbicacion(),
+                    programacion.getEstado()
+            )) {
+                overflowUsado.merge(
+                        claveTurno(programacion),
+                        1,
+                        Integer::sum
+                );
+            }
+        }
+
+        for (ItemResuelto resuelto :
+                resueltos) {
+            if (!permiteTurno(
+                    resuelto.ubicacion(),
+                    resuelto.programacion().getEstado()
+            )) {
+                overflowUsado.merge(
+                        claveTurno(
+                                resuelto.programacion()
+                        ),
+                        1,
+                        Integer::sum
+                );
+            }
+        }
+
+        for (Map.Entry<String, Integer> entry :
+                overflowUsado.entrySet()) {
+            EstadoProgramacion estado =
+                    estadoPorClave.get(
+                            entry.getKey()
+                    );
+
+            if (estado == null) {
+                continue;
+            }
+
+            int demanda =
+                    demandaPorTurno.getOrDefault(
+                            entry.getKey(),
+                            0
+                    );
+
+            int capacidad =
+                    capacidadPorTurno.getOrDefault(
+                            estado,
+                            0
+                    );
+
+            int maxOverflow =
+                    Math.max(
+                            0,
+                            demanda - capacidad
+                    );
+
+            if (entry.getValue() > maxOverflow) {
+                throw bad(
+                        "Solo se pueden habilitar casetas adicionales cuando la cantidad de agentes del turno "
+                                + estado.name()
+                                + " supera las "
+                                + capacidad
+                                + " casetas habilitadas. Para esta fecha se permiten como máximo "
+                                + maxOverflow
+                                + " caseta(s) adicional(es)"
+                );
+            }
+        }
     }
 
     private void validarOcupacionFinal(
