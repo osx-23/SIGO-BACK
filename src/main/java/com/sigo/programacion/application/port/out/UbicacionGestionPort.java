@@ -15,7 +15,10 @@ public interface UbicacionGestionPort {
             String codigo,
             String nombre,
             String tipo,
-            Integer orden
+            Integer orden,
+            Boolean permiteTurnoA,
+            Boolean permiteTurnoB,
+            Boolean permiteTurnoC
     );
 
     UbicacionUseCase.Ubicacion actualizar(
@@ -24,7 +27,10 @@ public interface UbicacionGestionPort {
             String codigo,
             String nombre,
             String tipo,
-            Integer orden
+            Integer orden,
+            Boolean permiteTurnoA,
+            Boolean permiteTurnoB,
+            Boolean permiteTurnoC
     );
 
     UbicacionUseCase.Ubicacion cambiarEstado(

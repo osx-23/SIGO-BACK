@@ -35,6 +35,15 @@ public class ProgramacionUbicacion {
     @Column(nullable=false)
     private Integer orden=0;
 
+    @Column(name="permite_turno_a", nullable=false)
+    private Boolean permiteTurnoA=true;
+
+    @Column(name="permite_turno_b", nullable=false)
+    private Boolean permiteTurnoB=true;
+
+    @Column(name="permite_turno_c", nullable=false)
+    private Boolean permiteTurnoC=true;
+
     @Column(name="created_at", insertable=false, updatable=false)
     private OffsetDateTime createdAt;
 }

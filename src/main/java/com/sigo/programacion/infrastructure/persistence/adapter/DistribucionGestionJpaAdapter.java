@@ -5,8 +5,10 @@ import com.sigo.personal.infrastructure.persistence.repository.TrabajadorReposit
 import com.sigo.programacion.application.port.in.DistribucionUseCase;
 import com.sigo.programacion.application.port.out.DistribucionGestionPort;
 import com.sigo.programacion.infrastructure.persistence.entity.DistribucionPersonal;
+import com.sigo.programacion.infrastructure.persistence.entity.EstadoProgramacion;
 import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionTurno;
 import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionUbicacion;
+import com.sigo.programacion.infrastructure.persistence.entity.TipoUbicacion;
 import com.sigo.programacion.infrastructure.persistence.repository.DistribucionPersonalRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionTurnoRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionUbicacionRepository;
@@ -22,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 
 @Component
@@ -61,8 +64,7 @@ public class DistribucionGestionJpaAdapter
                         )
                 );
 
-        List<DistribucionPersonal> guardados =
-                new ArrayList<>();
+        List<ItemResuelto> resueltos = new ArrayList<>();
 
         for (DistribucionUseCase.Item item : distribuciones) {
             if (item == null
@@ -117,6 +119,43 @@ public class DistribucionGestionJpaAdapter
                 );
             }
 
+            if (!permiteTurno(
+                    ubicacion,
+                    programacion.getEstado()
+            )) {
+                throw bad(
+                        "La ubicación "
+                                + ubicacion.getCodigo()
+                                + " no está habilitada para el turno "
+                                + programacion.getEstado().name()
+                );
+            }
+
+            resueltos.add(
+                    new ItemResuelto(
+                            item,
+                            programacion,
+                            ubicacion
+                    )
+            );
+        }
+
+        validarOcupacionFinal(
+                plazaId,
+                resueltos
+        );
+
+        List<DistribucionPersonal> guardados =
+                new ArrayList<>();
+
+        for (ItemResuelto resuelto : resueltos) {
+            DistribucionUseCase.Item item =
+                    resuelto.item();
+            ProgramacionTurno programacion =
+                    resuelto.programacion();
+            ProgramacionUbicacion ubicacion =
+                    resuelto.ubicacion();
+
             DistribucionPersonal distribucion =
                     distribucionRepository
                             .findByProgramacionTurnoId(
@@ -145,6 +184,190 @@ public class DistribucionGestionJpaAdapter
                 .stream()
                 .map(this::toData)
                 .toList();
+    }
+
+    private void validarOcupacionFinal(
+            Long plazaId,
+            List<ItemResuelto> resueltos
+    ) {
+        if (resueltos.isEmpty()) {
+            return;
+        }
+
+        LocalDate desde = resueltos.stream()
+                .map(item -> item.programacion().getFecha())
+                .min(LocalDate::compareTo)
+                .orElseThrow();
+
+        LocalDate hasta = resueltos.stream()
+                .map(item -> item.programacion().getFecha())
+                .max(LocalDate::compareTo)
+                .orElseThrow();
+
+        Set<Long> programacionesModificadas =
+                resueltos.stream()
+                        .map(item -> item.programacion().getId())
+                        .collect(java.util.stream.Collectors.toSet());
+
+        Map<String, Set<Long>> ocupadas =
+                new HashMap<>();
+
+        for (DistribucionPersonal existente :
+                distribucionRepository.findMes(
+                        plazaId,
+                        desde,
+                        hasta
+                )) {
+            if (programacionesModificadas.contains(
+                    existente.getProgramacionTurno().getId()
+            )) {
+                continue;
+            }
+
+            String key = claveTurno(
+                    existente.getProgramacionTurno()
+            );
+
+            Set<Long> ids =
+                    ocupadas.computeIfAbsent(
+                            key,
+                            ignored -> new java.util.LinkedHashSet<>()
+                    );
+
+            if (!ids.add(existente.getUbicacion().getId())) {
+                throw bad(
+                        "Existe una ubicación duplicada en la distribución guardada"
+                );
+            }
+        }
+
+        for (ItemResuelto resuelto : resueltos) {
+            String key =
+                    claveTurno(resuelto.programacion());
+
+            Set<Long> ids =
+                    ocupadas.computeIfAbsent(
+                            key,
+                            ignored -> new java.util.LinkedHashSet<>()
+                    );
+
+            if (!ids.add(resuelto.ubicacion().getId())) {
+                throw bad(
+                        "La ubicación "
+                                + resuelto.ubicacion().getCodigo()
+                                + " ya está asignada para el turno "
+                                + resuelto.programacion().getEstado().name()
+                                + " del "
+                                + resuelto.programacion().getFecha()
+                );
+            }
+        }
+
+        List<ProgramacionUbicacion> ubicacionesActivas =
+                ubicacionRepository
+                        .findByPlazaIdAndActivoTrueOrderByOrdenAscCodigoAsc(
+                                plazaId
+                        );
+
+        Map<String, EstadoProgramacion> turnoPorClave =
+                new HashMap<>();
+
+        for (ItemResuelto resuelto : resueltos) {
+            turnoPorClave.put(
+                    claveTurno(resuelto.programacion()),
+                    resuelto.programacion().getEstado()
+            );
+        }
+
+        for (Map.Entry<String, EstadoProgramacion> entry :
+                turnoPorClave.entrySet()) {
+            Set<Long> ids =
+                    ocupadas.getOrDefault(
+                            entry.getKey(),
+                            Set.of()
+                    );
+
+            List<ProgramacionUbicacion> secuenciales =
+                    ubicacionesActivas.stream()
+                            .filter(item ->
+                                    item.getTipo() != TipoUbicacion.VIA
+                            )
+                            .filter(item ->
+                                    permiteTurno(
+                                            item,
+                                            entry.getValue()
+                                    )
+                            )
+                            .sorted(
+                                    java.util.Comparator
+                                            .comparing(
+                                                    ProgramacionUbicacion::getOrden,
+                                                    java.util.Comparator.nullsLast(
+                                                            Integer::compareTo
+                                                    )
+                                            )
+                                            .thenComparing(
+                                                    ProgramacionUbicacion::getCodigo,
+                                                    String.CASE_INSENSITIVE_ORDER
+                                            )
+                            )
+                            .toList();
+
+            boolean faltaAnterior = false;
+
+            for (ProgramacionUbicacion ubicacion :
+                    secuenciales) {
+                boolean asignada =
+                        ids.contains(ubicacion.getId());
+
+                if (!asignada) {
+                    faltaAnterior = true;
+                    continue;
+                }
+
+                if (faltaAnterior) {
+                    throw bad(
+                            "No se puede asignar "
+                                    + ubicacion.getCodigo()
+                                    + " sin completar antes las ubicaciones auxiliares/apoyo anteriores del turno "
+                                    + entry.getValue().name()
+                    );
+                }
+            }
+        }
+    }
+
+    private boolean permiteTurno(
+            ProgramacionUbicacion ubicacion,
+            EstadoProgramacion turno
+    ) {
+        return switch (turno) {
+            case A -> Boolean.TRUE.equals(
+                    ubicacion.getPermiteTurnoA()
+            );
+            case B -> Boolean.TRUE.equals(
+                    ubicacion.getPermiteTurnoB()
+            );
+            case C -> Boolean.TRUE.equals(
+                    ubicacion.getPermiteTurnoC()
+            );
+            default -> false;
+        };
+    }
+
+    private String claveTurno(
+            ProgramacionTurno programacion
+    ) {
+        return programacion.getFecha()
+                + "|"
+                + programacion.getEstado().name();
+    }
+
+    private record ItemResuelto(
+            DistribucionUseCase.Item item,
+            ProgramacionTurno programacion,
+            ProgramacionUbicacion ubicacion
+    ) {
     }
 
     @Override

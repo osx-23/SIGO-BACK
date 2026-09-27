@@ -51,7 +51,10 @@ public class UbicacionGestionJpaAdapter
             String codigo,
             String nombre,
             String tipo,
-            Integer orden
+            Integer orden,
+            Boolean permiteTurnoA,
+            Boolean permiteTurnoB,
+            Boolean permiteTurnoC
     ) {
         Plaza plaza = plazaRepository
                 .findById(plazaId)
@@ -83,6 +86,9 @@ public class UbicacionGestionJpaAdapter
                         ? orden
                         : siguienteOrden(plazaId)
         );
+        ubicacion.setPermiteTurnoA(Boolean.TRUE.equals(permiteTurnoA));
+        ubicacion.setPermiteTurnoB(Boolean.TRUE.equals(permiteTurnoB));
+        ubicacion.setPermiteTurnoC(Boolean.TRUE.equals(permiteTurnoC));
 
         return toData(
                 ubicacionRepository.saveAndFlush(ubicacion)
@@ -96,7 +102,10 @@ public class UbicacionGestionJpaAdapter
             String codigo,
             String nombre,
             String tipo,
-            Integer orden
+            Integer orden,
+            Boolean permiteTurnoA,
+            Boolean permiteTurnoB,
+            Boolean permiteTurnoC
     ) {
         ProgramacionUbicacion ubicacion = ubicacionRepository
                 .findById(ubicacionId)
@@ -139,6 +148,10 @@ public class UbicacionGestionJpaAdapter
         if (orden != null && orden > 0) {
             ubicacion.setOrden(orden);
         }
+
+        ubicacion.setPermiteTurnoA(Boolean.TRUE.equals(permiteTurnoA));
+        ubicacion.setPermiteTurnoB(Boolean.TRUE.equals(permiteTurnoB));
+        ubicacion.setPermiteTurnoC(Boolean.TRUE.equals(permiteTurnoC));
 
         return toData(
                 ubicacionRepository.saveAndFlush(ubicacion)
@@ -193,7 +206,10 @@ public class UbicacionGestionJpaAdapter
                 ubicacion.getTipo().name(),
                 ubicacion.getViaId(),
                 ubicacion.getActivo(),
-                ubicacion.getOrden()
+                ubicacion.getOrden(),
+                Boolean.TRUE.equals(ubicacion.getPermiteTurnoA()),
+                Boolean.TRUE.equals(ubicacion.getPermiteTurnoB()),
+                Boolean.TRUE.equals(ubicacion.getPermiteTurnoC())
         );
     }
 

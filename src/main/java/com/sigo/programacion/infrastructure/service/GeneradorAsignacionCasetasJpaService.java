@@ -399,6 +399,10 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Candidate mejor = null;
 
             for (ProgramacionUbicacion ubicacion : ubicaciones) {
+                if (!permiteTurno(ubicacion, turno.getEstado())) {
+                    continue;
+                }
+
                 if (restricciones.contains(key(trabajadorId, ubicacion.getId()))) {
                     continue;
                 }
@@ -439,9 +443,22 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 String ocupacionKey =
                         turno.getFecha() + "|" + turno.getEstado().name();
 
-                if (ocupadasPorFechaTurno
-                        .getOrDefault(ocupacionKey, Set.of())
-                        .contains(ubicacion.getId())) {
+                Set<Long> ocupadasTurno =
+                        ocupadasPorFechaTurno.getOrDefault(
+                                ocupacionKey,
+                                Set.of()
+                        );
+
+                if (ocupadasTurno.contains(ubicacion.getId())) {
+                    continue;
+                }
+
+                if (!cumpleOrdenSecuencial(
+                        ubicacion,
+                        ubicaciones,
+                        turno.getEstado(),
+                        ocupadasTurno
+                )) {
                     continue;
                 }
 
@@ -560,6 +577,46 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 asignaciones,
                 conflictos
         );
+    }
+
+    private boolean permiteTurno(
+            ProgramacionUbicacion ubicacion,
+            EstadoProgramacion turno
+    ) {
+        return switch (turno) {
+            case A -> Boolean.TRUE.equals(ubicacion.getPermiteTurnoA());
+            case B -> Boolean.TRUE.equals(ubicacion.getPermiteTurnoB());
+            case C -> Boolean.TRUE.equals(ubicacion.getPermiteTurnoC());
+            default -> false;
+        };
+    }
+
+    private boolean cumpleOrdenSecuencial(
+            ProgramacionUbicacion candidata,
+            List<ProgramacionUbicacion> ubicaciones,
+            EstadoProgramacion turno,
+            Set<Long> ocupadas
+    ) {
+        if (candidata.getTipo() == TipoUbicacion.VIA) {
+            return true;
+        }
+
+        int ordenCandidata =
+                candidata.getOrden() == null
+                        ? Integer.MAX_VALUE
+                        : candidata.getOrden();
+
+        return ubicaciones.stream()
+                .filter(item -> item.getTipo() != TipoUbicacion.VIA)
+                .filter(item -> permiteTurno(item, turno))
+                .filter(item -> {
+                    int orden =
+                            item.getOrden() == null
+                                    ? Integer.MAX_VALUE
+                                    : item.getOrden();
+                    return orden < ordenCandidata;
+                })
+                .allMatch(item -> ocupadas.contains(item.getId()));
     }
 
     private Plaza validarPlaza(Long plazaId) {

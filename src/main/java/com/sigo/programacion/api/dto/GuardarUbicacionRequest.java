@@ -8,6 +8,9 @@ public record GuardarUbicacionRequest(
         @NotBlank String codigo,
         @NotBlank String nombre,
         @NotBlank String tipo,
-        Integer orden
+        Integer orden,
+        Boolean permiteTurnoA,
+        Boolean permiteTurnoB,
+        Boolean permiteTurnoC
 ) {
 }
