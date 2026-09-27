@@ -408,13 +408,14 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         }
 
         /*
-         * Para el primer día del mes también necesitamos conocer
-         * la asignación del día anterior, aunque pertenezca al mes previo.
+         * Para los primeros días del mes también necesitamos conocer
+         * las asignaciones de los dos días previos, aunque pertenezcan
+         * al mes anterior.
          */
         for (DistribucionPersonal anterior :
                 distribucionRepository.findMes(
                         plazaId,
-                        ym.atDay(1).minusDays(1),
+                        ym.atDay(1).minusDays(2),
                         ym.atDay(1).minusDays(1)
                 )) {
             ProgramacionTurno turnoAnterior =
@@ -429,6 +430,14 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             turnoAnterior.getTrabajador().getId(),
                             turnoAnterior.getFecha(),
                             turnoAnterior.getEstado()
+                    ),
+                    anterior.getUbicacion().getId()
+            );
+
+            asignacionPorDiaAgente.put(
+                    keyDia(
+                            turnoAnterior.getTrabajador().getId(),
+                            turnoAnterior.getFecha()
                     ),
                     anterior.getUbicacion().getId()
             );
@@ -550,10 +559,45 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     continue;
                 }
 
-                GrupoFlujoCaseta grupo = grupo(especifica);
-
                 boolean turnoC =
                         turno.getEstado() == EstadoProgramacion.C;
+
+                /*
+                 * En A/B una caseta usada por el agente en cualquiera de
+                 * los dos días anteriores entra en enfriamiento. Así,
+                 * al volver al mismo grupo de flujo (alto/bajo), se elige
+                 * otra caseta del grupo en vez de reciclar la anterior.
+                 * C queda más flexible porque tiene menos casetas abiertas.
+                 */
+                if (!turnoC) {
+                    Long ubicacionAyer =
+                            asignacionPorDiaAgente.get(
+                                    keyDia(
+                                            trabajadorId,
+                                            turno.getFecha().minusDays(1)
+                                    )
+                            );
+
+                    Long ubicacionAnteayer =
+                            asignacionPorDiaAgente.get(
+                                    keyDia(
+                                            trabajadorId,
+                                            turno.getFecha().minusDays(2)
+                                    )
+                            );
+
+                    if (Objects.equals(
+                            ubicacionAyer,
+                            ubicacion.getId()
+                    ) || Objects.equals(
+                            ubicacionAnteayer,
+                            ubicacion.getId()
+                    )) {
+                        continue;
+                    }
+                }
+
+                GrupoFlujoCaseta grupo = grupo(especifica);
 
                 Long ubicacionDiaAnterior =
                         asignacionPorDiaAgente.get(
