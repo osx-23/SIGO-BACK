@@ -287,6 +287,45 @@ public class DistribucionGestionJpaAdapter
                             Set.of()
                     );
 
+            boolean tieneAuxiliarAsignada =
+                    ubicacionesActivas.stream()
+                            .filter(item ->
+                                    item.getTipo() == TipoUbicacion.AUXILIAR
+                            )
+                            .filter(item ->
+                                    permiteTurno(
+                                            item,
+                                            entry.getValue()
+                                    )
+                            )
+                            .anyMatch(item ->
+                                    ids.contains(item.getId())
+                            );
+
+            if (tieneAuxiliarAsignada) {
+                boolean viasCompletas =
+                        ubicacionesActivas.stream()
+                                .filter(item ->
+                                        item.getTipo() == TipoUbicacion.VIA
+                                )
+                                .filter(item ->
+                                        permiteTurno(
+                                                item,
+                                                entry.getValue()
+                                        )
+                                )
+                                .allMatch(item ->
+                                        ids.contains(item.getId())
+                                );
+
+                if (!viasCompletas) {
+                    throw bad(
+                            "No se pueden asignar ubicaciones auxiliares mientras existan vías habilitadas sin cubrir en el turno "
+                                    + entry.getValue().name()
+                    );
+                }
+            }
+
             List<ProgramacionUbicacion> secuenciales =
                     ubicacionesActivas.stream()
                             .filter(item ->
