@@ -578,6 +578,20 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
         for (List<ProgramacionTurno> grupoTurno :
                 grupos.values()) {
+            int casetasHabilitadasTurno =
+                    (int) ubicaciones.stream()
+                            .filter(item ->
+                                    permiteTurno(
+                                            item,
+                                            grupoTurno.get(0).getEstado()
+                                    )
+                            )
+                            .count();
+
+            boolean permitirOverflowTurno =
+                    grupoTurno.size()
+                            > casetasHabilitadasTurno;
+
             ResultadoGrupoBacktracking resultado =
                     resolverGrupoBacktracking(
                             grupoTurno,
@@ -591,7 +605,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             flujo,
                             asignacionPorDiaAgente,
                             asignacionPorDiaTurnoAgente,
-                            flujoEstricto
+                            flujoEstricto,
+                            permitirOverflowTurno
                     );
 
             for (ProgramacionTurno turno :
@@ -700,7 +715,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<Long, int[]> flujo,
             Map<String, Long> asignacionPorDiaAgente,
             Map<String, Long> asignacionPorDiaTurnoAgente,
-            boolean flujoEstricto
+            boolean flujoEstricto,
+            boolean permitirOverflowTurno
     ) {
         /*
          * Fase 1: Greedy inteligente.
@@ -721,7 +737,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         flujo,
                         asignacionPorDiaAgente,
                         asignacionPorDiaTurnoAgente,
-                        flujoEstricto
+                        flujoEstricto,
+                        permitirOverflowTurno
                 );
 
         long maxNodos =
@@ -763,6 +780,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 asignacionPorDiaAgente,
                 asignacionPorDiaTurnoAgente,
                 flujoEstricto,
+                permitirOverflowTurno,
                 busqueda
         );
 
@@ -784,7 +802,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<Long, int[]> flujo,
             Map<String, Long> asignacionPorDiaAgente,
             Map<String, Long> asignacionPorDiaTurnoAgente,
-            boolean flujoEstricto
+            boolean flujoEstricto,
+            boolean permitirOverflowTurno
     ) {
         List<ProgramacionTurno> pendientes =
                 new ArrayList<>(grupoTurno);
@@ -825,7 +844,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                 flujo,
                                 asignacionPorDiaAgente,
                                 asignacionPorDiaTurnoAgente,
-                                flujoEstricto
+                                flujoEstricto,
+                                permitirOverflowTurno
                         );
 
                 if (opciones.isEmpty()) {
@@ -913,6 +933,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<String, Long> asignacionPorDiaAgente,
             Map<String, Long> asignacionPorDiaTurnoAgente,
             boolean flujoEstricto,
+            boolean permitirOverflowTurno,
             BusquedaBacktracking busqueda
     ) {
         if (++busqueda.nodos
@@ -967,7 +988,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             flujo,
                             asignacionPorDiaAgente,
                             asignacionPorDiaTurnoAgente,
-                            flujoEstricto
+                            flujoEstricto,
+                            permitirOverflowTurno
                     );
 
             if (opciones.isEmpty()) {
@@ -1063,6 +1085,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     asignacionPorDiaAgente,
                     asignacionPorDiaTurnoAgente,
                     flujoEstricto,
+                    permitirOverflowTurno,
                     busqueda
             );
 
@@ -1097,6 +1120,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 asignacionPorDiaAgente,
                 asignacionPorDiaTurnoAgente,
                 flujoEstricto,
+                permitirOverflowTurno,
                 busqueda
         );
     }
@@ -1145,7 +1169,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<Long, int[]> flujo,
             Map<String, Long> asignacionPorDiaAgente,
             Map<String, Long> asignacionPorDiaTurnoAgente,
-            boolean flujoEstricto
+            boolean flujoEstricto,
+            boolean permitirOverflowTurno
     ) {
         Long trabajadorId =
                 turno.getTrabajador().getId();
@@ -1167,10 +1192,14 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
         for (ProgramacionUbicacion ubicacion :
                 ubicacionesAleatorias) {
-            if (!permiteTurno(
-                    ubicacion,
-                    turno.getEstado()
-            )) {
+            boolean habilitadaParaTurno =
+                    permiteTurno(
+                            ubicacion,
+                            turno.getEstado()
+                    );
+
+            if (!habilitadaParaTurno
+                    && !permitirOverflowTurno) {
                 continue;
             }
 
@@ -1370,6 +1399,9 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             + Math.max(
                                     0,
                                     ubicacion.getOrden()
+                            )
+                            + penalizacionOverflowTurno(
+                                    habilitadaParaTurno
                             )
                             + penalizacionAleatoria();
 
@@ -1594,6 +1626,20 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         return config == null || config.getGrupoFlujo() == null
                 ? GrupoFlujoCaseta.SIN_CLASIFICAR
                 : config.getGrupoFlujo();
+    }
+
+    private int penalizacionOverflowTurno(
+            boolean habilitadaParaTurno
+    ) {
+        /*
+         * Solo se consideran casetas fuera del turno cuando la demanda
+         * supera la capacidad habilitada. La penalización alta hace que
+         * el solver use primero las casetas normales y abra una adicional
+         * únicamente cuando es necesario para evitar una observación.
+         */
+        return habilitadaParaTurno
+                ? 0
+                : 2_000;
     }
 
     private int penalizacionAleatoria() {
