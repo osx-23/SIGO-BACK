@@ -24,6 +24,24 @@ public interface UbicacionUseCase {
             Boolean permiteTurnoB,
             Boolean permiteTurnoC
     ) {
+        public Command(
+                Long plazaId,
+                String codigo,
+                String nombre,
+                String tipo,
+                Integer orden
+        ) {
+            this(
+                    plazaId,
+                    codigo,
+                    nombre,
+                    tipo,
+                    orden,
+                    Boolean.TRUE,
+                    Boolean.TRUE,
+                    Boolean.TRUE
+            );
+        }
     }
 
     record Ubicacion(
