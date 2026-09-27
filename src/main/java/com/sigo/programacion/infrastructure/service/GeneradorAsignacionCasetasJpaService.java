@@ -609,10 +609,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             asignacionPorDiaAgente,
                             asignacionPorDiaTurnoAgente,
                             flujoEstricto,
-                            contarOverflow(
-                                    actuales.values(),
-                                    turno.getEstado()
-                            ),
                             maxOverflowTurno
                     );
 
@@ -723,7 +719,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<String, Long> asignacionPorDiaAgente,
             Map<String, Long> asignacionPorDiaTurnoAgente,
             boolean flujoEstricto,
-            int overflowUsadas,
             int maxOverflowTurno
     ) {
         /*
@@ -1001,6 +996,10 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             asignacionPorDiaAgente,
                             asignacionPorDiaTurnoAgente,
                             flujoEstricto,
+                            contarOverflow(
+                                    actuales.values(),
+                                    turno.getEstado()
+                            ),
                             maxOverflowTurno
                     );
 
@@ -1182,6 +1181,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<String, Long> asignacionPorDiaAgente,
             Map<String, Long> asignacionPorDiaTurnoAgente,
             boolean flujoEstricto,
+            int overflowUsadas,
             int maxOverflowTurno
     ) {
         Long trabajadorId =
