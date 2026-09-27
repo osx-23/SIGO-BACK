@@ -172,7 +172,10 @@ public class DistribucionController {
                 request.codigo(),
                 request.nombre(),
                 request.tipo(),
-                request.orden()
+                request.orden(),
+                request.permiteTurnoA(),
+                request.permiteTurnoB(),
+                request.permiteTurnoC()
         );
     }
 
@@ -187,7 +190,10 @@ public class DistribucionController {
                 ubicacion.tipo(),
                 ubicacion.viaId(),
                 ubicacion.activo(),
-                ubicacion.orden()
+                ubicacion.orden(),
+                ubicacion.permiteTurnoA(),
+                ubicacion.permiteTurnoB(),
+                ubicacion.permiteTurnoC()
         );
     }
 
