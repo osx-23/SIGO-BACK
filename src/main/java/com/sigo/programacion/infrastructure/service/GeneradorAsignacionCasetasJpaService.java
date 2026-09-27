@@ -1379,11 +1379,27 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             configCaseta
                     );
 
-            if (flujoEstricto
-                    && !turnoC
-                    && grupo != GrupoFlujoCaseta.SIN_CLASIFICAR
-                    && grupoDiaAnterior != GrupoFlujoCaseta.SIN_CLASIFICAR
-                    && grupo == grupoDiaAnterior) {
+            EstadoProgramacion turnoDiaAnterior =
+                    turnoAnterior(
+                            trabajadorId,
+                            turno.getFecha().minusDays(1),
+                            asignacionPorDiaTurnoAgente
+                    );
+
+            boolean excepcionEntradaTurnoC =
+                    turno.getEstado() == EstadoProgramacion.C
+                            && (
+                                    turnoDiaAnterior == EstadoProgramacion.A
+                                            || turnoDiaAnterior == EstadoProgramacion.B
+                            );
+
+            boolean mismoFlujoConsecutivo =
+                    grupo != GrupoFlujoCaseta.SIN_CLASIFICAR
+                            && grupoDiaAnterior != GrupoFlujoCaseta.SIN_CLASIFICAR
+                            && grupo == grupoDiaAnterior;
+
+            if (mismoFlujoConsecutivo
+                    && !excepcionEntradaTurnoC) {
                 continue;
             }
 
@@ -1751,6 +1767,31 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         }
 
         return turnoC ? -10 : -45;
+    }
+
+    private EstadoProgramacion turnoAnterior(
+            Long trabajadorId,
+            LocalDate fecha,
+            Map<String, Long> asignacionPorDiaTurnoAgente
+    ) {
+        for (EstadoProgramacion estado :
+                List.of(
+                        EstadoProgramacion.A,
+                        EstadoProgramacion.B,
+                        EstadoProgramacion.C
+                )) {
+            if (asignacionPorDiaTurnoAgente.containsKey(
+                    keyDiaTurno(
+                            trabajadorId,
+                            fecha,
+                            estado
+                    )
+            )) {
+                return estado;
+            }
+        }
+
+        return null;
     }
 
     private GrupoFlujoCaseta grupoDeUbicacion(
