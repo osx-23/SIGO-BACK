@@ -443,57 +443,85 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             );
         }
 
-        IntentoGeneracion primerIntento =
-                ejecutarIntento(
-                        turnos,
-                        Set.of(),
-                        ubicaciones,
-                        configCaseta,
-                        restricciones,
-                        config,
-                        conteoMes,
-                        conteoSemana,
-                        flujo,
-                        asignacionPorDiaAgente,
-                        asignacionPorDiaTurnoAgente,
-                        true
-                );
-
-        Set<Long> trabajadoresConConflicto =
-                primerIntento.conflictos()
-                        .stream()
-                        .map(Conflicto::trabajadorId)
-                        .collect(Collectors.toSet());
-
         /*
-         * Segunda pasada:
-         * volvemos a generar desde cero, pero dentro de cada fecha/turno
-         * damos prioridad a los agentes que quedaron sin caseta en la
-         * primera pasada. Así se reduce el efecto del orden greedy.
+         * Multi-start Greedy + Backtracking.
+         *
+         * Cada ejecución completa puede encontrar una combinación distinta
+         * porque el solver mezcla agentes/candidatos. Repetimos el periodo
+         * completo y conservamos la mejor solución global, no solo la mejor
+         * solución local de cada día/turno.
+         *
+         * Objetivo lexicográfico:
+         * 1) cero observaciones siempre que exista una solución factible;
+         * 2) máxima cobertura de las casetas normales del turno;
+         * 3) mayor cantidad de asignaciones;
+         * 4) menor puntaje total.
          */
-        IntentoGeneracion segundoIntento =
-                ejecutarIntento(
-                        turnos,
-                        trabajadoresConConflicto,
-                        ubicaciones,
-                        configCaseta,
-                        restricciones,
-                        config,
-                        conteoMes,
-                        conteoSemana,
-                        flujo,
-                        asignacionPorDiaAgente,
-                        asignacionPorDiaTurnoAgente,
-                        false
-                );
+        IntentoGeneracion mejorIntento = null;
+        Set<Long> trabajadoresPrioritarios = Set.of();
 
-        IntentoGeneracion mejorIntento =
-                esMejorIntento(
-                        segundoIntento,
-                        primerIntento
-                )
-                        ? segundoIntento
-                        : primerIntento;
+        final int maxIntentos = 10;
+
+        for (int intento = 0;
+                intento < maxIntentos;
+                intento++) {
+            boolean flujoEstricto =
+                    intento < 2;
+
+            IntentoGeneracion candidato =
+                    ejecutarIntento(
+                            turnos,
+                            trabajadoresPrioritarios,
+                            ubicaciones,
+                            configCaseta,
+                            restricciones,
+                            config,
+                            conteoMes,
+                            conteoSemana,
+                            flujo,
+                            asignacionPorDiaAgente,
+                            asignacionPorDiaTurnoAgente,
+                            flujoEstricto
+                    );
+
+            if (mejorIntento == null
+                    || esMejorIntento(
+                            candidato,
+                            mejorIntento,
+                            turnos,
+                            ubicaciones
+                    )) {
+                mejorIntento =
+                        candidato;
+            }
+
+            if (candidato.conflictos().isEmpty()
+                    && deficitCoberturaNormal(
+                            candidato,
+                            turnos,
+                            ubicaciones
+                    ) == 0) {
+                mejorIntento =
+                        candidato;
+                break;
+            }
+
+            trabajadoresPrioritarios =
+                    candidato.conflictos()
+                            .stream()
+                            .map(
+                                    Conflicto::trabajadorId
+                            )
+                            .collect(
+                                    Collectors.toSet()
+                            );
+        }
+
+        if (mejorIntento == null) {
+            throw new ProgramacionValidationException(
+                    "No fue posible construir una propuesta de distribución"
+            );
+        }
 
         return new Propuesta(
                 plazaId,
@@ -747,8 +775,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         long maxNodos =
                 semillaGreedy.asignaciones().size()
                         == grupoTurno.size()
-                        ? 80_000L
-                        : 300_000L;
+                        ? 150_000L
+                        : 750_000L;
 
         BusquedaBacktracking busqueda =
                 new BusquedaBacktracking(
@@ -1498,12 +1526,34 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
     private boolean esMejorIntento(
             IntentoGeneracion candidato,
-            IntentoGeneracion actual
+            IntentoGeneracion actual,
+            List<ProgramacionTurno> turnos,
+            List<ProgramacionUbicacion> ubicaciones
     ) {
         if (candidato.conflictos().size()
                 != actual.conflictos().size()) {
             return candidato.conflictos().size()
                     < actual.conflictos().size();
+        }
+
+        int deficitCandidato =
+                deficitCoberturaNormal(
+                        candidato,
+                        turnos,
+                        ubicaciones
+                );
+
+        int deficitActual =
+                deficitCoberturaNormal(
+                        actual,
+                        turnos,
+                        ubicaciones
+                );
+
+        if (deficitCandidato
+                != deficitActual) {
+            return deficitCandidato
+                    < deficitActual;
         }
 
         if (candidato.asignaciones().size()
@@ -1517,6 +1567,130 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         ) < puntajeTotal(
                 actual.asignaciones()
         );
+    }
+
+    private int deficitCoberturaNormal(
+            IntentoGeneracion intento,
+            List<ProgramacionTurno> turnos,
+            List<ProgramacionUbicacion> ubicaciones
+    ) {
+        Map<Long, ProgramacionTurno> turnoPorId =
+                turnos.stream()
+                        .collect(
+                                Collectors.toMap(
+                                        ProgramacionTurno::getId,
+                                        Function.identity()
+                                )
+                        );
+
+        Map<Long, ProgramacionUbicacion> ubicacionPorId =
+                ubicaciones.stream()
+                        .collect(
+                                Collectors.toMap(
+                                        ProgramacionUbicacion::getId,
+                                        Function.identity()
+                                )
+                        );
+
+        Map<String, Integer> agentesPorGrupo =
+                new HashMap<>();
+
+        for (ProgramacionTurno turno :
+                turnos) {
+            agentesPorGrupo.merge(
+                    turno.getFecha()
+                            + "|"
+                            + turno.getEstado().name(),
+                    1,
+                    Integer::sum
+            );
+        }
+
+        Map<String, Set<Long>> casetasNormalesCubiertas =
+                new HashMap<>();
+
+        for (ItemPropuesta item :
+                intento.asignaciones()) {
+            ProgramacionTurno turno =
+                    turnoPorId.get(
+                            item.programacionTurnoId()
+                    );
+
+            ProgramacionUbicacion ubicacion =
+                    ubicacionPorId.get(
+                            item.ubicacionId()
+                    );
+
+            if (turno == null
+                    || ubicacion == null
+                    || !permiteTurno(
+                            ubicacion,
+                            turno.getEstado()
+                    )) {
+                continue;
+            }
+
+            String key =
+                    turno.getFecha()
+                            + "|"
+                            + turno.getEstado().name();
+
+            casetasNormalesCubiertas
+                    .computeIfAbsent(
+                            key,
+                            ignored -> new HashSet<>()
+                    )
+                    .add(
+                            ubicacion.getId()
+                    );
+        }
+
+        int deficit =
+                0;
+
+        for (Map.Entry<String, Integer> entry :
+                agentesPorGrupo.entrySet()) {
+            String[] partes =
+                    entry.getKey()
+                            .split("\\|");
+
+            EstadoProgramacion estado =
+                    EstadoProgramacion.valueOf(
+                            partes[1]
+                    );
+
+            int casetasNormales =
+                    (int) ubicaciones.stream()
+                            .filter(item ->
+                                    permiteTurno(
+                                            item,
+                                            estado
+                                    )
+                            )
+                            .count();
+
+            int objetivo =
+                    Math.min(
+                            entry.getValue(),
+                            casetasNormales
+                    );
+
+            int cubiertas =
+                    casetasNormalesCubiertas
+                            .getOrDefault(
+                                    entry.getKey(),
+                                    Set.of()
+                            )
+                            .size();
+
+            deficit +=
+                    Math.max(
+                            0,
+                            objetivo - cubiertas
+                    );
+        }
+
+        return deficit;
     }
 
     private int puntajeTotal(
