@@ -476,10 +476,36 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
                 GrupoFlujoCaseta grupo = grupo(especifica);
 
+                boolean turnoC =
+                        turno.getEstado() == EstadoProgramacion.C;
+
+                Long ubicacionDiaAnterior =
+                        asignacionPorDiaAgente.get(
+                                keyDia(
+                                        trabajadorId,
+                                        turno.getFecha().minusDays(1)
+                                )
+                        );
+
+                GrupoFlujoCaseta grupoDiaAnterior =
+                        grupoDeUbicacion(
+                                ubicacionDiaAnterior,
+                                configCaseta
+                        );
+
                 int score =
-                        (vecesMes * 20)
-                                + (vecesSemana * 25)
-                                + (consecutivos * 80)
+                        penalizacionRepeticionCaseta(
+                                vecesMes,
+                                vecesSemana,
+                                consecutivos,
+                                turnoC
+                        )
+                                + penalizacionAlternanciaFlujo(
+                                        grupoDiaAnterior,
+                                        grupo,
+                                        turnoC,
+                                        config.balancearFlujo()
+                                )
                                 + penalizacionFlujo(
                                         flujo,
                                         trabajadorId,
@@ -678,6 +704,68 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         return config == null || config.getGrupoFlujo() == null
                 ? GrupoFlujoCaseta.SIN_CLASIFICAR
                 : config.getGrupoFlujo();
+    }
+
+    private int penalizacionRepeticionCaseta(
+            int vecesMes,
+            int vecesSemana,
+            int consecutivos,
+            boolean turnoC
+    ) {
+        if (turnoC) {
+            return (vecesMes * 18)
+                    + (vecesSemana * 30)
+                    + (consecutivos * 90);
+        }
+
+        int penalizacionSemana =
+                vecesSemana == 0
+                        ? 0
+                        : 260 + ((vecesSemana - 1) * 120);
+
+        int penalizacionMes =
+                vecesMes * 35;
+
+        int penalizacionConsecutiva =
+                consecutivos * 180;
+
+        return penalizacionSemana
+                + penalizacionMes
+                + penalizacionConsecutiva;
+    }
+
+    private int penalizacionAlternanciaFlujo(
+            GrupoFlujoCaseta grupoAnterior,
+            GrupoFlujoCaseta grupoActual,
+            boolean turnoC,
+            boolean balancear
+    ) {
+        if (!balancear
+                || grupoAnterior == GrupoFlujoCaseta.SIN_CLASIFICAR
+                || grupoActual == GrupoFlujoCaseta.SIN_CLASIFICAR) {
+            return 0;
+        }
+
+        if (grupoAnterior == grupoActual) {
+            return turnoC ? 25 : 140;
+        }
+
+        return turnoC ? -10 : -45;
+    }
+
+    private GrupoFlujoCaseta grupoDeUbicacion(
+            Long ubicacionId,
+            Map<Long, ConfiguracionCaseta> configCaseta
+    ) {
+        if (ubicacionId == null) {
+            return GrupoFlujoCaseta.SIN_CLASIFICAR;
+        }
+
+        return grupo(
+                configCaseta.get(
+                        ubicacionId
+                )
+        );
     }
 
     private int penalizacionFlujo(
