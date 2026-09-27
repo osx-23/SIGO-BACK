@@ -453,6 +453,15 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     continue;
                 }
 
+                if (!viasCompletasAntesDeAuxiliar(
+                        ubicacion,
+                        ubicaciones,
+                        turno.getEstado(),
+                        ocupadasTurno
+                )) {
+                    continue;
+                }
+
                 if (!cumpleOrdenSecuencial(
                         ubicacion,
                         ubicaciones,
@@ -615,6 +624,23 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             case C -> Boolean.TRUE.equals(ubicacion.getPermiteTurnoC());
             default -> false;
         };
+    }
+
+    private boolean viasCompletasAntesDeAuxiliar(
+            ProgramacionUbicacion candidata,
+            List<ProgramacionUbicacion> ubicaciones,
+            EstadoProgramacion turno,
+            Set<Long> ocupadas
+    ) {
+        if (candidata.getTipo() != TipoUbicacion.AUXILIAR) {
+            return true;
+        }
+
+        return ubicaciones.stream()
+                .filter(item -> item.getTipo() == TipoUbicacion.VIA)
+                .filter(item -> Boolean.TRUE.equals(item.getActivo()))
+                .filter(item -> permiteTurno(item, turno))
+                .allMatch(item -> ocupadas.contains(item.getId()));
     }
 
     private boolean cumpleOrdenSecuencial(
