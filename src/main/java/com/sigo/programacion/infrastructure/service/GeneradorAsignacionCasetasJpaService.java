@@ -1373,6 +1373,19 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                     )
                             );
 
+            ProgramacionUbicacion ubicacionAnterior =
+                    ubicacionPorId(
+                            ubicaciones,
+                            ubicacionDiaAnterior
+                    );
+
+            if (esApoyoOAuxiliar(ubicacion)
+                    && esApoyoOAuxiliar(
+                            ubicacionAnterior
+                    )) {
+                continue;
+            }
+
             GrupoFlujoCaseta grupoDiaAnterior =
                     grupoDeUbicacion(
                             ubicacionDiaAnterior,
@@ -1540,6 +1553,35 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             List<ItemPropuesta> asignaciones,
             List<Conflicto> conflictos
     ) {
+    }
+
+    private ProgramacionUbicacion ubicacionPorId(
+            List<ProgramacionUbicacion> ubicaciones,
+            Long ubicacionId
+    ) {
+        if (ubicacionId == null) {
+            return null;
+        }
+
+        return ubicaciones.stream()
+                .filter(item ->
+                        Objects.equals(
+                                item.getId(),
+                                ubicacionId
+                        )
+                )
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean esApoyoOAuxiliar(
+            ProgramacionUbicacion ubicacion
+    ) {
+        return ubicacion != null
+                && (
+                        ubicacion.getTipo() == TipoUbicacion.AUXILIAR
+                                || ubicacion.getTipo() == TipoUbicacion.APOYO
+                );
     }
 
     private boolean permiteTurno(

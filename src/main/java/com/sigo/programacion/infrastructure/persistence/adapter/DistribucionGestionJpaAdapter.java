@@ -439,6 +439,9 @@ public class DistribucionGestionJpaAdapter
         Map<String, Long> asignacionPorAgenteDiaTurno =
                 new HashMap<>();
 
+        Map<String, ProgramacionUbicacion> ubicacionPorAgenteDia =
+                new HashMap<>();
+
         for (DistribucionPersonal existente :
                 distribucionRepository.findMes(
                         plazaId,
@@ -464,6 +467,13 @@ public class DistribucionGestionJpaAdapter
                     ),
                     existente.getUbicacion().getId()
             );
+
+            ubicacionPorAgenteDia.put(
+                    claveAgenteDia(
+                            turnoExistente
+                    ),
+                    existente.getUbicacion()
+            );
         }
 
         for (ItemResuelto resuelto : resueltos) {
@@ -473,6 +483,37 @@ public class DistribucionGestionJpaAdapter
                     ),
                     resuelto.ubicacion().getId()
             );
+
+            ubicacionPorAgenteDia.put(
+                    claveAgenteDia(
+                            resuelto.programacion()
+                    ),
+                    resuelto.ubicacion()
+            );
+        }
+
+        for (ItemResuelto resuelto : resueltos) {
+            ProgramacionTurno actual =
+                    resuelto.programacion();
+
+            ProgramacionUbicacion ubicacionAnterior =
+                    ubicacionPorAgenteDia.get(
+                            actual.getTrabajador().getId()
+                                    + "|"
+                                    + actual.getFecha().minusDays(1)
+                    );
+
+            if (esApoyoOAuxiliar(
+                    resuelto.ubicacion()
+            ) && esApoyoOAuxiliar(
+                    ubicacionAnterior
+            )) {
+                throw bad(
+                        "El agente "
+                                + actual.getTrabajador().getNombreCompleto()
+                                + " no puede estar dos días seguidos en una ubicación de tipo APOYO o AUXILIAR"
+                );
+            }
         }
 
         for (ItemResuelto resuelto : resueltos) {
@@ -643,6 +684,24 @@ public class DistribucionGestionJpaAdapter
         return programacion.getFecha()
                 + "|"
                 + programacion.getEstado().name();
+    }
+
+    private String claveAgenteDia(
+            ProgramacionTurno programacion
+    ) {
+        return programacion.getTrabajador().getId()
+                + "|"
+                + programacion.getFecha();
+    }
+
+    private boolean esApoyoOAuxiliar(
+            ProgramacionUbicacion ubicacion
+    ) {
+        return ubicacion != null
+                && (
+                        ubicacion.getTipo() == TipoUbicacion.AUXILIAR
+                                || ubicacion.getTipo() == TipoUbicacion.APOYO
+                );
     }
 
     private String claveAgenteDiaTurno(
