@@ -443,40 +443,182 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             );
         }
 
-        List<ItemPropuesta> asignaciones = new ArrayList<>();
-        List<Conflicto> conflictos = new ArrayList<>();
-        Map<String, Set<Long>> ocupadasPorFechaTurno = new HashMap<>();
+        IntentoGeneracion primerIntento =
+                ejecutarIntento(
+                        turnos,
+                        Set.of(),
+                        ubicaciones,
+                        configCaseta,
+                        restricciones,
+                        config,
+                        conteoMes,
+                        conteoSemana,
+                        flujo,
+                        asignacionPorDiaAgente,
+                        asignacionPorDiaTurnoAgente
+                );
+
+        Set<Long> trabajadoresConConflicto =
+                primerIntento.conflictos()
+                        .stream()
+                        .map(Conflicto::trabajadorId)
+                        .collect(Collectors.toSet());
+
+        /*
+         * Segunda pasada:
+         * volvemos a generar desde cero, pero dentro de cada fecha/turno
+         * damos prioridad a los agentes que quedaron sin caseta en la
+         * primera pasada. Así se reduce el efecto del orden greedy.
+         */
+        IntentoGeneracion segundoIntento =
+                ejecutarIntento(
+                        turnos,
+                        trabajadoresConConflicto,
+                        ubicaciones,
+                        configCaseta,
+                        restricciones,
+                        config,
+                        conteoMes,
+                        conteoSemana,
+                        flujo,
+                        asignacionPorDiaAgente,
+                        asignacionPorDiaTurnoAgente
+                );
+
+        IntentoGeneracion mejorIntento =
+                esMejorIntento(
+                        segundoIntento,
+                        primerIntento
+                )
+                        ? segundoIntento
+                        : primerIntento;
+
+        return new Propuesta(
+                plazaId,
+                anio,
+                mes,
+                periodo,
+                semana,
+                desde,
+                hasta,
+                mejorIntento.asignaciones(),
+                mejorIntento.conflictos()
+        );
+    }
+
+    private IntentoGeneracion ejecutarIntento(
+            List<ProgramacionTurno> turnosBase,
+            Set<Long> trabajadoresPrioritarios,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta,
+            Set<String> restricciones,
+            Configuracion config,
+            Map<String, Integer> conteoMesBase,
+            Map<String, Integer> conteoSemanaBase,
+            Map<Long, int[]> flujoBase,
+            Map<String, Long> asignacionPorDiaAgenteBase,
+            Map<String, Long> asignacionPorDiaTurnoAgenteBase
+    ) {
+        Map<String, Integer> conteoMes =
+                new HashMap<>(conteoMesBase);
+
+        Map<String, Integer> conteoSemana =
+                new HashMap<>(conteoSemanaBase);
+
+        Map<Long, int[]> flujo =
+                copiarFlujo(flujoBase);
+
+        Map<String, Long> asignacionPorDiaAgente =
+                new HashMap<>(
+                        asignacionPorDiaAgenteBase
+                );
+
+        Map<String, Long> asignacionPorDiaTurnoAgente =
+                new HashMap<>(
+                        asignacionPorDiaTurnoAgenteBase
+                );
+
+        List<ProgramacionTurno> turnos =
+                new ArrayList<>(turnosBase);
+
+        Collections.shuffle(turnos);
+
+        turnos.sort(
+                Comparator.comparing(
+                                ProgramacionTurno::getFecha
+                        )
+                        .thenComparing(
+                                item ->
+                                        item.getEstado()
+                                                .name()
+                        )
+                        .thenComparingInt(
+                                item ->
+                                        trabajadoresPrioritarios.contains(
+                                                item.getTrabajador().getId()
+                                        )
+                                                ? 0
+                                                : 1
+                        )
+        );
+
+        List<ItemPropuesta> asignaciones =
+                new ArrayList<>();
+
+        List<Conflicto> conflictos =
+                new ArrayList<>();
+
+        Map<String, Set<Long>> ocupadasPorFechaTurno =
+                new HashMap<>();
 
         for (ProgramacionTurno turno : turnos) {
-            Long trabajadorId = turno.getTrabajador().getId();
-            int semanaActual = semanaDelMes(turno.getFecha());
+            Long trabajadorId =
+                    turno.getTrabajador().getId();
+
+            int semanaActual =
+                    semanaDelMes(turno.getFecha());
 
             Candidate mejor = null;
 
             List<ProgramacionUbicacion> ubicacionesAleatorias =
                     new ArrayList<>(ubicaciones);
 
-            Collections.shuffle(ubicacionesAleatorias);
+            Collections.shuffle(
+                    ubicacionesAleatorias
+            );
 
-            for (ProgramacionUbicacion ubicacion : ubicacionesAleatorias) {
-                if (!permiteTurno(ubicacion, turno.getEstado())) {
+            for (ProgramacionUbicacion ubicacion :
+                    ubicacionesAleatorias) {
+                if (!permiteTurno(
+                        ubicacion,
+                        turno.getEstado()
+                )) {
                     continue;
                 }
 
-                if (restricciones.contains(key(trabajadorId, ubicacion.getId()))) {
+                if (restricciones.contains(
+                        key(
+                                trabajadorId,
+                                ubicacion.getId()
+                        )
+                )) {
                     continue;
                 }
 
                 ConfiguracionCaseta especifica =
-                        configCaseta.get(ubicacion.getId());
+                        configCaseta.get(
+                                ubicacion.getId()
+                        );
 
                 int maxSemana =
-                        especifica != null && especifica.getMaxSemana() != null
+                        especifica != null
+                                && especifica.getMaxSemana() != null
                                 ? especifica.getMaxSemana()
                                 : config.maxMismaCasetaSemana();
 
                 int maxMes =
-                        especifica != null && especifica.getMaxMes() != null
+                        especifica != null
+                                && especifica.getMaxMes() != null
                                 ? especifica.getMaxMes()
                                 : config.maxMismaCasetaMes();
 
@@ -492,24 +634,33 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
                 int vecesMes =
                         conteoMes.getOrDefault(
-                                key(trabajadorId, ubicacion.getId()),
+                                key(
+                                        trabajadorId,
+                                        ubicacion.getId()
+                                ),
                                 0
                         );
 
-                if (vecesSemana >= maxSemana || vecesMes >= maxMes) {
+                if (vecesSemana >= maxSemana
+                        || vecesMes >= maxMes) {
                     continue;
                 }
 
                 String ocupacionKey =
-                        turno.getFecha() + "|" + turno.getEstado().name();
+                        turno.getFecha()
+                                + "|"
+                                + turno.getEstado().name();
 
                 Set<Long> ocupadasTurno =
-                        ocupadasPorFechaTurno.getOrDefault(
-                                ocupacionKey,
-                                Set.of()
-                        );
+                        ocupadasPorFechaTurno
+                                .getOrDefault(
+                                        ocupacionKey,
+                                        Set.of()
+                                );
 
-                if (ocupadasTurno.contains(ubicacion.getId())) {
+                if (ocupadasTurno.contains(
+                        ubicacion.getId()
+                )) {
                     continue;
                 }
 
@@ -539,18 +690,21 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                 asignacionPorDiaAgente
                         );
 
-                if (consecutivos >= config.maxConsecutivos()) {
+                if (consecutivos
+                        >= config.maxConsecutivos()) {
                     continue;
                 }
 
                 Long ubicacionMismoTurnoDiaAnterior =
-                        asignacionPorDiaTurnoAgente.get(
-                                keyDiaTurno(
-                                        trabajadorId,
-                                        turno.getFecha().minusDays(1),
-                                        turno.getEstado()
-                                )
-                        );
+                        asignacionPorDiaTurnoAgente
+                                .get(
+                                        keyDiaTurno(
+                                                trabajadorId,
+                                                turno.getFecha()
+                                                        .minusDays(1),
+                                                turno.getEstado()
+                                        )
+                                );
 
                 if (Objects.equals(
                         ubicacionMismoTurnoDiaAnterior,
@@ -560,31 +714,29 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 }
 
                 boolean turnoC =
-                        turno.getEstado() == EstadoProgramacion.C;
+                        turno.getEstado()
+                                == EstadoProgramacion.C;
 
-                /*
-                 * En A/B una caseta usada por el agente en cualquiera de
-                 * los dos días anteriores entra en enfriamiento. Así,
-                 * al volver al mismo grupo de flujo (alto/bajo), se elige
-                 * otra caseta del grupo en vez de reciclar la anterior.
-                 * C queda más flexible porque tiene menos casetas abiertas.
-                 */
                 if (!turnoC) {
                     Long ubicacionAyer =
-                            asignacionPorDiaAgente.get(
-                                    keyDia(
-                                            trabajadorId,
-                                            turno.getFecha().minusDays(1)
-                                    )
-                            );
+                            asignacionPorDiaAgente
+                                    .get(
+                                            keyDia(
+                                                    trabajadorId,
+                                                    turno.getFecha()
+                                                            .minusDays(1)
+                                            )
+                                    );
 
                     Long ubicacionAnteayer =
-                            asignacionPorDiaAgente.get(
-                                    keyDia(
-                                            trabajadorId,
-                                            turno.getFecha().minusDays(2)
-                                    )
-                            );
+                            asignacionPorDiaAgente
+                                    .get(
+                                            keyDia(
+                                                    trabajadorId,
+                                                    turno.getFecha()
+                                                            .minusDays(2)
+                                            )
+                                    );
 
                     if (Objects.equals(
                             ubicacionAyer,
@@ -597,15 +749,18 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     }
                 }
 
-                GrupoFlujoCaseta grupo = grupo(especifica);
+                GrupoFlujoCaseta grupo =
+                        grupo(especifica);
 
                 Long ubicacionDiaAnterior =
-                        asignacionPorDiaAgente.get(
-                                keyDia(
-                                        trabajadorId,
-                                        turno.getFecha().minusDays(1)
-                                )
-                        );
+                        asignacionPorDiaAgente
+                                .get(
+                                        keyDia(
+                                                trabajadorId,
+                                                turno.getFecha()
+                                                        .minusDays(1)
+                                        )
+                                );
 
                 GrupoFlujoCaseta grupoDiaAnterior =
                         grupoDeUbicacion(
@@ -632,7 +787,10 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                         grupo,
                                         config.balancearFlujo()
                                 )
-                                + Math.max(0, ubicacion.getOrden())
+                                + Math.max(
+                                        0,
+                                        ubicacion.getOrden()
+                                )
                                 + penalizacionAleatoria();
 
                 Candidate candidate =
@@ -643,7 +801,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         );
 
                 if (mejor == null
-                        || candidate.score() < mejor.score()) {
+                        || candidate.score()
+                        < mejor.score()) {
                     mejor = candidate;
                 }
             }
@@ -653,25 +812,31 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         new Conflicto(
                                 turno.getId(),
                                 trabajadorId,
-                                turno.getTrabajador().getNombreCompleto(),
+                                turno.getTrabajador()
+                                        .getNombreCompleto(),
                                 turno.getFecha(),
-                                turno.getEstado().name(),
+                                turno.getEstado()
+                                        .name(),
                                 "No existe una caseta válida con las restricciones y máximos actuales"
                         )
                 );
                 continue;
             }
 
-            ProgramacionUbicacion ubicacion = mejor.ubicacion();
+            ProgramacionUbicacion ubicacion =
+                    mejor.ubicacion();
 
             asignaciones.add(
                     new ItemPropuesta(
                             turno.getId(),
                             trabajadorId,
-                            turno.getTrabajador().getCodigo(),
-                            turno.getTrabajador().getNombreCompleto(),
+                            turno.getTrabajador()
+                                    .getCodigo(),
+                            turno.getTrabajador()
+                                    .getNombreCompleto(),
                             turno.getFecha(),
-                            turno.getEstado().name(),
+                            turno.getEstado()
+                                    .name(),
                             ubicacion.getId(),
                             ubicacion.getCodigo(),
                             ubicacion.getNombre(),
@@ -680,7 +845,14 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     )
             );
 
-            incrementar(conteoMes, key(trabajadorId, ubicacion.getId()));
+            incrementar(
+                    conteoMes,
+                    key(
+                            trabajadorId,
+                            ubicacion.getId()
+                    )
+            );
+
             incrementar(
                     conteoSemana,
                     keySemana(
@@ -689,6 +861,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             semanaActual
                     )
             );
+
             incrementarFlujo(
                     flujo,
                     trabajadorId,
@@ -696,7 +869,10 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             );
 
             asignacionPorDiaAgente.put(
-                    keyDia(trabajadorId, turno.getFecha()),
+                    keyDia(
+                            trabajadorId,
+                            turno.getFecha()
+                    ),
                     ubicacion.getId()
             );
 
@@ -711,23 +887,81 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
             ocupadasPorFechaTurno
                     .computeIfAbsent(
-                            turno.getFecha() + "|" + turno.getEstado().name(),
-                            ignored -> new HashSet<>()
+                            turno.getFecha()
+                                    + "|"
+                                    + turno.getEstado()
+                                            .name(),
+                            ignored ->
+                                    new HashSet<>()
                     )
-                    .add(ubicacion.getId());
+                    .add(
+                            ubicacion.getId()
+                    );
         }
 
-        return new Propuesta(
-                plazaId,
-                anio,
-                mes,
-                periodo,
-                semana,
-                desde,
-                hasta,
+        return new IntentoGeneracion(
                 asignaciones,
                 conflictos
         );
+    }
+
+    private boolean esMejorIntento(
+            IntentoGeneracion candidato,
+            IntentoGeneracion actual
+    ) {
+        if (candidato.conflictos().size()
+                != actual.conflictos().size()) {
+            return candidato.conflictos().size()
+                    < actual.conflictos().size();
+        }
+
+        if (candidato.asignaciones().size()
+                != actual.asignaciones().size()) {
+            return candidato.asignaciones().size()
+                    > actual.asignaciones().size();
+        }
+
+        return puntajeTotal(
+                candidato.asignaciones()
+        ) < puntajeTotal(
+                actual.asignaciones()
+        );
+    }
+
+    private int puntajeTotal(
+            List<ItemPropuesta> asignaciones
+    ) {
+        return asignaciones.stream()
+                .mapToInt(
+                        ItemPropuesta::puntaje
+                )
+                .sum();
+    }
+
+    private Map<Long, int[]> copiarFlujo(
+            Map<Long, int[]> original
+    ) {
+        Map<Long, int[]> copia =
+                new HashMap<>();
+
+        original.forEach(
+                (trabajadorId, valores) ->
+                        copia.put(
+                                trabajadorId,
+                                Arrays.copyOf(
+                                        valores,
+                                        valores.length
+                                )
+                        )
+        );
+
+        return copia;
+    }
+
+    private record IntentoGeneracion(
+            List<ItemPropuesta> asignaciones,
+            List<Conflicto> conflictos
+    ) {
     }
 
     private boolean permiteTurno(
