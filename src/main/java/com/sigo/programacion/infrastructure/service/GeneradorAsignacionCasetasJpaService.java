@@ -702,11 +702,46 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<String, Long> asignacionPorDiaTurnoAgente,
             boolean flujoEstricto
     ) {
-        BusquedaBacktracking busqueda =
-                new BusquedaBacktracking(
-                        250_000
+        /*
+         * Fase 1: Greedy inteligente.
+         * Construimos rápidamente una solución inicial usando MRV
+         * (agente con menos opciones primero) y el menor puntaje.
+         * Esa solución sirve como incumbent para podar el backtracking.
+         */
+        ResultadoGrupoBacktracking semillaGreedy =
+                construirSemillaGreedy(
+                        grupoTurno,
+                        trabajadoresPrioritarios,
+                        ubicaciones,
+                        configCaseta,
+                        restricciones,
+                        config,
+                        conteoMes,
+                        conteoSemana,
+                        flujo,
+                        asignacionPorDiaAgente,
+                        asignacionPorDiaTurnoAgente,
+                        flujoEstricto
                 );
 
+        long maxNodos =
+                semillaGreedy.asignaciones().size()
+                        == grupoTurno.size()
+                        ? 80_000L
+                        : 300_000L;
+
+        BusquedaBacktracking busqueda =
+                new BusquedaBacktracking(
+                        maxNodos,
+                        semillaGreedy
+                );
+
+        /*
+         * Fase 2: Backtracking.
+         * Parte desde cero, pero ya conoce una solución greedy válida.
+         * Solo conserva ramas capaces de igualar o superar la cobertura
+         * de esa solución y busca reducir observaciones/puntaje.
+         */
         List<ProgramacionTurno> pendientes =
                 new ArrayList<>(grupoTurno);
 
@@ -734,6 +769,131 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         return new ResultadoGrupoBacktracking(
                 busqueda.mejorAsignacion,
                 busqueda.mejorPuntaje
+        );
+    }
+
+    private ResultadoGrupoBacktracking construirSemillaGreedy(
+            List<ProgramacionTurno> grupoTurno,
+            Set<Long> trabajadoresPrioritarios,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta,
+            Set<String> restricciones,
+            Configuracion config,
+            Map<String, Integer> conteoMes,
+            Map<String, Integer> conteoSemana,
+            Map<Long, int[]> flujo,
+            Map<String, Long> asignacionPorDiaAgente,
+            Map<String, Long> asignacionPorDiaTurnoAgente,
+            boolean flujoEstricto
+    ) {
+        List<ProgramacionTurno> pendientes =
+                new ArrayList<>(grupoTurno);
+
+        Collections.shuffle(pendientes);
+
+        Map<Long, Candidate> asignadas =
+                new HashMap<>();
+
+        Set<Long> ocupadas =
+                new HashSet<>();
+
+        int puntaje =
+                0;
+
+        while (!pendientes.isEmpty()) {
+            ProgramacionTurno seleccionado =
+                    null;
+
+            List<Candidate> opcionesSeleccionado =
+                    List.of();
+
+            int menorCantidad =
+                    Integer.MAX_VALUE;
+
+            for (ProgramacionTurno turno :
+                    pendientes) {
+                List<Candidate> opciones =
+                        candidatosValidos(
+                                turno,
+                                ocupadas,
+                                ubicaciones,
+                                configCaseta,
+                                restricciones,
+                                config,
+                                conteoMes,
+                                conteoSemana,
+                                flujo,
+                                asignacionPorDiaAgente,
+                                asignacionPorDiaTurnoAgente,
+                                flujoEstricto
+                        );
+
+                if (opciones.isEmpty()) {
+                    continue;
+                }
+
+                boolean prioritario =
+                        trabajadoresPrioritarios.contains(
+                                turno.getTrabajador().getId()
+                        );
+
+                boolean seleccionadoPrioritario =
+                        seleccionado != null
+                                && trabajadoresPrioritarios.contains(
+                                        seleccionado
+                                                .getTrabajador()
+                                                .getId()
+                                );
+
+                if (seleccionado == null
+                        || opciones.size()
+                        < menorCantidad
+                        || opciones.size()
+                        == menorCantidad
+                        && prioritario
+                        && !seleccionadoPrioritario) {
+                    seleccionado =
+                            turno;
+                    opcionesSeleccionado =
+                            opciones;
+                    menorCantidad =
+                            opciones.size();
+                }
+            }
+
+            if (seleccionado == null) {
+                break;
+            }
+
+            Candidate mejor =
+                    opcionesSeleccionado.stream()
+                            .min(
+                                    Comparator.comparingInt(
+                                            Candidate::score
+                                    )
+                            )
+                            .orElseThrow();
+
+            asignadas.put(
+                    seleccionado.getId(),
+                    mejor
+            );
+
+            ocupadas.add(
+                    mejor.ubicacion().getId()
+            );
+
+            puntaje +=
+                    mejor.score();
+
+            pendientes.remove(
+                    seleccionado
+            );
+        }
+
+        return new ResultadoGrupoBacktracking(
+                asignadas,
+                puntaje
         );
     }
 
@@ -914,14 +1074,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     seleccionado.getId()
             );
 
-            if (busqueda.mejorAsignados
-                    == grupoObjetivoMaximo(
-                            pendientes,
-                            actuales
-                    )
-                    && busqueda.mejorPuntaje == 0) {
-                break;
-            }
         }
 
         /*
@@ -947,14 +1099,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 flujoEstricto,
                 busqueda
         );
-    }
-
-    private int grupoObjetivoMaximo(
-            List<ProgramacionTurno> pendientes,
-            Map<Long, Candidate> actuales
-    ) {
-        return actuales.size()
-                + pendientes.size();
     }
 
     private void actualizarMejorBacktracking(
@@ -1245,17 +1389,27 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
         private final long maxNodos;
         private long nodos = 0;
-        private int mejorAsignados = -1;
-        private int mejorPuntaje =
-                Integer.MAX_VALUE;
-        private Map<Long, Candidate> mejorAsignacion =
-                new HashMap<>();
+        private int mejorAsignados;
+        private int mejorPuntaje;
+        private Map<Long, Candidate> mejorAsignacion;
 
         private BusquedaBacktracking(
-                long maxNodos
+                long maxNodos,
+                ResultadoGrupoBacktracking semillaGreedy
         ) {
             this.maxNodos =
                     maxNodos;
+
+            this.mejorAsignacion =
+                    new HashMap<>(
+                            semillaGreedy.asignaciones()
+                    );
+
+            this.mejorAsignados =
+                    this.mejorAsignacion.size();
+
+            this.mejorPuntaje =
+                    semillaGreedy.puntaje();
         }
     }
 
