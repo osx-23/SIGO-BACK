@@ -321,19 +321,28 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         .collect(Collectors.toSet());
 
         List<ProgramacionTurno> turnos =
-                turnoRepository.findMes(plazaId, desde, hasta)
-                        .stream()
-                        .filter(item ->
-                                item.getEstado() == EstadoProgramacion.A
-                                        || item.getEstado() == EstadoProgramacion.B
-                                        || item.getEstado() == EstadoProgramacion.C
-                        )
-                        .sorted(
-                                Comparator.comparing(ProgramacionTurno::getFecha)
-                                        .thenComparing(item -> item.getEstado().name())
-                                        .thenComparing(item -> item.getTrabajador().getNombreCompleto())
-                        )
-                        .toList();
+                new ArrayList<>(
+                        turnoRepository.findMes(plazaId, desde, hasta)
+                                .stream()
+                                .filter(item ->
+                                        item.getEstado() == EstadoProgramacion.A
+                                                || item.getEstado() == EstadoProgramacion.B
+                                                || item.getEstado() == EstadoProgramacion.C
+                                )
+                                .toList()
+                );
+
+        /*
+         * Primero mezclamos para que, dentro del mismo día y turno,
+         * los agentes no se procesen siempre en el mismo orden.
+         * Luego ordenamos solo por fecha y turno. El sort es estable,
+         * así que mantiene el orden aleatorio entre agentes equivalentes.
+         */
+        Collections.shuffle(turnos);
+        turnos.sort(
+                Comparator.comparing(ProgramacionTurno::getFecha)
+                        .thenComparing(item -> item.getEstado().name())
+        );
 
         if (turnos.isEmpty()) {
             throw new ProgramacionValidationException(
@@ -398,7 +407,12 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
             Candidate mejor = null;
 
-            for (ProgramacionUbicacion ubicacion : ubicaciones) {
+            List<ProgramacionUbicacion> ubicacionesAleatorias =
+                    new ArrayList<>(ubicaciones);
+
+            Collections.shuffle(ubicacionesAleatorias);
+
+            for (ProgramacionUbicacion ubicacion : ubicacionesAleatorias) {
                 if (!permiteTurno(ubicacion, turno.getEstado())) {
                     continue;
                 }
@@ -521,7 +535,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                         grupo,
                                         config.balancearFlujo()
                                 )
-                                + Math.max(0, ubicacion.getOrden());
+                                + Math.max(0, ubicacion.getOrden())
+                                + penalizacionAleatoria();
 
                 Candidate candidate =
                         new Candidate(
@@ -531,12 +546,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         );
 
                 if (mejor == null
-                        || candidate.score() < mejor.score()
-                        || candidate.score() == mejor.score()
-                        && candidate.ubicacion().getCodigo()
-                        .compareToIgnoreCase(
-                                mejor.ubicacion().getCodigo()
-                        ) < 0) {
+                        || candidate.score() < mejor.score()) {
                     mejor = candidate;
                 }
             }
@@ -730,6 +740,17 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         return config == null || config.getGrupoFlujo() == null
                 ? GrupoFlujoCaseta.SIN_CLASIFICAR
                 : config.getGrupoFlujo();
+    }
+
+    private int penalizacionAleatoria() {
+        /*
+         * Ruido pequeño para evitar patrones deterministas.
+         * No supera las penalizaciones fuertes de reglas de negocio,
+         * pero sí cambia la elección entre opciones similares.
+         */
+        return java.util.concurrent.ThreadLocalRandom
+                .current()
+                .nextInt(0, 26);
     }
 
     private int penalizacionRepeticionCaseta(
