@@ -1,5 +1,6 @@
 package com.sigo.programacion.infrastructure.persistence.entity;
 
+import com.sigo.programacion.domain.GrupoFlujoCaseta;
 import jakarta.persistence.*;
 import lombok.*;
 
