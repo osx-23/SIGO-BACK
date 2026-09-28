@@ -1584,9 +1584,29 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         Long trabajadorId =
                 turno.getTrabajador().getId();
 
+        boolean turnoC =
+                turno.getEstado()
+                        == EstadoProgramacion.C;
+
         int semanaActual =
                 semanaDelMes(
                         turno.getFecha()
+                );
+
+        Long ubicacionDiaAnterior =
+                asignacionPorDiaAgente
+                        .get(
+                                keyDia(
+                                        trabajadorId,
+                                        turno.getFecha()
+                                                .minusDays(1)
+                                )
+                        );
+
+        ProgramacionUbicacion ubicacionAnterior =
+                ubicacionPorId(
+                        ubicaciones,
+                        ubicacionDiaAnterior
                 );
 
         List<ProgramacionUbicacion> ubicacionesAleatorias =
@@ -1607,7 +1627,35 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             turno.getEstado()
                     );
 
-            if (!habilitadaParaTurno
+            /*
+             * TURNO C:
+             * - Solo trabajamos con VÍAS.
+             * - 102/103/104 (o las vías configuradas para C) se consumen
+             *   primero.
+             * - Una vía no habilitada para C recién puede entrar cuando
+             *   todas las vías habilitadas ya están ocupadas.
+             * - El overflow nunca puede superar el déficit real del turno.
+             */
+            if (turnoC) {
+                if (ubicacion.getTipo()
+                        != TipoUbicacion.VIA) {
+                    continue;
+                }
+
+                if (!habilitadaParaTurno
+                        && (
+                                maxOverflowTurno <= 0
+                                        || overflowUsadas
+                                        >= maxOverflowTurno
+                                        || !viasHabilitadasCompletas(
+                                                ubicaciones,
+                                                turno.getEstado(),
+                                                ocupadasTurno
+                                        )
+                        )) {
+                    continue;
+                }
+            } else if (!habilitadaParaTurno
                     && (
                             maxOverflowTurno <= 0
                                     || overflowUsadas
@@ -1667,8 +1715,16 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             0
                     );
 
-            if (vecesSemana >= maxSemana
-                    || vecesMes >= maxMes) {
+            /*
+             * En C hay pocas vías y todas son del mismo flujo. Los topes
+             * semana/mes no deben dejar personas sin caseta; la rotación
+             * se resuelve evitando la vía del día anterior y usando azar.
+             */
+            if (!turnoC
+                    && (
+                            vecesSemana >= maxSemana
+                                    || vecesMes >= maxMes
+                    )) {
                 continue;
             }
 
@@ -1698,7 +1754,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             asignacionPorDiaAgente
                     );
 
-            if (consecutivos
+            if (!turnoC
+                    && consecutivos
                     >= config.maxConsecutivos()) {
                 continue;
             }
@@ -1721,20 +1778,23 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 continue;
             }
 
-            boolean turnoC =
-                    turno.getEstado()
-                            == EstadoProgramacion.C;
+            /*
+             * Regla específica de C: aunque ayer haya sido A, B o C,
+             * no se repite exactamente la misma VÍA al día siguiente.
+             */
+            if (turnoC
+                    && ubicacion.getTipo()
+                    == TipoUbicacion.VIA
+                    && Objects.equals(
+                            ubicacionDiaAnterior,
+                            ubicacion.getId()
+                    )) {
+                continue;
+            }
 
             if (!turnoC) {
                 Long ubicacionAyer =
-                        asignacionPorDiaAgente
-                                .get(
-                                        keyDia(
-                                                trabajadorId,
-                                                turno.getFecha()
-                                                        .minusDays(1)
-                                        )
-                                );
+                        ubicacionDiaAnterior;
 
                 Long ubicacionAnteayer =
                         asignacionPorDiaAgente
@@ -1757,25 +1817,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 }
             }
 
-            GrupoFlujoCaseta grupo =
-                    grupo(especifica);
-
-            Long ubicacionDiaAnterior =
-                    asignacionPorDiaAgente
-                            .get(
-                                    keyDia(
-                                            trabajadorId,
-                                            turno.getFecha()
-                                                    .minusDays(1)
-                                    )
-                            );
-
-            ProgramacionUbicacion ubicacionAnterior =
-                    ubicacionPorId(
-                            ubicaciones,
-                            ubicacionDiaAnterior
-                    );
-
             if (esApoyoOAuxiliar(ubicacion)
                     && esApoyoOAuxiliar(
                             ubicacionAnterior
@@ -1783,69 +1824,81 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 continue;
             }
 
+            GrupoFlujoCaseta grupo =
+                    grupo(especifica);
+
             GrupoFlujoCaseta grupoDiaAnterior =
                     grupoDeUbicacion(
                             ubicacionDiaAnterior,
                             configCaseta
                     );
 
-            EstadoProgramacion turnoDiaAnterior =
-                    turnoAnterior(
-                            trabajadorId,
-                            turno.getFecha().minusDays(1),
-                            asignacionPorDiaTurnoAgente
-                    );
+            /*
+             * En C no existe alternancia real de flujo en P4:
+             * las vías habilitadas son todas ALTO_FLUJO.
+             * Por eso C no se bloquea por ALTO/ALTO; se rota por vía.
+             */
+            if (!turnoC) {
+                boolean mismoFlujoConsecutivo =
+                        grupo != GrupoFlujoCaseta.SIN_CLASIFICAR
+                                && grupoDiaAnterior
+                                != GrupoFlujoCaseta.SIN_CLASIFICAR
+                                && grupo == grupoDiaAnterior;
 
-            boolean excepcionEntradaTurnoC =
-                    turno.getEstado() == EstadoProgramacion.C
-                            && (
-                                    turnoDiaAnterior == EstadoProgramacion.A
-                                            || turnoDiaAnterior == EstadoProgramacion.B
-                            );
-
-            boolean mismoFlujoConsecutivo =
-                    grupo != GrupoFlujoCaseta.SIN_CLASIFICAR
-                            && grupoDiaAnterior != GrupoFlujoCaseta.SIN_CLASIFICAR
-                            && grupo == grupoDiaAnterior;
-
-            if (mismoFlujoConsecutivo
-                    && !excepcionEntradaTurnoC) {
-                continue;
+                if (mismoFlujoConsecutivo) {
+                    continue;
+                }
             }
 
-            int score =
-                    penalizacionRepeticionCaseta(
-                            vecesMes,
-                            vecesSemana,
-                            consecutivos,
-                            turnoC
-                    )
-                            + penalizacionAlternanciaFlujo(
-                                    grupoDiaAnterior,
-                                    grupo,
-                                    turnoC,
-                                    config.balancearFlujo()
-                            )
-                            + penalizacionRecuperacionFlujo(
-                                    flujoEstricto,
-                                    turnoC,
-                                    grupoDiaAnterior,
-                                    grupo
-                            )
-                            + penalizacionFlujo(
-                                    flujo,
-                                    trabajadorId,
-                                    grupo,
-                                    config.balancearFlujo()
-                            )
-                            + Math.max(
-                                    0,
-                                    ubicacion.getOrden()
-                            )
-                            + penalizacionOverflowTurno(
-                                    habilitadaParaTurno
-                            )
-                            + penalizacionAleatoria();
+            int score;
+
+            if (turnoC) {
+                /*
+                 * C se reparte aleatoriamente entre las vías válidas.
+                 * El overflow mantiene una penalización alta, pero además
+                 * está bloqueado hasta ocupar primero todas las vías
+                 * habilitadas para C.
+                 */
+                score =
+                        penalizacionOverflowTurno(
+                                habilitadaParaTurno
+                        )
+                                + penalizacionAleatoria();
+            } else {
+                score =
+                        penalizacionRepeticionCaseta(
+                                vecesMes,
+                                vecesSemana,
+                                consecutivos,
+                                false
+                        )
+                                + penalizacionAlternanciaFlujo(
+                                        grupoDiaAnterior,
+                                        grupo,
+                                        false,
+                                        config.balancearFlujo()
+                                )
+                                + penalizacionRecuperacionFlujo(
+                                        flujoEstricto,
+                                        false,
+                                        grupoDiaAnterior,
+                                        grupo
+                                )
+                                + penalizacionFlujo(
+                                        flujo,
+                                        trabajadorId,
+                                        grupo,
+                                        config.balancearFlujo()
+                                )
+                                + Math.max(
+                                        0,
+                                        ubicacion.getOrden()
+                                )
+                                + penalizacionOverflowTurno(
+                                        habilitadaParaTurno
+                                )
+                                + penalizacionAleatoria();
+            }
 
             candidatos.add(
                     new Candidate(
@@ -1857,6 +1910,34 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         }
 
         return candidatos;
+    }
+
+    private boolean viasHabilitadasCompletas(
+            List<ProgramacionUbicacion> ubicaciones,
+            EstadoProgramacion turno,
+            Set<Long> ocupadas
+    ) {
+        return ubicaciones.stream()
+                .filter(item ->
+                        item.getTipo()
+                                == TipoUbicacion.VIA
+                )
+                .filter(item ->
+                        Boolean.TRUE.equals(
+                                item.getActivo()
+                        )
+                )
+                .filter(item ->
+                        permiteTurno(
+                                item,
+                                turno
+                        )
+                )
+                .allMatch(item ->
+                        ocupadas.contains(
+                                item.getId()
+                        )
+                );
     }
 
     private static final class BusquedaBacktracking {
