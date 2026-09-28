@@ -1834,18 +1834,47 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     );
 
             /*
-             * En C no existe alternancia real de flujo en P4:
-             * las vías habilitadas son todas ALTO_FLUJO.
-             * Por eso C no se bloquea por ALTO/ALTO; se rota por vía.
+             * Alternancia de flujo para A/B:
+             *
+             * 1) En la pasada estricta primero intentamos SIEMPRE cambiar
+             *    de flujo respecto al día anterior.
+             * 2) Si esa combinación no es posible, la pasada flexible
+             *    puede repetir el mismo flujo una sola vez.
+             * 3) Nunca permitimos tres días consecutivos con el mismo flujo.
+             *
+             * Ejemplo válido:
+             * BAJO -> ALTO -> ALTO -> BAJO
+             *
+             * Turno C conserva su tratamiento especial porque sus vías
+             * operativas pueden pertenecer todas al mismo flujo; en C la
+             * rotación se controla por vía, no por grupo ALTO/BAJO.
              */
-            if (!turnoC) {
-                boolean mismoFlujoConsecutivo =
-                        grupo != GrupoFlujoCaseta.SIN_CLASIFICAR
-                                && grupoDiaAnterior
-                                != GrupoFlujoCaseta.SIN_CLASIFICAR
-                                && grupo == grupoDiaAnterior;
+            if (!turnoC
+                    && grupo
+                    != GrupoFlujoCaseta.SIN_CLASIFICAR
+                    && grupoDiaAnterior
+                    != GrupoFlujoCaseta.SIN_CLASIFICAR
+                    && grupo == grupoDiaAnterior) {
+                GrupoFlujoCaseta grupoHaceDosDias =
+                        grupoDeUbicacion(
+                                asignacionPorDiaAgente
+                                        .get(
+                                                keyDia(
+                                                        trabajadorId,
+                                                        turno.getFecha()
+                                                                .minusDays(2)
+                                                )
+                                        ),
+                                configCaseta
+                        );
 
-                if (mismoFlujoConsecutivo) {
+                boolean seriaTercerDiaMismoFlujo =
+                        grupoHaceDosDias
+                                != GrupoFlujoCaseta.SIN_CLASIFICAR
+                                && grupoHaceDosDias == grupo;
+
+                if (flujoEstricto
+                        || seriaTercerDiaMismoFlujo) {
                     continue;
                 }
             }
