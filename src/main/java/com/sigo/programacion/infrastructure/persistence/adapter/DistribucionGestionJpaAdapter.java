@@ -392,9 +392,7 @@ public class DistribucionGestionJpaAdapter
                             demanda - capacidad
                     );
 
-            if (estado
-                    == EstadoProgramacion.C
-                    && entry.getValue() > 0) {
+            if (entry.getValue() > 0) {
                 Set<Long> asignadas =
                         ubicacionesFinalesPorTurno
                                 .getOrDefault(
@@ -402,27 +400,48 @@ public class DistribucionGestionJpaAdapter
                                         Set.of()
                                 );
 
-                boolean viasCHabilitadasCompletas =
-                        ubicacionesActivas.stream()
-                                .filter(item ->
-                                        item.getTipo()
-                                                == TipoUbicacion.VIA
-                                )
-                                .filter(item ->
-                                        permiteTurno(
-                                                item,
-                                                EstadoProgramacion.C
-                                        )
-                                )
-                                .allMatch(item ->
-                                        asignadas.contains(
-                                                item.getId()
-                                        )
-                                );
+                boolean habilitadasCompletas;
 
-                if (!viasCHabilitadasCompletas) {
+                if (estado
+                        == EstadoProgramacion.C) {
+                    habilitadasCompletas =
+                            ubicacionesActivas.stream()
+                                    .filter(item ->
+                                            item.getTipo()
+                                                    == TipoUbicacion.VIA
+                                    )
+                                    .filter(item ->
+                                            permiteTurno(
+                                                    item,
+                                                    EstadoProgramacion.C
+                                            )
+                                    )
+                                    .allMatch(item ->
+                                            asignadas.contains(
+                                                    item.getId()
+                                            )
+                                    );
+                } else {
+                    habilitadasCompletas =
+                            ubicacionesActivas.stream()
+                                    .filter(item ->
+                                            permiteTurno(
+                                                    item,
+                                                    estado
+                                            )
+                                    )
+                                    .allMatch(item ->
+                                            asignadas.contains(
+                                                    item.getId()
+                                            )
+                                    );
+                }
+
+                if (!habilitadasCompletas) {
                     throw bad(
-                            "En turno C primero deben ocuparse todas las vías habilitadas antes de usar una vía adicional"
+                            "Primero deben ocuparse todas las casetas habilitadas del turno "
+                                    + estado.name()
+                                    + " antes de usar una caseta adicional"
                     );
                 }
             }
