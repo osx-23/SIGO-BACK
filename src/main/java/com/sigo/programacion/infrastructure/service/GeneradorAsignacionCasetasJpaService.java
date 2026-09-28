@@ -651,11 +651,11 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         BusquedaPeriodo busqueda =
                 new BusquedaPeriodo(
                         flujoEstricto
-                                ? 350
-                                : 1_500,
+                                ? 1_200
+                                : 6_000,
                         flujoEstricto
-                                ? 900L
-                                : 3_500L
+                                ? 1_000L
+                                : 2_800L
                 );
 
         backtrackingPeriodo(
@@ -864,24 +864,34 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         );
 
         /*
-         * Fast path:
-         * los grupos que no participan en un conflicto usan una sola
-         * solución. Solo abrimos varias ramas donde aparece un agente
-         * que realmente quedó sin caseta en la pasada anterior.
+         * Conservamos diversidad controlada en TODOS los grupos.
+         *
+         * Antes los grupos sin conflictos previos generaban una sola
+         * solución. Eso convertía el "backtracking global" en una ruta
+         * casi greedy: cuando un día posterior quedaba sin caseta, no
+         * existía una alternativa anterior a la cual retroceder.
+         *
+         * Ahora mantenemos pocas variantes por grupo y aumentamos la
+         * diversidad solo donde ya detectamos trabajadores conflictivos.
+         * Así evitamos la explosión combinatoria pero permitimos reparar
+         * decisiones de días anteriores.
          */
-        int objetivoVariantes =
-                contieneTrabajadorPrioritario
-                        ? (
-                                grupoTurno.size() <= 4
-                                        ? 4
-                                        : 3
-                        )
-                        : 1;
+        int objetivoVariantes;
+
+        if (contieneTrabajadorPrioritario) {
+            objetivoVariantes =
+                    grupoTurno.size() <= 5
+                            ? 5
+                            : 4;
+        } else {
+            objetivoVariantes =
+                    grupoTurno.size() <= 5
+                            ? 3
+                            : 2;
+        }
 
         int maxIntentos =
-                objetivoVariantes == 1
-                        ? 1
-                        : objetivoVariantes * 2;
+                objetivoVariantes * 3;
 
         Map<String, ResultadoGrupoBacktracking> unicas =
                 new LinkedHashMap<>();
@@ -1218,13 +1228,14 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         }
 
         long maxNodos =
-                60_000L;
+                100_000L;
 
         BusquedaBacktracking busqueda =
                 new BusquedaBacktracking(
                         maxNodos,
-                        120L,
-                        semillaGreedy
+                        300L,
+                        semillaGreedy,
+                        grupoTurno.size()
                 );
 
         /*
@@ -1414,6 +1425,10 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             int maxOverflowTurno,
             BusquedaBacktracking busqueda
     ) {
+        if (busqueda.solucionCompleta) {
+            return;
+        }
+
         if (System.nanoTime()
                 >= busqueda.deadlineNanos) {
             actualizarMejorBacktracking(
@@ -1448,6 +1463,38 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             );
             return;
         }
+
+        /*
+         * Memoización del estado combinatorio.
+         *
+         * Para el resto del grupo, las opciones futuras dependen de:
+         * - qué trabajadores faltan;
+         * - qué casetas ya están ocupadas.
+         *
+         * Si llegamos al mismo estado con un puntaje igual o peor,
+         * esa rama está dominada y no aporta ninguna solución mejor.
+         */
+        String firmaEstado =
+                firmaEstadoBacktracking(
+                        pendientes,
+                        ocupadas
+                );
+
+        Integer mejorPuntajeEstado =
+                busqueda.mejorPuntajePorEstado
+                        .get(
+                                firmaEstado
+                        );
+
+        if (mejorPuntajeEstado != null
+                && mejorPuntajeEstado <= puntajeActual) {
+            return;
+        }
+
+        busqueda.mejorPuntajePorEstado.put(
+                firmaEstado,
+                puntajeActual
+        );
 
         ProgramacionTurno seleccionado = null;
         List<Candidate> opcionesSeleccionado =
@@ -1589,6 +1636,9 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     seleccionado.getId()
             );
 
+            if (busqueda.solucionCompleta) {
+                return;
+            }
         }
 
         /*
@@ -1647,6 +1697,54 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 new HashMap<>(
                         actuales
                 );
+
+        /*
+         * La prioridad principal del solver es completar el turno.
+         * Apenas encontramos una asignación para todos los agentes,
+         * detenemos el árbol local. Seguir buscando solo para reducir
+         * puntaje consumía la mayor parte del tiempo sin mejorar cobertura.
+         */
+        if (asignados
+                == busqueda.objetivoAsignados) {
+            busqueda.solucionCompleta =
+                    true;
+        }
+    }
+
+    private String firmaEstadoBacktracking(
+            List<ProgramacionTurno> pendientes,
+            Set<Long> ocupadas
+    ) {
+        String pendientesKey =
+                pendientes.stream()
+                        .map(
+                                ProgramacionTurno::getId
+                        )
+                        .sorted()
+                        .map(
+                                String::valueOf
+                        )
+                        .collect(
+                                Collectors.joining(
+                                        ","
+                                )
+                        );
+
+        String ocupadasKey =
+                ocupadas.stream()
+                        .sorted()
+                        .map(
+                                String::valueOf
+                        )
+                        .collect(
+                                Collectors.joining(
+                                        ","
+                                )
+                        );
+
+        return pendientesKey
+                + "#"
+                + ocupadasKey;
     }
 
     private List<Candidate> candidatosValidos(
@@ -2086,15 +2184,20 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
         private final long maxNodos;
         private final long deadlineNanos;
+        private final int objetivoAsignados;
+        private final Map<String, Integer> mejorPuntajePorEstado =
+                new HashMap<>();
         private long nodos = 0;
         private int mejorAsignados;
         private int mejorPuntaje;
         private Map<Long, Candidate> mejorAsignacion;
+        private boolean solucionCompleta = false;
 
         private BusquedaBacktracking(
                 long maxNodos,
                 long maxMillis,
-                ResultadoGrupoBacktracking semillaGreedy
+                ResultadoGrupoBacktracking semillaGreedy,
+                int objetivoAsignados
         ) {
             this.maxNodos =
                     maxNodos;
@@ -2106,6 +2209,9 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                             * 1_000_000L
                             );
 
+            this.objetivoAsignados =
+                    objetivoAsignados;
+
             this.mejorAsignacion =
                     new HashMap<>(
                             semillaGreedy.asignaciones()
@@ -2116,6 +2222,10 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
             this.mejorPuntaje =
                     semillaGreedy.puntaje();
+
+            this.solucionCompleta =
+                    this.mejorAsignados
+                            == objetivoAsignados;
         }
     }
 
