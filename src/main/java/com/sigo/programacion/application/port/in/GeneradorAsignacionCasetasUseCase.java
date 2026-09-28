@@ -64,6 +64,19 @@ public interface GeneradorAsignacionCasetasUseCase {
             String mensaje
     ) {}
 
+    record Calidad(
+            double puntuacion,
+            double coberturaPct,
+            double rotacionFlujoPct,
+            double rotacionTipoPct,
+            double rotacionCasetaPct,
+            int repeticionesTipo,
+            int repeticionesExactas,
+            int duplicidades,
+            int restriccionesVioladas,
+            int solucionesEvaluadas
+    ) {}
+
     record Propuesta(
             Long plazaId,
             int anio,
@@ -73,7 +86,8 @@ public interface GeneradorAsignacionCasetasUseCase {
             LocalDate desde,
             LocalDate hasta,
             List<ItemPropuesta> asignaciones,
-            List<Conflicto> conflictos
+            List<Conflicto> conflictos,
+            Calidad calidad
     ) {}
 
     Configuracion obtenerConfiguracion(Long plazaId);
