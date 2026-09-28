@@ -465,6 +465,12 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         for (int intento = 0;
                 intento < maxIntentos;
                 intento++) {
+            /*
+             * Primera pasada: respeta todas las preferencias de rotación.
+             * Segunda pasada: mantiene las reglas estructurales (flujo,
+             * jerarquía, no duplicidad), pero permite superar topes
+             * históricos de semana/mes para no dejar personal sin caseta.
+             */
             boolean flujoEstricto =
                     intento == 0;
 
@@ -1860,6 +1866,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
              *    ninguna VÍA registrada libre.
              * 4) Los AUXILIARES se habilitan secuencialmente por "orden":
              *    AUX 1 -> AUX 2 -> AUX 3...
+             * 5) APOYO (incluido APPMOVIL) recién se habilita cuando
+             *    TODOS los auxiliares activos ya están ocupados.
              *
              * El número de orden NO participa para VIA ni APOYO. Las VÍAS
              * continúan evaluándose aleatoriamente.
@@ -1907,6 +1915,20 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     == TipoUbicacion.AUXILIAR
                     && !auxiliaresPreviosCompletos(
                             ubicacion,
+                            ubicaciones,
+                            ocupadasTurno
+                    )) {
+                continue;
+            }
+
+            /*
+             * APOYO es el último nivel de la jerarquía.
+             * No puede entrar APPMOVIL ni ningún otro APOYO mientras
+             * exista un AUXILIAR activo sin ocupar.
+             */
+            if (ubicacion.getTipo()
+                    == TipoUbicacion.APOYO
+                    && !todosLosAuxiliaresCompletos(
                             ubicaciones,
                             ocupadasTurno
                     )) {
@@ -1970,6 +1992,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
              * se resuelve evitando la vía del día anterior y usando azar.
              */
             if (!turnoC
+                    && flujoEstricto
                     && (
                             vecesSemana >= maxSemana
                                     || vecesMes >= maxMes
@@ -1986,6 +2009,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     );
 
             if (!turnoC
+                    && flujoEstricto
                     && consecutivos
                     >= config.maxConsecutivos()) {
                 continue;
@@ -2023,7 +2047,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 continue;
             }
 
-            if (!turnoC) {
+            if (!turnoC
+                    && flujoEstricto) {
                 Long ubicacionAyer =
                         ubicacionDiaAnterior;
 
@@ -2589,6 +2614,27 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
                     return orden < ordenCandidata;
                 })
+                .allMatch(item ->
+                        ocupadas.contains(
+                                item.getId()
+                        )
+                );
+    }
+
+    private boolean todosLosAuxiliaresCompletos(
+            List<ProgramacionUbicacion> ubicaciones,
+            Set<Long> ocupadas
+    ) {
+        return ubicaciones.stream()
+                .filter(item ->
+                        Boolean.TRUE.equals(
+                                item.getActivo()
+                        )
+                )
+                .filter(item ->
+                        item.getTipo()
+                                == TipoUbicacion.AUXILIAR
+                )
                 .allMatch(item ->
                         ocupadas.contains(
                                 item.getId()
