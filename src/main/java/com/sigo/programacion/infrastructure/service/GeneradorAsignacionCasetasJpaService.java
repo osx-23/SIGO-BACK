@@ -1744,6 +1744,11 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             maxOverflowTurno <= 0
                                     || overflowUsadas
                                     >= maxOverflowTurno
+                                    || !ubicacionesHabilitadasCompletas(
+                                            ubicaciones,
+                                            turno.getEstado(),
+                                            ocupadasTurno
+                                    )
                     )) {
                 continue;
             }
@@ -2023,6 +2028,30 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         }
 
         return candidatos;
+    }
+
+    private boolean ubicacionesHabilitadasCompletas(
+            List<ProgramacionUbicacion> ubicaciones,
+            EstadoProgramacion turno,
+            Set<Long> ocupadas
+    ) {
+        return ubicaciones.stream()
+                .filter(item ->
+                        Boolean.TRUE.equals(
+                                item.getActivo()
+                        )
+                )
+                .filter(item ->
+                        permiteTurno(
+                                item,
+                                turno
+                        )
+                )
+                .allMatch(item ->
+                        ocupadas.contains(
+                                item.getId()
+                        )
+                );
     }
 
     private boolean viasHabilitadasCompletas(
