@@ -6,6 +6,7 @@ import com.sigo.personal.infrastructure.persistence.repository.PlazaRepository;
 import com.sigo.personal.infrastructure.persistence.repository.TrabajadorRepository;
 import com.sigo.programacion.application.port.in.GeneradorAsignacionCasetasUseCase;
 import com.sigo.programacion.application.port.in.GeneradorAsignacionCasetasUseCase.CasetaConfig;
+import com.sigo.programacion.application.port.in.GeneradorAsignacionCasetasUseCase.Calidad;
 import com.sigo.programacion.application.port.in.GeneradorAsignacionCasetasUseCase.Configuracion;
 import com.sigo.programacion.application.port.in.GeneradorAsignacionCasetasUseCase.Conflicto;
 import com.sigo.programacion.application.port.in.GeneradorAsignacionCasetasUseCase.ItemPropuesta;
@@ -535,33 +536,19 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         }
 
         /*
-         * Una vez conseguida la mejor cobertura, hacemos una segunda
-         * optimización local. Esta fase NO cambia el flujo asignado ni
-         * la cantidad de ubicaciones ocupadas: únicamente intercambia
-         * VIA/AUXILIAR entre agentes del mismo día, turno y flujo cuando
-         * con ello mejora la rotación individual.
+         * Optimizamos la mejor solución encontrada y, cuando ya existe
+         * cobertura completa, probamos dos arranques estrictos adicionales.
+         * Son intentos cortos: aportan diversidad aleatoria sin triplicar
+         * el costo de las fases flexible y de recuperación.
          */
-        mejorIntento =
-                repararRotacionMismoFlujo(
-                        mejorIntento,
-                        turnos,
-                        ubicaciones,
-                        configCaseta,
-                        restricciones,
-                        asignacionPorDiaAgente
-                );
+        List<IntentoGeneracion> solucionesCalidad =
+                new ArrayList<>();
 
-        /*
-         * Segunda optimización:
-         * - intercambia casetas del mismo tipo/flujo para evitar repetir
-         *   exactamente 101/105, 102/103/104, AUX1/AUX2/AUX3;
-         * - en A/B también puede intercambiar ALTO <-> BAJO cuando el
-         *   resultado global de ambos agentes mejora;
-         * - conserva el mismo conjunto de casetas ocupadas por turno,
-         *   por lo que no altera cobertura ni jerarquía.
-         */
-        mejorIntento =
-                repararIntercambiosGlobales(
+        Set<String> firmasCalidad =
+                new HashSet<>();
+
+        IntentoGeneracion optimizadaBase =
+                optimizarIntentoPostGeneracion(
                         mejorIntento,
                         turnos,
                         ubicaciones,
@@ -569,6 +556,124 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         restricciones,
                         config,
                         asignacionPorDiaAgente
+                );
+
+        solucionesCalidad.add(
+                optimizadaBase
+        );
+
+        firmasCalidad.add(
+                firmaIntento(
+                        optimizadaBase
+                )
+        );
+
+        boolean baseCompleta =
+                optimizadaBase.conflictos()
+                        .isEmpty()
+                        && deficitCoberturaNormal(
+                                optimizadaBase,
+                                turnos,
+                                ubicaciones
+                        ) == 0;
+
+        if (baseCompleta) {
+            final int arranquesCalidadExtra =
+                    2;
+
+            for (int inicio = 0;
+                    inicio < arranquesCalidadExtra;
+                    inicio++) {
+                IntentoGeneracion alternativo =
+                        ejecutarIntento(
+                                turnos,
+                                Set.of(),
+                                ubicaciones,
+                                configCaseta,
+                                restricciones,
+                                config,
+                                conteoMes,
+                                conteoSemana,
+                                flujo,
+                                asignacionPorDiaAgente,
+                                asignacionPorDiaTurnoAgente,
+                                true,
+                                false
+                        );
+
+                if (!alternativo.conflictos()
+                        .isEmpty()
+                        || deficitCoberturaNormal(
+                                alternativo,
+                                turnos,
+                                ubicaciones
+                        ) != 0) {
+                    continue;
+                }
+
+                alternativo =
+                        optimizarIntentoPostGeneracion(
+                                alternativo,
+                                turnos,
+                                ubicaciones,
+                                configCaseta,
+                                restricciones,
+                                config,
+                                asignacionPorDiaAgente
+                        );
+
+                String firma =
+                        firmaIntento(
+                                alternativo
+                        );
+
+                if (firmasCalidad.add(
+                        firma
+                )) {
+                    solucionesCalidad.add(
+                            alternativo
+                    );
+                }
+            }
+        }
+
+        int solucionesEvaluadas =
+                solucionesCalidad.size();
+
+        IntentoGeneracion elegida =
+                null;
+
+        Calidad calidadElegida =
+                null;
+
+        for (IntentoGeneracion solucion :
+                solucionesCalidad) {
+            Calidad calidad =
+                    calcularCalidad(
+                            solucion,
+                            turnos,
+                            ubicaciones,
+                            configCaseta,
+                            restricciones,
+                            asignacionPorDiaAgente,
+                            solucionesEvaluadas
+                    );
+
+            if (elegida == null
+                    || esMejorCalidad(
+                            calidad,
+                            calidadElegida
+                    )) {
+                elegida =
+                        solucion;
+                calidadElegida =
+                        calidad;
+            }
+        }
+
+        mejorIntento =
+                Objects.requireNonNull(
+                        elegida
                 );
 
         validarSinDuplicidadDeCaseta(
@@ -589,8 +694,416 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 desde,
                 hasta,
                 mejorIntento.asignaciones(),
-                mejorIntento.conflictos()
+                mejorIntento.conflictos(),
+                calidadElegida
         );
+    }
+
+    private IntentoGeneracion optimizarIntentoPostGeneracion(
+            IntentoGeneracion intento,
+            List<ProgramacionTurno> turnos,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta,
+            Set<String> restricciones,
+            Configuracion config,
+            Map<String, Long> historialBase
+    ) {
+        IntentoGeneracion optimizado =
+                repararRotacionMismoFlujo(
+                        intento,
+                        turnos,
+                        ubicaciones,
+                        configCaseta,
+                        restricciones,
+                        historialBase
+                );
+
+        return repararIntercambiosGlobales(
+                optimizado,
+                turnos,
+                ubicaciones,
+                configCaseta,
+                restricciones,
+                config,
+                historialBase
+        );
+    }
+
+    private String firmaIntento(
+            IntentoGeneracion intento
+    ) {
+        return intento.asignaciones()
+                .stream()
+                .sorted(
+                        Comparator.comparing(
+                                ItemPropuesta::programacionTurnoId
+                        )
+                )
+                .map(item ->
+                        item.programacionTurnoId()
+                                + ":"
+                                + item.ubicacionId()
+                )
+                .collect(
+                        Collectors.joining(
+                                "|"
+                        )
+                );
+    }
+
+    private Calidad calcularCalidad(
+            IntentoGeneracion intento,
+            List<ProgramacionTurno> turnos,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta,
+            Set<String> restricciones,
+            Map<String, Long> historialBase,
+            int solucionesEvaluadas
+    ) {
+        Map<Long, ProgramacionTurno> turnoPorId =
+                turnos.stream()
+                        .collect(
+                                Collectors.toMap(
+                                        ProgramacionTurno::getId,
+                                        Function.identity()
+                                )
+                        );
+
+        List<ItemPropuesta> ordenadas =
+                intento.asignaciones()
+                        .stream()
+                        .sorted(
+                                Comparator.comparing(
+                                                ItemPropuesta::fecha
+                                        )
+                                        .thenComparing(
+                                                ItemPropuesta::turno
+                                        )
+                                        .thenComparing(
+                                                ItemPropuesta::trabajadorId
+                                        )
+                        )
+                        .toList();
+
+        Map<String, Long> historial =
+                new HashMap<>(
+                        historialBase
+                );
+
+        Set<String> ocupacion =
+                new HashSet<>();
+
+        int duplicidades =
+                0;
+
+        int restriccionesVioladas =
+                0;
+
+        int transicionesFlujo =
+                0;
+
+        int cambiosFlujo =
+                0;
+
+        int retornosTipo =
+                0;
+
+        int cambiosTipo =
+                0;
+
+        int repeticionesTipo =
+                0;
+
+        int transicionesCaseta =
+                0;
+
+        int cambiosCaseta =
+                0;
+
+        int repeticionesExactas =
+                0;
+
+        for (ItemPropuesta item :
+                ordenadas) {
+            ProgramacionTurno turno =
+                    turnoPorId.get(
+                            item.programacionTurnoId()
+                    );
+
+            ProgramacionUbicacion ubicacion =
+                    ubicacionPorId(
+                            ubicaciones,
+                            item.ubicacionId()
+                    );
+
+            if (turno == null
+                    || ubicacion == null) {
+                continue;
+            }
+
+            String keyOcupacion =
+                    item.fecha()
+                            + "|"
+                            + item.turno()
+                            + "|"
+                            + item.ubicacionId();
+
+            if (!ocupacion.add(
+                    keyOcupacion
+            )) {
+                duplicidades++;
+            }
+
+            if (restricciones.contains(
+                    key(
+                            item.trabajadorId(),
+                            item.ubicacionId()
+                    )
+            )) {
+                restriccionesVioladas++;
+            }
+
+            Long ayer =
+                    historial.get(
+                            keyDia(
+                                    item.trabajadorId(),
+                                    item.fecha()
+                                            .minusDays(1)
+                            )
+                    );
+
+            if (ayer != null) {
+                transicionesCaseta++;
+
+                if (Objects.equals(
+                        ayer,
+                        item.ubicacionId()
+                )) {
+                    repeticionesExactas++;
+                } else {
+                    cambiosCaseta++;
+                }
+            }
+
+            GrupoFlujoCaseta grupoActual =
+                    grupoDeUbicacion(
+                            item.ubicacionId(),
+                            configCaseta
+                    );
+
+            if (turno.getEstado()
+                    != EstadoProgramacion.C) {
+                GrupoFlujoCaseta grupoAyer =
+                        grupoDeUbicacion(
+                                ayer,
+                                configCaseta
+                        );
+
+                if (ayer != null
+                        && grupoActual
+                        != GrupoFlujoCaseta.SIN_CLASIFICAR
+                        && grupoAyer
+                        != GrupoFlujoCaseta.SIN_CLASIFICAR) {
+                    transicionesFlujo++;
+
+                    if (grupoActual
+                            != grupoAyer) {
+                        cambiosFlujo++;
+                    }
+                }
+
+                if (flujoPermiteAlternanciaTipo(
+                        grupoActual,
+                        turno.getEstado(),
+                        ubicaciones,
+                        configCaseta
+                )) {
+                    ProgramacionUbicacion ultimaMismoFlujo =
+                            ultimaUbicacionEnMismoFlujo(
+                                    item.trabajadorId(),
+                                    item.fecha(),
+                                    grupoActual,
+                                    historial,
+                                    ubicaciones,
+                                    configCaseta
+                            );
+
+                    if (ultimaMismoFlujo != null
+                            && esViaOAuxiliar(
+                                    ultimaMismoFlujo
+                            )
+                            && esViaOAuxiliar(
+                                    ubicacion
+                            )) {
+                        retornosTipo++;
+
+                        if (ultimaMismoFlujo.getTipo()
+                                != ubicacion.getTipo()) {
+                            cambiosTipo++;
+                        } else {
+                            repeticionesTipo++;
+                        }
+                    }
+                }
+            }
+
+            historial.put(
+                    keyDia(
+                            item.trabajadorId(),
+                            item.fecha()
+                    ),
+                    item.ubicacionId()
+            );
+        }
+
+        double cobertura =
+                porcentaje(
+                        intento.asignaciones()
+                                .size(),
+                        turnos.size()
+                );
+
+        double rotacionFlujo =
+                transicionesFlujo == 0
+                        ? 100.0
+                        : porcentaje(
+                                cambiosFlujo,
+                                transicionesFlujo
+                        );
+
+        double rotacionTipo =
+                retornosTipo == 0
+                        ? 100.0
+                        : porcentaje(
+                                cambiosTipo,
+                                retornosTipo
+                        );
+
+        double rotacionCaseta =
+                transicionesCaseta == 0
+                        ? 100.0
+                        : porcentaje(
+                                cambiosCaseta,
+                                transicionesCaseta
+                        );
+
+        double puntuacion =
+                (cobertura * 0.40)
+                        + (rotacionFlujo * 0.25)
+                        + (rotacionTipo * 0.25)
+                        + (rotacionCaseta * 0.10)
+                        - (
+                                duplicidades
+                                        * 25.0
+                        )
+                        - (
+                                restriccionesVioladas
+                                        * 25.0
+                        );
+
+        puntuacion =
+                Math.max(
+                        0.0,
+                        Math.min(
+                                100.0,
+                                puntuacion
+                        )
+                );
+
+        return new Calidad(
+                redondearUno(
+                        puntuacion
+                ),
+                redondearUno(
+                        cobertura
+                ),
+                redondearUno(
+                        rotacionFlujo
+                ),
+                redondearUno(
+                        rotacionTipo
+                ),
+                redondearUno(
+                        rotacionCaseta
+                ),
+                repeticionesTipo,
+                repeticionesExactas,
+                duplicidades,
+                restriccionesVioladas,
+                solucionesEvaluadas
+        );
+    }
+
+    private boolean esMejorCalidad(
+            Calidad candidato,
+            Calidad actual
+    ) {
+        if (actual == null) {
+            return true;
+        }
+
+        if (candidato.restriccionesVioladas()
+                != actual.restriccionesVioladas()) {
+            return candidato.restriccionesVioladas()
+                    < actual.restriccionesVioladas();
+        }
+
+        if (candidato.duplicidades()
+                != actual.duplicidades()) {
+            return candidato.duplicidades()
+                    < actual.duplicidades();
+        }
+
+        int cobertura =
+                Double.compare(
+                        candidato.coberturaPct(),
+                        actual.coberturaPct()
+                );
+
+        if (cobertura != 0) {
+            return cobertura > 0;
+        }
+
+        int puntuacion =
+                Double.compare(
+                        candidato.puntuacion(),
+                        actual.puntuacion()
+                );
+
+        if (puntuacion != 0) {
+            return puntuacion > 0;
+        }
+
+        if (candidato.repeticionesTipo()
+                != actual.repeticionesTipo()) {
+            return candidato.repeticionesTipo()
+                    < actual.repeticionesTipo();
+        }
+
+        return candidato.repeticionesExactas()
+                < actual.repeticionesExactas();
+    }
+
+    private double porcentaje(
+            int parte,
+            int total
+    ) {
+        if (total <= 0) {
+            return 100.0;
+        }
+
+        return (
+                parte
+                        * 100.0
+        ) / total;
+    }
+
+    private double redondearUno(
+            double valor
+    ) {
+        return Math.round(
+                valor * 10.0
+        ) / 10.0;
     }
 
     private IntentoGeneracion repararRotacionMismoFlujo(
