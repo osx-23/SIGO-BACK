@@ -704,16 +704,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             return;
         }
 
-        if (System.nanoTime()
-                >= busqueda.deadlineNanos) {
-            actualizarMejorBacktracking(
-                    actuales,
-                    puntajeActual,
-                    busqueda
-            );
-            return;
-        }
-
         if (++busqueda.nodos
                 > busqueda.maxNodos) {
             return;
@@ -1424,6 +1414,16 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             int maxOverflowTurno,
             BusquedaBacktracking busqueda
     ) {
+        if (System.nanoTime()
+                >= busqueda.deadlineNanos) {
+            actualizarMejorBacktracking(
+                    actuales,
+                    puntajeActual,
+                    busqueda
+            );
+            return;
+        }
+
         if (++busqueda.nodos
                 > busqueda.maxNodos) {
             actualizarMejorBacktracking(
