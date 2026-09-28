@@ -460,19 +460,23 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         IntentoGeneracion mejorIntento = null;
         Set<Long> trabajadoresPrioritarios = Set.of();
 
-        final int maxIntentos = 2;
+        final int maxIntentos = 3;
 
         for (int intento = 0;
                 intento < maxIntentos;
                 intento++) {
             /*
-             * Primera pasada: respeta todas las preferencias de rotación.
-             * Segunda pasada: mantiene las reglas estructurales (flujo,
-             * jerarquía, no duplicidad), pero permite superar topes
-             * históricos de semana/mes para no dejar personal sin caseta.
+             * Fase 1: asignación normal, respeta todas las preferencias.
+             * Fase 2: flexible, prioriza cobertura y permite excepciones.
+             * Fase 3: reparación de cobertura. Mantiene solo las reglas
+             * duras: no duplicidad, jerarquía, restricciones del agente
+             * y máximo dos días consecutivos del mismo flujo.
              */
             boolean flujoEstricto =
                     intento == 0;
+
+            boolean coberturaForzada =
+                    intento == 2;
 
             IntentoGeneracion candidato =
                     ejecutarIntento(
@@ -487,7 +491,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             flujo,
                             asignacionPorDiaAgente,
                             asignacionPorDiaTurnoAgente,
-                            flujoEstricto
+                            flujoEstricto,
+                            coberturaForzada
                     );
 
             if (mejorIntento == null
@@ -588,7 +593,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<Long, int[]> flujoBase,
             Map<String, Long> asignacionPorDiaAgenteBase,
             Map<String, Long> asignacionPorDiaTurnoAgenteBase,
-            boolean flujoEstricto
+            boolean flujoEstricto,
+            boolean coberturaForzada
     ) {
         List<ProgramacionTurno> turnos =
                 new ArrayList<>(turnosBase);
@@ -656,12 +662,20 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
          */
         BusquedaPeriodo busqueda =
                 new BusquedaPeriodo(
-                        flujoEstricto
-                                ? 1_200
-                                : 6_000,
-                        flujoEstricto
-                                ? 1_000L
-                                : 2_800L
+                        coberturaForzada
+                                ? 12_000
+                                : (
+                                        flujoEstricto
+                                                ? 1_200
+                                                : 6_000
+                                ),
+                        coberturaForzada
+                                ? 4_500L
+                                : (
+                                        flujoEstricto
+                                                ? 1_000L
+                                                : 2_800L
+                                )
                 );
 
         backtrackingPeriodo(
@@ -673,6 +687,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 restricciones,
                 config,
                 flujoEstricto,
+                coberturaForzada,
                 estadoInicial,
                 busqueda,
                 turnos
@@ -697,6 +712,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Set<String> restricciones,
             Configuracion config,
             boolean flujoEstricto,
+            boolean coberturaForzada,
             EstadoGeneracion estado,
             BusquedaPeriodo busqueda,
             List<ProgramacionTurno> turnos
@@ -818,6 +834,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         config,
                         estado,
                         flujoEstricto,
+                        coberturaForzada,
                         maxOverflowTurno
                 );
 
@@ -839,6 +856,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     restricciones,
                     config,
                     flujoEstricto,
+                    coberturaForzada,
                     siguiente,
                     busqueda,
                     turnos
@@ -859,6 +877,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Configuracion config,
             EstadoGeneracion estado,
             boolean flujoEstricto,
+            boolean coberturaForzada,
             int maxOverflowTurno
     ) {
         boolean contieneTrabajadorPrioritario =
@@ -921,6 +940,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             estado.asignacionPorDiaAgente,
                             estado.asignacionPorDiaTurnoAgente,
                             flujoEstricto,
+                            coberturaForzada,
                             maxOverflowTurno
                     );
 
@@ -1243,6 +1263,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<String, Long> asignacionPorDiaAgente,
             Map<String, Long> asignacionPorDiaTurnoAgente,
             boolean flujoEstricto,
+            boolean coberturaForzada,
             int maxOverflowTurno
     ) {
         /*
@@ -1265,6 +1286,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         asignacionPorDiaAgente,
                         asignacionPorDiaTurnoAgente,
                         flujoEstricto,
+                        coberturaForzada,
                         maxOverflowTurno
                 );
 
@@ -1279,7 +1301,9 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         BusquedaBacktracking busqueda =
                 new BusquedaBacktracking(
                         maxNodos,
-                        300L,
+                        coberturaForzada
+                                ? 650L
+                                : 300L,
                         semillaGreedy,
                         grupoTurno.size()
                 );
@@ -1311,6 +1335,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 asignacionPorDiaAgente,
                 asignacionPorDiaTurnoAgente,
                 flujoEstricto,
+                coberturaForzada,
                 maxOverflowTurno,
                 busqueda
         );
@@ -1334,6 +1359,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<String, Long> asignacionPorDiaAgente,
             Map<String, Long> asignacionPorDiaTurnoAgente,
             boolean flujoEstricto,
+            boolean coberturaForzada,
             int maxOverflowTurno
     ) {
         List<ProgramacionTurno> pendientes =
@@ -1376,6 +1402,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                 asignacionPorDiaAgente,
                                 asignacionPorDiaTurnoAgente,
                                 flujoEstricto,
+                                coberturaForzada,
                                 contarOverflow(
                                         asignadas.values(),
                                         turno.getEstado()
@@ -1468,6 +1495,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<String, Long> asignacionPorDiaAgente,
             Map<String, Long> asignacionPorDiaTurnoAgente,
             boolean flujoEstricto,
+            boolean coberturaForzada,
             int maxOverflowTurno,
             BusquedaBacktracking busqueda
     ) {
@@ -1570,6 +1598,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             asignacionPorDiaAgente,
                             asignacionPorDiaTurnoAgente,
                             flujoEstricto,
+                            coberturaForzada,
                             contarOverflow(
                                     actuales.values(),
                                     turno.getEstado()
@@ -1670,6 +1699,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     asignacionPorDiaAgente,
                     asignacionPorDiaTurnoAgente,
                     flujoEstricto,
+                    coberturaForzada,
                     maxOverflowTurno,
                     busqueda
             );
@@ -1708,6 +1738,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 asignacionPorDiaAgente,
                 asignacionPorDiaTurnoAgente,
                 flujoEstricto,
+                coberturaForzada,
                 maxOverflowTurno,
                 busqueda
         );
@@ -1806,6 +1837,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<String, Long> asignacionPorDiaAgente,
             Map<String, Long> asignacionPorDiaTurnoAgente,
             boolean flujoEstricto,
+            boolean coberturaForzada,
             int overflowUsadas,
             int maxOverflowTurno
     ) {
@@ -2026,10 +2058,11 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                     )
                             );
 
-            if (Objects.equals(
-                    ubicacionMismoTurnoDiaAnterior,
-                    ubicacion.getId()
-            )) {
+            if (!coberturaForzada
+                    && Objects.equals(
+                            ubicacionMismoTurnoDiaAnterior,
+                            ubicacion.getId()
+                    )) {
                 continue;
             }
 
@@ -2131,14 +2164,21 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 /*
                  * Excepción de alternancia:
                  * - La pasada estricta exige ALTO -> BAJO -> ALTO...
-                 * - La pasada flexible admite ALTO -> ALTO o BAJO -> BAJO.
+                 * - La pasada flexible admite ALTO -> ALTO o BAJO -> BAJO
+                 *   cambiando preferentemente el tipo de ubicación.
+                 * - La reparación puede repetir también el mismo tipo si
+                 *   es la única forma de asignar al agente.
                  * - Nunca se permiten tres días seguidos del mismo flujo.
-                 * - Si repetimos flujo, debe cambiar el tipo de ubicación:
-                 *   VIA/AUXILIAR/APOYO no puede ser igual al día anterior.
                  */
+                if (seriaTercerDiaMismoFlujo) {
+                    continue;
+                }
+
                 if (flujoEstricto
-                        || seriaTercerDiaMismoFlujo
-                        || repiteTipoUbicacion) {
+                        || (
+                                !coberturaForzada
+                                        && repiteTipoUbicacion
+                        )) {
                     continue;
                 }
             }
