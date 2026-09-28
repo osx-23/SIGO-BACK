@@ -460,13 +460,13 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         IntentoGeneracion mejorIntento = null;
         Set<Long> trabajadoresPrioritarios = Set.of();
 
-        final int maxIntentos = 4;
+        final int maxIntentos = 2;
 
         for (int intento = 0;
                 intento < maxIntentos;
                 intento++) {
             boolean flujoEstricto =
-                    intento < 2;
+                    intento == 0;
 
             IntentoGeneracion candidato =
                     ejecutarIntento(
@@ -651,8 +651,11 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         BusquedaPeriodo busqueda =
                 new BusquedaPeriodo(
                         flujoEstricto
-                                ? 1_800
-                                : 8_000
+                                ? 350
+                                : 1_500,
+                        flujoEstricto
+                                ? 900L
+                                : 3_500L
                 );
 
         backtrackingPeriodo(
@@ -693,6 +696,21 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             List<ProgramacionTurno> turnos
     ) {
         if (busqueda.perfecto) {
+            return;
+        }
+
+        if (System.nanoTime()
+                >= busqueda.deadlineNanos) {
+            return;
+        }
+
+        if (System.nanoTime()
+                >= busqueda.deadlineNanos) {
+            actualizarMejorBacktracking(
+                    actuales,
+                    puntajeActual,
+                    busqueda
+            );
             return;
         }
 
@@ -847,13 +865,33 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             boolean flujoEstricto,
             int maxOverflowTurno
     ) {
+        boolean contieneTrabajadorPrioritario =
+                grupoTurno.stream()
+                        .anyMatch(turno ->
+                                trabajadoresPrioritarios.contains(
+                                        turno.getTrabajador().getId()
+                                )
+                        );
+
+        /*
+         * Fast path:
+         * los grupos que no participan en un conflicto usan una sola
+         * solución. Solo abrimos varias ramas donde aparece un agente
+         * que realmente quedó sin caseta en la pasada anterior.
+         */
         int objetivoVariantes =
-                grupoTurno.size() <= 4
-                        ? 6
-                        : 4;
+                contieneTrabajadorPrioritario
+                        ? (
+                                grupoTurno.size() <= 4
+                                        ? 4
+                                        : 3
+                        )
+                        : 1;
 
         int maxIntentos =
-                objetivoVariantes * 3;
+                objetivoVariantes == 1
+                        ? 1
+                        : objetivoVariantes * 2;
 
         Map<String, ResultadoGrupoBacktracking> unicas =
                 new LinkedHashMap<>();
@@ -1089,15 +1127,24 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
     private static final class BusquedaPeriodo {
 
         private final long maxNodos;
+        private final long deadlineNanos;
         private long nodos = 0;
         private IntentoGeneracion mejor;
         private boolean perfecto = false;
 
         private BusquedaPeriodo(
-                long maxNodos
+                long maxNodos,
+                long maxMillis
         ) {
             this.maxNodos =
                     maxNodos;
+
+            this.deadlineNanos =
+                    System.nanoTime()
+                            + (
+                                    maxMillis
+                                            * 1_000_000L
+                            );
         }
     }
 
@@ -1175,15 +1222,18 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         maxOverflowTurno
                 );
 
+        if (semillaGreedy.asignaciones().size()
+                == grupoTurno.size()) {
+            return semillaGreedy;
+        }
+
         long maxNodos =
-                semillaGreedy.asignaciones().size()
-                        == grupoTurno.size()
-                        ? 150_000L
-                        : 750_000L;
+                60_000L;
 
         BusquedaBacktracking busqueda =
                 new BusquedaBacktracking(
                         maxNodos,
+                        120L,
                         semillaGreedy
                 );
 
@@ -1926,7 +1976,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         penalizacionOverflowTurno(
                                 habilitadaParaTurno
                         )
-                                + penalizacionAleatoria();
+                                ;
             } else {
                 score =
                         penalizacionRepeticionCaseta(
@@ -1960,7 +2010,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                 + penalizacionOverflowTurno(
                                         habilitadaParaTurno
                                 )
-                                + penalizacionAleatoria();
+                                ;
             }
 
             candidatos.add(
@@ -2006,6 +2056,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
     private static final class BusquedaBacktracking {
 
         private final long maxNodos;
+        private final long deadlineNanos;
         private long nodos = 0;
         private int mejorAsignados;
         private int mejorPuntaje;
@@ -2013,10 +2064,18 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
         private BusquedaBacktracking(
                 long maxNodos,
+                long maxMillis,
                 ResultadoGrupoBacktracking semillaGreedy
         ) {
             this.maxNodos =
                     maxNodos;
+
+            this.deadlineNanos =
+                    System.nanoTime()
+                            + (
+                                    maxMillis
+                                            * 1_000_000L
+                            );
 
             this.mejorAsignacion =
                     new HashMap<>(
@@ -2415,17 +2474,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         return habilitadaParaTurno
                 ? 0
                 : 2_000;
-    }
-
-    private int penalizacionAleatoria() {
-        /*
-         * Ruido pequeño para evitar patrones deterministas.
-         * No supera las penalizaciones fuertes de reglas de negocio,
-         * pero sí cambia la elección entre opciones similares.
-         */
-        return java.util.concurrent.ThreadLocalRandom
-                .current()
-                .nextInt(0, 26);
     }
 
     private int penalizacionRepeticionCaseta(
