@@ -460,7 +460,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         IntentoGeneracion mejorIntento = null;
         Set<Long> trabajadoresPrioritarios = Set.of();
 
-        final int maxIntentos = 10;
+        final int maxIntentos = 4;
 
         for (int intento = 0;
                 intento < maxIntentos;
@@ -550,25 +550,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<String, Long> asignacionPorDiaTurnoAgenteBase,
             boolean flujoEstricto
     ) {
-        Map<String, Integer> conteoMes =
-                new HashMap<>(conteoMesBase);
-
-        Map<String, Integer> conteoSemana =
-                new HashMap<>(conteoSemanaBase);
-
-        Map<Long, int[]> flujo =
-                copiarFlujo(flujoBase);
-
-        Map<String, Long> asignacionPorDiaAgente =
-                new HashMap<>(
-                        asignacionPorDiaAgenteBase
-                );
-
-        Map<String, Long> asignacionPorDiaTurnoAgente =
-                new HashMap<>(
-                        asignacionPorDiaTurnoAgenteBase
-                );
-
         List<ProgramacionTurno> turnos =
                 new ArrayList<>(turnosBase);
 
@@ -583,7 +564,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         )
         );
 
-        Map<String, List<ProgramacionTurno>> grupos =
+        Map<String, List<ProgramacionTurno>> gruposMap =
                 new LinkedHashMap<>();
 
         for (ProgramacionTurno turno : turnos) {
@@ -592,37 +573,262 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             + "|"
                             + turno.getEstado().name();
 
-            grupos.computeIfAbsent(
+            gruposMap.computeIfAbsent(
                     clave,
                     ignored -> new ArrayList<>()
             ).add(turno);
         }
 
-        List<ItemPropuesta> asignaciones =
-                new ArrayList<>();
+        List<List<ProgramacionTurno>> grupos =
+                new ArrayList<>(
+                        gruposMap.values()
+                );
 
-        List<Conflicto> conflictos =
-                new ArrayList<>();
+        EstadoGeneracion estadoInicial =
+                new EstadoGeneracion(
+                        new HashMap<>(
+                                conteoMesBase
+                        ),
+                        new HashMap<>(
+                                conteoSemanaBase
+                        ),
+                        copiarFlujo(
+                                flujoBase
+                        ),
+                        new HashMap<>(
+                                asignacionPorDiaAgenteBase
+                        ),
+                        new HashMap<>(
+                                asignacionPorDiaTurnoAgenteBase
+                        ),
+                        new ArrayList<>(),
+                        new ArrayList<>()
+                );
 
-        for (List<ProgramacionTurno> grupoTurno :
-                grupos.values()) {
-            int casetasHabilitadasTurno =
-                    (int) ubicaciones.stream()
-                            .filter(item ->
-                                    permiteTurno(
-                                            item,
-                                            grupoTurno.get(0).getEstado()
-                                    )
+        /*
+         * Backtracking global entre días/turnos.
+         *
+         * Antes el backtracking optimizaba cada día/turno por separado.
+         * Eso podía elegir una combinación perfecta hoy que dejara a un
+         * agente sin opciones mañana. Ahora se conservan varias soluciones
+         * locales y el solver puede retroceder a grupos anteriores cuando
+         * una elección genera conflictos posteriores.
+         */
+        BusquedaPeriodo busqueda =
+                new BusquedaPeriodo(
+                        flujoEstricto
+                                ? 1_800
+                                : 8_000
+                );
+
+        backtrackingPeriodo(
+                grupos,
+                0,
+                trabajadoresPrioritarios,
+                ubicaciones,
+                configCaseta,
+                restricciones,
+                config,
+                flujoEstricto,
+                estadoInicial,
+                busqueda,
+                turnos
+        );
+
+        if (busqueda.mejor != null) {
+            return busqueda.mejor;
+        }
+
+        return new IntentoGeneracion(
+                estadoInicial.asignaciones,
+                estadoInicial.conflictos
+        );
+    }
+
+    private void backtrackingPeriodo(
+            List<List<ProgramacionTurno>> grupos,
+            int indice,
+            Set<Long> trabajadoresPrioritarios,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta,
+            Set<String> restricciones,
+            Configuracion config,
+            boolean flujoEstricto,
+            EstadoGeneracion estado,
+            BusquedaPeriodo busqueda,
+            List<ProgramacionTurno> turnos
+    ) {
+        if (busqueda.perfecto) {
+            return;
+        }
+
+        if (++busqueda.nodos
+                > busqueda.maxNodos) {
+            return;
+        }
+
+        if (busqueda.mejor != null) {
+            int conflictosActuales =
+                    estado.conflictos.size();
+
+            int conflictosMejor =
+                    busqueda.mejor
+                            .conflictos()
+                            .size();
+
+            if (conflictosActuales
+                    > conflictosMejor) {
+                return;
+            }
+
+            if (conflictosActuales
+                    == conflictosMejor) {
+                int turnosRestantes =
+                        turnosRestantes(
+                                grupos,
+                                indice
+                        );
+
+                if (estado.asignaciones.size()
+                        + turnosRestantes
+                        < busqueda.mejor
+                                .asignaciones()
+                                .size()) {
+                    return;
+                }
+            }
+        }
+
+        if (indice
+                >= grupos.size()) {
+            IntentoGeneracion candidato =
+                    new IntentoGeneracion(
+                            List.copyOf(
+                                    estado.asignaciones
+                            ),
+                            List.copyOf(
+                                    estado.conflictos
                             )
-                            .count();
-
-            int maxOverflowTurno =
-                    Math.max(
-                            0,
-                            grupoTurno.size()
-                                    - casetasHabilitadasTurno
                     );
 
+            if (busqueda.mejor == null
+                    || esMejorIntento(
+                            candidato,
+                            busqueda.mejor,
+                            turnos,
+                            ubicaciones
+                    )) {
+                busqueda.mejor =
+                        candidato;
+            }
+
+            if (candidato.conflictos()
+                    .isEmpty()
+                    && deficitCoberturaNormal(
+                            candidato,
+                            turnos,
+                            ubicaciones
+                    ) == 0) {
+                busqueda.perfecto =
+                        true;
+            }
+
+            return;
+        }
+
+        List<ProgramacionTurno> grupoTurno =
+                grupos.get(
+                        indice
+                );
+
+        int casetasHabilitadasTurno =
+                (int) ubicaciones.stream()
+                        .filter(item ->
+                                permiteTurno(
+                                        item,
+                                        grupoTurno
+                                                .get(0)
+                                                .getEstado()
+                                )
+                        )
+                        .count();
+
+        int maxOverflowTurno =
+                Math.max(
+                        0,
+                        grupoTurno.size()
+                                - casetasHabilitadasTurno
+                );
+
+        List<ResultadoGrupoBacktracking> variantes =
+                generarVariantesGrupo(
+                        grupoTurno,
+                        trabajadoresPrioritarios,
+                        ubicaciones,
+                        configCaseta,
+                        restricciones,
+                        config,
+                        estado,
+                        flujoEstricto,
+                        maxOverflowTurno
+                );
+
+        for (ResultadoGrupoBacktracking variante :
+                variantes) {
+            EstadoGeneracion siguiente =
+                    aplicarResultadoGrupo(
+                            estado,
+                            grupoTurno,
+                            variante
+                    );
+
+            backtrackingPeriodo(
+                    grupos,
+                    indice + 1,
+                    trabajadoresPrioritarios,
+                    ubicaciones,
+                    configCaseta,
+                    restricciones,
+                    config,
+                    flujoEstricto,
+                    siguiente,
+                    busqueda,
+                    turnos
+            );
+
+            if (busqueda.perfecto) {
+                return;
+            }
+        }
+    }
+
+    private List<ResultadoGrupoBacktracking> generarVariantesGrupo(
+            List<ProgramacionTurno> grupoTurno,
+            Set<Long> trabajadoresPrioritarios,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta,
+            Set<String> restricciones,
+            Configuracion config,
+            EstadoGeneracion estado,
+            boolean flujoEstricto,
+            int maxOverflowTurno
+    ) {
+        int objetivoVariantes =
+                grupoTurno.size() <= 4
+                        ? 6
+                        : 4;
+
+        int maxIntentos =
+                objetivoVariantes * 3;
+
+        Map<String, ResultadoGrupoBacktracking> unicas =
+                new LinkedHashMap<>();
+
+        for (int intento = 0;
+                intento < maxIntentos
+                        && unicas.size()
+                                < objetivoVariantes;
+                intento++) {
             ResultadoGrupoBacktracking resultado =
                     resolverGrupoBacktracking(
                             grupoTurno,
@@ -631,107 +837,270 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             configCaseta,
                             restricciones,
                             config,
-                            conteoMes,
-                            conteoSemana,
-                            flujo,
-                            asignacionPorDiaAgente,
-                            asignacionPorDiaTurnoAgente,
+                            estado.conteoMes,
+                            estado.conteoSemana,
+                            estado.flujo,
+                            estado.asignacionPorDiaAgente,
+                            estado.asignacionPorDiaTurnoAgente,
                             flujoEstricto,
                             maxOverflowTurno
                     );
 
-            for (ProgramacionTurno turno :
-                    grupoTurno) {
-                Candidate elegido =
-                        resultado.asignaciones()
-                                .get(turno.getId());
-
-                if (elegido == null) {
-                    conflictos.add(
-                            new Conflicto(
-                                    turno.getId(),
-                                    turno.getTrabajador().getId(),
-                                    turno.getTrabajador()
-                                            .getNombreCompleto(),
-                                    turno.getFecha(),
-                                    turno.getEstado().name(),
-                                    "No se encontró una combinación válida para cubrir este agente sin romper las restricciones"
-                            )
-                    );
-                    continue;
-                }
-
-                Long trabajadorId =
-                        turno.getTrabajador().getId();
-
-                ProgramacionUbicacion ubicacion =
-                        elegido.ubicacion();
-
-                asignaciones.add(
-                        new ItemPropuesta(
-                                turno.getId(),
-                                trabajadorId,
-                                turno.getTrabajador().getCodigo(),
-                                turno.getTrabajador()
-                                    .getNombreCompleto(),
-                                turno.getFecha(),
-                                turno.getEstado().name(),
-                                ubicacion.getId(),
-                                ubicacion.getCodigo(),
-                                ubicacion.getNombre(),
-                                elegido.grupo(),
-                                elegido.score()
-                        )
-                );
-
-                incrementar(
-                        conteoMes,
-                        key(
-                                trabajadorId,
-                                ubicacion.getId()
-                        )
-                );
-
-                incrementar(
-                        conteoSemana,
-                        keySemana(
-                                trabajadorId,
-                                ubicacion.getId(),
-                                semanaDelMes(
-                                        turno.getFecha()
-                                )
-                        )
-                );
-
-                incrementarFlujo(
-                        flujo,
-                        trabajadorId,
-                        elegido.grupo()
-                );
-
-                asignacionPorDiaAgente.put(
-                        keyDia(
-                                trabajadorId,
-                                turno.getFecha()
-                        ),
-                        ubicacion.getId()
-                );
-
-                asignacionPorDiaTurnoAgente.put(
-                        keyDiaTurno(
-                                trabajadorId,
-                                turno.getFecha(),
-                                turno.getEstado()
-                        ),
-                        ubicacion.getId()
-                );
-            }
+            unicas.putIfAbsent(
+                    firmaResultadoGrupo(
+                            resultado
+                    ),
+                    resultado
+            );
         }
 
-        return new IntentoGeneracion(
-                asignaciones,
-                conflictos
+        if (unicas.isEmpty()) {
+            return List.of(
+                    new ResultadoGrupoBacktracking(
+                            Map.of(),
+                            Integer.MAX_VALUE
+                    )
+            );
+        }
+
+        return unicas.values()
+                .stream()
+                .sorted(
+                        Comparator
+                                .comparingInt(
+                                        (
+                                                ResultadoGrupoBacktracking item
+                                        ) ->
+                                                item.asignaciones()
+                                                        .size()
+                                )
+                                .reversed()
+                                .thenComparingInt(
+                                        ResultadoGrupoBacktracking::puntaje
+                                )
+                )
+                .toList();
+    }
+
+    private String firmaResultadoGrupo(
+            ResultadoGrupoBacktracking resultado
+    ) {
+        return resultado.asignaciones()
+                .entrySet()
+                .stream()
+                .sorted(
+                        Map.Entry.comparingByKey()
+                )
+                .map(entry ->
+                        entry.getKey()
+                                + ":"
+                                + entry.getValue()
+                                        .ubicacion()
+                                        .getId()
+                )
+                .collect(
+                        Collectors.joining(
+                                "|"
+                        )
+                );
+    }
+
+    private EstadoGeneracion aplicarResultadoGrupo(
+            EstadoGeneracion base,
+            List<ProgramacionTurno> grupoTurno,
+            ResultadoGrupoBacktracking resultado
+    ) {
+        EstadoGeneracion siguiente =
+                copiarEstado(
+                        base
+                );
+
+        for (ProgramacionTurno turno :
+                grupoTurno) {
+            Candidate elegido =
+                    resultado.asignaciones()
+                            .get(
+                                    turno.getId()
+                            );
+
+            if (elegido == null) {
+                siguiente.conflictos.add(
+                        new Conflicto(
+                                turno.getId(),
+                                turno.getTrabajador().getId(),
+                                turno.getTrabajador()
+                                        .getNombreCompleto(),
+                                turno.getFecha(),
+                                turno.getEstado().name(),
+                                "No se encontró una combinación válida para cubrir este agente sin romper las restricciones"
+                        )
+                );
+                continue;
+            }
+
+            Long trabajadorId =
+                    turno.getTrabajador().getId();
+
+            ProgramacionUbicacion ubicacion =
+                    elegido.ubicacion();
+
+            siguiente.asignaciones.add(
+                    new ItemPropuesta(
+                            turno.getId(),
+                            trabajadorId,
+                            turno.getTrabajador().getCodigo(),
+                            turno.getTrabajador()
+                                    .getNombreCompleto(),
+                            turno.getFecha(),
+                            turno.getEstado().name(),
+                            ubicacion.getId(),
+                            ubicacion.getCodigo(),
+                            ubicacion.getNombre(),
+                            elegido.grupo(),
+                            elegido.score()
+                    )
+            );
+
+            incrementar(
+                    siguiente.conteoMes,
+                    key(
+                            trabajadorId,
+                            ubicacion.getId()
+                    )
+            );
+
+            incrementar(
+                    siguiente.conteoSemana,
+                    keySemana(
+                            trabajadorId,
+                            ubicacion.getId(),
+                            semanaDelMes(
+                                    turno.getFecha()
+                            )
+                    )
+            );
+
+            incrementarFlujo(
+                    siguiente.flujo,
+                    trabajadorId,
+                    elegido.grupo()
+            );
+
+            siguiente.asignacionPorDiaAgente.put(
+                    keyDia(
+                            trabajadorId,
+                            turno.getFecha()
+                    ),
+                    ubicacion.getId()
+            );
+
+            siguiente.asignacionPorDiaTurnoAgente.put(
+                    keyDiaTurno(
+                            trabajadorId,
+                            turno.getFecha(),
+                            turno.getEstado()
+                    ),
+                    ubicacion.getId()
+            );
+        }
+
+        return siguiente;
+    }
+
+    private EstadoGeneracion copiarEstado(
+            EstadoGeneracion original
+    ) {
+        return new EstadoGeneracion(
+                new HashMap<>(
+                        original.conteoMes
+                ),
+                new HashMap<>(
+                        original.conteoSemana
+                ),
+                copiarFlujo(
+                        original.flujo
+                ),
+                new HashMap<>(
+                        original.asignacionPorDiaAgente
+                ),
+                new HashMap<>(
+                        original.asignacionPorDiaTurnoAgente
+                ),
+                new ArrayList<>(
+                        original.asignaciones
+                ),
+                new ArrayList<>(
+                        original.conflictos
+                )
         );
+    }
+
+    private int turnosRestantes(
+            List<List<ProgramacionTurno>> grupos,
+            int desdeIndice
+    ) {
+        int total =
+                0;
+
+        for (int i = desdeIndice;
+                i < grupos.size();
+                i++) {
+            total +=
+                    grupos.get(i).size();
+        }
+
+        return total;
+    }
+
+    private static final class BusquedaPeriodo {
+
+        private final long maxNodos;
+        private long nodos = 0;
+        private IntentoGeneracion mejor;
+        private boolean perfecto = false;
+
+        private BusquedaPeriodo(
+                long maxNodos
+        ) {
+            this.maxNodos =
+                    maxNodos;
+        }
+    }
+
+    private static final class EstadoGeneracion {
+
+        private final Map<String, Integer> conteoMes;
+        private final Map<String, Integer> conteoSemana;
+        private final Map<Long, int[]> flujo;
+        private final Map<String, Long> asignacionPorDiaAgente;
+        private final Map<String, Long> asignacionPorDiaTurnoAgente;
+        private final List<ItemPropuesta> asignaciones;
+        private final List<Conflicto> conflictos;
+
+        private EstadoGeneracion(
+                Map<String, Integer> conteoMes,
+                Map<String, Integer> conteoSemana,
+                Map<Long, int[]> flujo,
+                Map<String, Long> asignacionPorDiaAgente,
+                Map<String, Long> asignacionPorDiaTurnoAgente,
+                List<ItemPropuesta> asignaciones,
+                List<Conflicto> conflictos
+        ) {
+            this.conteoMes =
+                    conteoMes;
+            this.conteoSemana =
+                    conteoSemana;
+            this.flujo =
+                    flujo;
+            this.asignacionPorDiaAgente =
+                    asignacionPorDiaAgente;
+            this.asignacionPorDiaTurnoAgente =
+                    asignacionPorDiaTurnoAgente;
+            this.asignaciones =
+                    asignaciones;
+            this.conflictos =
+                    conflictos;
+        }
     }
 
     private ResultadoGrupoBacktracking resolverGrupoBacktracking(
