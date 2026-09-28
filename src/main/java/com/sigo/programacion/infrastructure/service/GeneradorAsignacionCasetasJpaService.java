@@ -1347,7 +1347,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             grupo,
                             mapa,
                             configCaseta,
-                            2
+                            config.maxConsecutivos()
                     )) {
                 return false;
             }
