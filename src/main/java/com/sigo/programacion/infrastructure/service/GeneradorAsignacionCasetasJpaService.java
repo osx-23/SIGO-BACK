@@ -408,14 +408,14 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         }
 
         /*
-         * Para los primeros días del mes también necesitamos conocer
-         * las asignaciones de los dos días previos, aunque pertenezcan
-         * al mes anterior.
+         * Para la rotación por flujo necesitamos conocer la última vez
+         * que cada agente estuvo en ALTO/BAJO, aunque haya tenido días
+         * libres o el antecedente pertenezca al mes anterior.
          */
         for (DistribucionPersonal anterior :
                 distribucionRepository.findMes(
                         plazaId,
-                        ym.atDay(1).minusDays(2),
+                        ym.atDay(1).minusDays(31),
                         ym.atDay(1).minusDays(1)
                 )) {
             ProgramacionTurno turnoAnterior =
@@ -1869,22 +1869,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         ubicacionDiaAnterior
                 );
 
-        Long ubicacionHaceDosDiasId =
-                asignacionPorDiaAgente
-                        .get(
-                                keyDia(
-                                        trabajadorId,
-                                        turno.getFecha()
-                                                .minusDays(2)
-                                )
-                        );
-
-        ProgramacionUbicacion ubicacionHaceDosDias =
-                ubicacionPorId(
-                        ubicaciones,
-                        ubicacionHaceDosDiasId
-                );
-
         List<ProgramacionUbicacion> ubicacionesAleatorias =
                 new ArrayList<>(ubicaciones);
 
@@ -2122,45 +2106,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 }
             }
 
-            /*
-             * Rotación por TIPO de ubicación para A/B, independiente
-             * del flujo ALTO/BAJO.
-             *
-             * Ideal:
-             *   VIA -> AUXILIAR -> VIA -> AUXILIAR
-             *
-             * Primera fase:
-             *   no repetimos el mismo tipo del día anterior.
-             *
-             * Fase flexible:
-             *   se puede repetir el tipo una vez si hace falta,
-             *   pero no tres días consecutivos.
-             *
-             * Reparación:
-             *   puede romper esta preferencia únicamente para no dejar
-             *   al agente sin asignación.
-             *
-             * Turno C no usa esta regla porque solo trabaja con VIA.
-             */
-            if (!turnoC
-                    && ubicacionAnterior != null
-                    && ubicacionAnterior.getTipo()
-                    == ubicacion.getTipo()) {
-                boolean seriaTercerDiaMismoTipo =
-                        ubicacionHaceDosDias != null
-                                && ubicacionHaceDosDias.getTipo()
-                                == ubicacion.getTipo();
-
-                if (flujoEstricto) {
-                    continue;
-                }
-
-                if (!coberturaForzada
-                        && seriaTercerDiaMismoTipo) {
-                    continue;
-                }
-            }
-
             GrupoFlujoCaseta grupo =
                     grupo(especifica);
 
@@ -2170,6 +2115,47 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             configCaseta
                     );
 
+            ProgramacionUbicacion ultimaUbicacionMismoFlujo =
+                    ultimaUbicacionEnMismoFlujo(
+                            trabajadorId,
+                            turno.getFecha(),
+                            grupo,
+                            asignacionPorDiaAgente,
+                            ubicaciones,
+                            configCaseta
+                    );
+
+            /*
+             * Rotación por tipo DENTRO DEL MISMO FLUJO.
+             *
+             * Ejemplo ideal:
+             *   Día 1: BAJO / VIA
+             *   Día 2: ALTO / VIA o AUXILIAR
+             *   Día 3: BAJO / AUXILIAR
+             *
+             * Es decir, al volver a BAJO se compara contra la última
+             * asignación BAJO, no contra el día anterior. Lo mismo para ALTO.
+             * VIA y AUXILIAR deben alternarse siempre que exista una
+             * combinación válida. En flexible/reparación puede repetirse
+             * el tipo para no dejar personal sin asignación.
+             */
+            boolean repiteTipoEnMismoFlujo =
+                    !turnoC
+                            && esViaOAuxiliar(
+                                    ubicacion
+                            )
+                            && ultimaUbicacionMismoFlujo != null
+                            && esViaOAuxiliar(
+                                    ultimaUbicacionMismoFlujo
+                            )
+                            && ultimaUbicacionMismoFlujo.getTipo()
+                            == ubicacion.getTipo();
+
+            if (flujoEstricto
+                    && repiteTipoEnMismoFlujo) {
+                continue;
+            }
+
             /*
              * Alternancia de flujo para A/B:
              *
@@ -2177,8 +2163,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
              *    de flujo respecto al día anterior.
              * 2) Si esa combinación no es posible, la pasada flexible
              *    puede repetir el mismo flujo una sola vez.
-             * 3) La rotación VIA/AUXILIAR/APOYO se controla además con
-             *    una regla independiente del flujo.
+             * 3) Al volver a un flujo, VIA/AUXILIAR se alterna respecto
+             *    a la última asignación que tuvo ese mismo flujo.
              * 4) Nunca permitimos tres días consecutivos con el mismo flujo.
              *
              * Ejemplo válido:
@@ -2267,9 +2253,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                         false,
                                         config.balancearFlujo()
                                 )
-                                + penalizacionAlternanciaTipoUbicacion(
-                                        ubicacionAnterior,
-                                        ubicacionHaceDosDias,
+                                + penalizacionTipoEnMismoFlujo(
+                                        ultimaUbicacionMismoFlujo,
                                         ubicacion,
                                         coberturaForzada
                                 )
@@ -2861,41 +2846,35 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 + penalizacionConsecutiva;
     }
 
-    private int penalizacionAlternanciaTipoUbicacion(
-            ProgramacionUbicacion anterior,
-            ProgramacionUbicacion haceDosDias,
+    private int penalizacionTipoEnMismoFlujo(
+            ProgramacionUbicacion ultimaMismoFlujo,
             ProgramacionUbicacion actual,
             boolean coberturaForzada
     ) {
-        if (anterior == null
-                || actual == null) {
+        if (ultimaMismoFlujo == null
+                || actual == null
+                || !esViaOAuxiliar(
+                        ultimaMismoFlujo
+                )
+                || !esViaOAuxiliar(
+                        actual
+                )) {
             return 0;
         }
 
-        if (anterior.getTipo()
+        if (ultimaMismoFlujo.getTipo()
                 != actual.getTipo()) {
-            /*
-             * Bonificación moderada por cambiar VIA/AUXILIAR/APOYO.
-             * No altera la jerarquía global de ocupación; solo decide
-             * qué agente conviene ubicar en cada tipo disponible.
-             */
-            return -90;
+            return -120;
         }
 
-        boolean tercerDiaMismoTipo =
-                haceDosDias != null
-                        && haceDosDias.getTipo()
-                        == actual.getTipo();
-
-        if (tercerDiaMismoTipo) {
-            return coberturaForzada
-                    ? 1_400
-                    : 900;
-        }
-
+        /*
+         * Repetir VIA/VIA o AUX/AUX al volver al mismo flujo es una
+         * excepción. No se bloquea en las fases de recuperación porque
+         * la prioridad superior sigue siendo asignar a todo el personal.
+         */
         return coberturaForzada
-                ? 700
-                : 450;
+                ? 650
+                : 900;
     }
 
     private int penalizacionRecuperacionFlujo(
@@ -2963,6 +2942,67 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         }
 
         return null;
+    }
+
+    private ProgramacionUbicacion ultimaUbicacionEnMismoFlujo(
+            Long trabajadorId,
+            LocalDate fecha,
+            GrupoFlujoCaseta flujoBuscado,
+            Map<String, Long> asignacionPorDiaAgente,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta
+    ) {
+        if (flujoBuscado == null
+                || flujoBuscado
+                == GrupoFlujoCaseta.SIN_CLASIFICAR) {
+            return null;
+        }
+
+        LocalDate cursor =
+                fecha.minusDays(1);
+
+        LocalDate limite =
+                fecha.minusDays(31);
+
+        while (!cursor.isBefore(
+                limite
+        )) {
+            Long ubicacionId =
+                    asignacionPorDiaAgente.get(
+                            keyDia(
+                                    trabajadorId,
+                                    cursor
+                            )
+                    );
+
+            if (ubicacionId != null
+                    && grupoDeUbicacion(
+                            ubicacionId,
+                            configCaseta
+                    ) == flujoBuscado) {
+                return ubicacionPorId(
+                        ubicaciones,
+                        ubicacionId
+                );
+            }
+
+            cursor =
+                    cursor.minusDays(1);
+        }
+
+        return null;
+    }
+
+    private boolean esViaOAuxiliar(
+            ProgramacionUbicacion ubicacion
+    ) {
+        return ubicacion != null
+                && (
+                        ubicacion.getTipo()
+                                == TipoUbicacion.VIA
+                                || ubicacion.getTipo()
+                                == TipoUbicacion.AUXILIAR
+                );
     }
 
     private GrupoFlujoCaseta grupoDeUbicacion(
