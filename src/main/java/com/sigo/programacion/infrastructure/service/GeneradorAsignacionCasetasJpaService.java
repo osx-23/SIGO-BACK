@@ -1869,6 +1869,22 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         ubicacionDiaAnterior
                 );
 
+        Long ubicacionHaceDosDiasId =
+                asignacionPorDiaAgente
+                        .get(
+                                keyDia(
+                                        trabajadorId,
+                                        turno.getFecha()
+                                                .minusDays(2)
+                                )
+                        );
+
+        ProgramacionUbicacion ubicacionHaceDosDias =
+                ubicacionPorId(
+                        ubicaciones,
+                        ubicacionHaceDosDiasId
+                );
+
         List<ProgramacionUbicacion> ubicacionesAleatorias =
                 new ArrayList<>(ubicaciones);
 
@@ -2106,6 +2122,45 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 }
             }
 
+            /*
+             * Rotación por TIPO de ubicación para A/B, independiente
+             * del flujo ALTO/BAJO.
+             *
+             * Ideal:
+             *   VIA -> AUXILIAR -> VIA -> AUXILIAR
+             *
+             * Primera fase:
+             *   no repetimos el mismo tipo del día anterior.
+             *
+             * Fase flexible:
+             *   se puede repetir el tipo una vez si hace falta,
+             *   pero no tres días consecutivos.
+             *
+             * Reparación:
+             *   puede romper esta preferencia únicamente para no dejar
+             *   al agente sin asignación.
+             *
+             * Turno C no usa esta regla porque solo trabaja con VIA.
+             */
+            if (!turnoC
+                    && ubicacionAnterior != null
+                    && ubicacionAnterior.getTipo()
+                    == ubicacion.getTipo()) {
+                boolean seriaTercerDiaMismoTipo =
+                        ubicacionHaceDosDias != null
+                                && ubicacionHaceDosDias.getTipo()
+                                == ubicacion.getTipo();
+
+                if (flujoEstricto) {
+                    continue;
+                }
+
+                if (!coberturaForzada
+                        && seriaTercerDiaMismoTipo) {
+                    continue;
+                }
+            }
+
             GrupoFlujoCaseta grupo =
                     grupo(especifica);
 
@@ -2121,9 +2176,10 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
              * 1) En la pasada estricta primero intentamos SIEMPRE cambiar
              *    de flujo respecto al día anterior.
              * 2) Si esa combinación no es posible, la pasada flexible
-             *    puede repetir el mismo flujo una sola vez, pero cambiando
-             *    el tipo de ubicación respecto al día anterior.
-             * 3) Nunca permitimos tres días consecutivos con el mismo flujo.
+             *    puede repetir el mismo flujo una sola vez.
+             * 3) La rotación VIA/AUXILIAR/APOYO se controla además con
+             *    una regla independiente del flujo.
+             * 4) Nunca permitimos tres días consecutivos con el mismo flujo.
              *
              * Ejemplo válido:
              * BAJO/VIA -> ALTO/VIA -> ALTO/AUXILIAR -> BAJO/VIA
@@ -2210,6 +2266,12 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                         grupo,
                                         false,
                                         config.balancearFlujo()
+                                )
+                                + penalizacionAlternanciaTipoUbicacion(
+                                        ubicacionAnterior,
+                                        ubicacionHaceDosDias,
+                                        ubicacion,
+                                        coberturaForzada
                                 )
                                 + penalizacionRecuperacionFlujo(
                                         flujoEstricto,
@@ -2797,6 +2859,43 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         return penalizacionSemana
                 + penalizacionMes
                 + penalizacionConsecutiva;
+    }
+
+    private int penalizacionAlternanciaTipoUbicacion(
+            ProgramacionUbicacion anterior,
+            ProgramacionUbicacion haceDosDias,
+            ProgramacionUbicacion actual,
+            boolean coberturaForzada
+    ) {
+        if (anterior == null
+                || actual == null) {
+            return 0;
+        }
+
+        if (anterior.getTipo()
+                != actual.getTipo()) {
+            /*
+             * Bonificación moderada por cambiar VIA/AUXILIAR/APOYO.
+             * No altera la jerarquía global de ocupación; solo decide
+             * qué agente conviene ubicar en cada tipo disponible.
+             */
+            return -90;
+        }
+
+        boolean tercerDiaMismoTipo =
+                haceDosDias != null
+                        && haceDosDias.getTipo()
+                        == actual.getTipo();
+
+        if (tercerDiaMismoTipo) {
+            return coberturaForzada
+                    ? 1_400
+                    : 900;
+        }
+
+        return coberturaForzada
+                ? 700
+                : 450;
     }
 
     private int penalizacionRecuperacionFlujo(
