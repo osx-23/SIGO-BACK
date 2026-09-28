@@ -523,6 +523,10 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             );
         }
 
+        validarSinDuplicidadDeCaseta(
+                mejorIntento.asignaciones()
+        );
+
         return new Propuesta(
                 plazaId,
                 anio,
@@ -534,6 +538,36 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 mejorIntento.asignaciones(),
                 mejorIntento.conflictos()
         );
+    }
+
+    private void validarSinDuplicidadDeCaseta(
+            List<ItemPropuesta> asignaciones
+    ) {
+        Set<String> ocupadas =
+                new HashSet<>();
+
+        for (ItemPropuesta item :
+                asignaciones) {
+            String clave =
+                    item.fecha()
+                            + "|"
+                            + item.turno()
+                            + "|"
+                            + item.ubicacionId();
+
+            if (!ocupadas.add(
+                    clave
+            )) {
+                throw new ProgramacionValidationException(
+                        "El generador intentó asignar la caseta "
+                                + item.ubicacionCodigo()
+                                + " a más de una persona en el turno "
+                                + item.turno()
+                                + " del "
+                                + item.fecha()
+                );
+            }
+        }
     }
 
     private IntentoGeneracion ejecutarIntento(
