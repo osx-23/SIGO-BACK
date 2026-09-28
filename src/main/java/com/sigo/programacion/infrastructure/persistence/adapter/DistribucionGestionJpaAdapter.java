@@ -273,6 +273,9 @@ public class DistribucionGestionJpaAdapter
         Map<String, Integer> overflowUsado =
                 new HashMap<>();
 
+        Map<String, Set<Long>> ubicacionesFinalesPorTurno =
+                new HashMap<>();
+
         for (DistribucionPersonal existente :
                 distribucionRepository.findMes(
                         plazaId,
@@ -288,12 +291,34 @@ public class DistribucionGestionJpaAdapter
             ProgramacionTurno programacion =
                     existente.getProgramacionTurno();
 
+            String clave =
+                    claveTurno(programacion);
+
+            ubicacionesFinalesPorTurno
+                    .computeIfAbsent(
+                            clave,
+                            ignored ->
+                                    new java.util.LinkedHashSet<>()
+                    )
+                    .add(
+                            existente.getUbicacion().getId()
+                    );
+
             if (!permiteTurno(
                     existente.getUbicacion(),
                     programacion.getEstado()
             )) {
+                if (programacion.getEstado()
+                        == EstadoProgramacion.C
+                        && existente.getUbicacion().getTipo()
+                        != TipoUbicacion.VIA) {
+                    throw bad(
+                            "En turno C las casetas adicionales deben ser vías"
+                    );
+                }
+
                 overflowUsado.merge(
-                        claveTurno(programacion),
+                        clave,
                         1,
                         Integer::sum
                 );
@@ -302,14 +327,36 @@ public class DistribucionGestionJpaAdapter
 
         for (ItemResuelto resuelto :
                 resueltos) {
+            String clave =
+                    claveTurno(
+                            resuelto.programacion()
+                    );
+
+            ubicacionesFinalesPorTurno
+                    .computeIfAbsent(
+                            clave,
+                            ignored ->
+                                    new java.util.LinkedHashSet<>()
+                    )
+                    .add(
+                            resuelto.ubicacion().getId()
+                    );
+
             if (!permiteTurno(
                     resuelto.ubicacion(),
                     resuelto.programacion().getEstado()
             )) {
+                if (resuelto.programacion().getEstado()
+                        == EstadoProgramacion.C
+                        && resuelto.ubicacion().getTipo()
+                        != TipoUbicacion.VIA) {
+                    throw bad(
+                            "En turno C las casetas adicionales deben ser vías"
+                    );
+                }
+
                 overflowUsado.merge(
-                        claveTurno(
-                                resuelto.programacion()
-                        ),
+                        clave,
                         1,
                         Integer::sum
                 );
@@ -344,6 +391,41 @@ public class DistribucionGestionJpaAdapter
                             0,
                             demanda - capacidad
                     );
+
+            if (estado
+                    == EstadoProgramacion.C
+                    && entry.getValue() > 0) {
+                Set<Long> asignadas =
+                        ubicacionesFinalesPorTurno
+                                .getOrDefault(
+                                        entry.getKey(),
+                                        Set.of()
+                                );
+
+                boolean viasCHabilitadasCompletas =
+                        ubicacionesActivas.stream()
+                                .filter(item ->
+                                        item.getTipo()
+                                                == TipoUbicacion.VIA
+                                )
+                                .filter(item ->
+                                        permiteTurno(
+                                                item,
+                                                EstadoProgramacion.C
+                                        )
+                                )
+                                .allMatch(item ->
+                                        asignadas.contains(
+                                                item.getId()
+                                        )
+                                );
+
+                if (!viasCHabilitadasCompletas) {
+                    throw bad(
+                            "En turno C primero deben ocuparse todas las vías habilitadas antes de usar una vía adicional"
+                    );
+                }
+            }
 
             if (entry.getValue() > maxOverflow) {
                 throw bad(
@@ -502,6 +584,24 @@ public class DistribucionGestionJpaAdapter
                                     + "|"
                                     + actual.getFecha().minusDays(1)
                     );
+
+            if (actual.getEstado()
+                    == EstadoProgramacion.C
+                    && resuelto.ubicacion().getTipo()
+                    == TipoUbicacion.VIA
+                    && ubicacionAnterior != null
+                    && ubicacionAnterior.getTipo()
+                    == TipoUbicacion.VIA
+                    && Objects.equals(
+                            ubicacionAnterior.getId(),
+                            resuelto.ubicacion().getId()
+                    )) {
+                throw bad(
+                        "En turno C el agente "
+                                + actual.getTrabajador().getNombreCompleto()
+                                + " no puede repetir la misma vía que tuvo el día anterior"
+                );
+            }
 
             if (esApoyoOAuxiliar(
                     resuelto.ubicacion()
