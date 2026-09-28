@@ -1810,13 +1810,19 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     );
 
             /*
-             * TURNO C:
-             * - Solo trabajamos con VÍAS.
-             * - 102/103/104 (o las vías configuradas para C) se consumen
-             *   primero.
-             * - Una vía no habilitada para C recién puede entrar cuando
-             *   todas las vías habilitadas ya están ocupadas.
-             * - El overflow nunca puede superar el déficit real del turno.
+             * Jerarquía obligatoria de ocupación:
+             *
+             * 1) Primero se llenan TODAS las VÍAS habilitadas para el turno.
+             * 2) Si todavía quedan agentes, se habilitan VÍAS adicionales
+             *    registradas para la plaza, aunque no estén marcadas para
+             *    ese turno.
+             * 3) AUXILIAR/APOYO recién pueden usarse cuando ya no queda
+             *    ninguna VÍA registrada libre.
+             *
+             * El número de orden NO participa. Dentro de cada nivel las
+             * ubicaciones se evalúan en orden aleatorio.
+             *
+             * Turno C conserva su regla especial: solo utiliza VÍAS.
              */
             if (turnoC) {
                 if (ubicacion.getTipo()
@@ -1825,29 +1831,27 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 }
 
                 if (!habilitadaParaTurno
-                        && (
-                                maxOverflowTurno <= 0
-                                        || overflowUsadas
-                                        >= maxOverflowTurno
-                                        || !viasHabilitadasCompletas(
-                                                ubicaciones,
-                                                turno.getEstado(),
-                                                ocupadasTurno
-                                        )
+                        && !viasHabilitadasCompletas(
+                                ubicaciones,
+                                turno.getEstado(),
+                                ocupadasTurno
                         )) {
                     continue;
                 }
-            } else if (!habilitadaParaTurno
-                    && (
-                            maxOverflowTurno <= 0
-                                    || overflowUsadas
-                                    >= maxOverflowTurno
-                                    || !ubicacionesHabilitadasCompletas(
-                                            ubicaciones,
-                                            turno.getEstado(),
-                                            ocupadasTurno
-                                    )
-                    )) {
+            } else if (ubicacion.getTipo()
+                    == TipoUbicacion.VIA) {
+                if (!habilitadaParaTurno
+                        && !viasHabilitadasCompletas(
+                                ubicaciones,
+                                turno.getEstado(),
+                                ocupadasTurno
+                        )) {
+                    continue;
+                }
+            } else if (!todasLasViasCompletas(
+                    ubicaciones,
+                    ocupadasTurno
+            )) {
                 continue;
             }
 
@@ -1912,24 +1916,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             vecesSemana >= maxSemana
                                     || vecesMes >= maxMes
                     )) {
-                continue;
-            }
-
-            if (!viasCompletasAntesDeAuxiliar(
-                    ubicacion,
-                    ubicaciones,
-                    turno.getEstado(),
-                    ocupadasTurno
-            )) {
-                continue;
-            }
-
-            if (!cumpleOrdenSecuencial(
-                    ubicacion,
-                    ubicaciones,
-                    turno.getEstado(),
-                    ocupadasTurno
-            )) {
                 continue;
             }
 
@@ -2004,13 +1990,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 }
             }
 
-            if (esApoyoOAuxiliar(ubicacion)
-                    && esApoyoOAuxiliar(
-                            ubicacionAnterior
-                    )) {
-                continue;
-            }
-
             GrupoFlujoCaseta grupo =
                     grupo(especifica);
 
@@ -2026,11 +2005,12 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
              * 1) En la pasada estricta primero intentamos SIEMPRE cambiar
              *    de flujo respecto al día anterior.
              * 2) Si esa combinación no es posible, la pasada flexible
-             *    puede repetir el mismo flujo una sola vez.
+             *    puede repetir el mismo flujo una sola vez, pero cambiando
+             *    el tipo de ubicación respecto al día anterior.
              * 3) Nunca permitimos tres días consecutivos con el mismo flujo.
              *
              * Ejemplo válido:
-             * BAJO -> ALTO -> ALTO -> BAJO
+             * BAJO/VIA -> ALTO/VIA -> ALTO/AUXILIAR -> BAJO/VIA
              *
              * Turno C conserva su tratamiento especial porque sus vías
              * operativas pueden pertenecer todas al mismo flujo; en C la
@@ -2060,8 +2040,22 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                 != GrupoFlujoCaseta.SIN_CLASIFICAR
                                 && grupoHaceDosDias == grupo;
 
+                boolean repiteTipoUbicacion =
+                        ubicacionAnterior != null
+                                && ubicacionAnterior.getTipo()
+                                == ubicacion.getTipo();
+
+                /*
+                 * Excepción de alternancia:
+                 * - La pasada estricta exige ALTO -> BAJO -> ALTO...
+                 * - La pasada flexible admite ALTO -> ALTO o BAJO -> BAJO.
+                 * - Nunca se permiten tres días seguidos del mismo flujo.
+                 * - Si repetimos flujo, debe cambiar el tipo de ubicación:
+                 *   VIA/AUXILIAR/APOYO no puede ser igual al día anterior.
+                 */
                 if (flujoEstricto
-                        || seriaTercerDiaMismoFlujo) {
+                        || seriaTercerDiaMismoFlujo
+                        || repiteTipoUbicacion) {
                     continue;
                 }
             }
@@ -2105,10 +2099,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                         trabajadorId,
                                         grupo,
                                         config.balancearFlujo()
-                                )
-                                + Math.max(
-                                        0,
-                                        ubicacion.getOrden()
                                 )
                                 + penalizacionOverflowTurno(
                                         habilitadaParaTurno
@@ -2334,6 +2324,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
             if (turno == null
                     || ubicacion == null
+                    || ubicacion.getTipo()
+                    != TipoUbicacion.VIA
                     || !permiteTurno(
                             ubicacion,
                             turno.getEstado()
@@ -2372,6 +2364,10 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
             int casetasNormales =
                     (int) ubicaciones.stream()
+                            .filter(item ->
+                                    item.getTipo()
+                                            == TipoUbicacion.VIA
+                            )
                             .filter(item ->
                                     permiteTurno(
                                             item,
@@ -2481,49 +2477,25 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         };
     }
 
-    private boolean viasCompletasAntesDeAuxiliar(
-            ProgramacionUbicacion candidata,
+    private boolean todasLasViasCompletas(
             List<ProgramacionUbicacion> ubicaciones,
-            EstadoProgramacion turno,
             Set<Long> ocupadas
     ) {
-        if (candidata.getTipo() != TipoUbicacion.AUXILIAR) {
-            return true;
-        }
-
         return ubicaciones.stream()
-                .filter(item -> item.getTipo() == TipoUbicacion.VIA)
-                .filter(item -> Boolean.TRUE.equals(item.getActivo()))
-                .filter(item -> permiteTurno(item, turno))
-                .allMatch(item -> ocupadas.contains(item.getId()));
-    }
-
-    private boolean cumpleOrdenSecuencial(
-            ProgramacionUbicacion candidata,
-            List<ProgramacionUbicacion> ubicaciones,
-            EstadoProgramacion turno,
-            Set<Long> ocupadas
-    ) {
-        if (candidata.getTipo() == TipoUbicacion.VIA) {
-            return true;
-        }
-
-        int ordenCandidata =
-                candidata.getOrden() == null
-                        ? Integer.MAX_VALUE
-                        : candidata.getOrden();
-
-        return ubicaciones.stream()
-                .filter(item -> item.getTipo() != TipoUbicacion.VIA)
-                .filter(item -> permiteTurno(item, turno))
-                .filter(item -> {
-                    int orden =
-                            item.getOrden() == null
-                                    ? Integer.MAX_VALUE
-                                    : item.getOrden();
-                    return orden < ordenCandidata;
-                })
-                .allMatch(item -> ocupadas.contains(item.getId()));
+                .filter(item ->
+                        Boolean.TRUE.equals(
+                                item.getActivo()
+                        )
+                )
+                .filter(item ->
+                        item.getTipo()
+                                == TipoUbicacion.VIA
+                )
+                .allMatch(item ->
+                        ocupadas.contains(
+                                item.getId()
+                        )
+                );
     }
 
     private Plaza validarPlaza(Long plazaId) {
