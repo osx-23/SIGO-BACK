@@ -987,6 +987,33 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         base
                 );
 
+        /*
+         * Defensa adicional contra duplicados.
+         * Aunque el backtracking ya mantiene un Set de casetas ocupadas,
+         * volvemos a comprobar aquí antes de materializar cada asignación.
+         */
+        Set<Long> casetasOcupadasGrupo =
+                siguiente.asignaciones.stream()
+                        .filter(item ->
+                                !grupoTurno.isEmpty()
+                                        && Objects.equals(
+                                                item.fecha(),
+                                                grupoTurno.get(0).getFecha()
+                                        )
+                                        && Objects.equals(
+                                                item.turno(),
+                                                grupoTurno.get(0)
+                                                        .getEstado()
+                                                        .name()
+                                        )
+                        )
+                        .map(
+                                ItemPropuesta::ubicacionId
+                        )
+                        .collect(
+                                Collectors.toSet()
+                        );
+
         for (ProgramacionTurno turno :
                 grupoTurno) {
             Candidate elegido =
@@ -1015,6 +1042,19 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
             ProgramacionUbicacion ubicacion =
                     elegido.ubicacion();
+
+            if (!casetasOcupadasGrupo.add(
+                    ubicacion.getId()
+            )) {
+                throw new ProgramacionValidationException(
+                        "No se permite asignar la caseta "
+                                + ubicacion.getCodigo()
+                                + " a dos agentes en el mismo turno "
+                                + turno.getEstado().name()
+                                + " del "
+                                + turno.getFecha()
+                );
+            }
 
             siguiente.asignaciones.add(
                     new ItemPropuesta(
@@ -1818,9 +1858,11 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
              *    ese turno.
              * 3) AUXILIAR/APOYO recién pueden usarse cuando ya no queda
              *    ninguna VÍA registrada libre.
+             * 4) Los AUXILIARES se habilitan secuencialmente por "orden":
+             *    AUX 1 -> AUX 2 -> AUX 3...
              *
-             * El número de orden NO participa. Dentro de cada nivel las
-             * ubicaciones se evalúan en orden aleatorio.
+             * El número de orden NO participa para VIA ni APOYO. Las VÍAS
+             * continúan evaluándose aleatoriamente.
              *
              * Turno C conserva su regla especial: solo utiliza VÍAS.
              */
@@ -1852,6 +1894,22 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     ubicaciones,
                     ocupadasTurno
             )) {
+                continue;
+            }
+
+            /*
+             * Los AUXILIARES sí respetan el orden configurado:
+             * AUX 1 debe ocuparse antes que AUX 2, AUX 2 antes que AUX 3,
+             * etc. Esta regla usa "orden" únicamente para AUXILIAR.
+             * VIA y APOYO continúan sin prioridad por número de orden.
+             */
+            if (ubicacion.getTipo()
+                    == TipoUbicacion.AUXILIAR
+                    && !auxiliaresPreviosCompletos(
+                            ubicacion,
+                            ubicaciones,
+                            ocupadasTurno
+                    )) {
                 continue;
             }
 
@@ -2491,6 +2549,46 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         item.getTipo()
                                 == TipoUbicacion.VIA
                 )
+                .allMatch(item ->
+                        ocupadas.contains(
+                                item.getId()
+                        )
+                );
+    }
+
+    private boolean auxiliaresPreviosCompletos(
+            ProgramacionUbicacion candidata,
+            List<ProgramacionUbicacion> ubicaciones,
+            Set<Long> ocupadas
+    ) {
+        if (candidata.getTipo()
+                != TipoUbicacion.AUXILIAR) {
+            return true;
+        }
+
+        int ordenCandidata =
+                candidata.getOrden() == null
+                        ? Integer.MAX_VALUE
+                        : candidata.getOrden();
+
+        return ubicaciones.stream()
+                .filter(item ->
+                        Boolean.TRUE.equals(
+                                item.getActivo()
+                        )
+                )
+                .filter(item ->
+                        item.getTipo()
+                                == TipoUbicacion.AUXILIAR
+                )
+                .filter(item -> {
+                    int orden =
+                            item.getOrden() == null
+                                    ? Integer.MAX_VALUE
+                                    : item.getOrden();
+
+                    return orden < ordenCandidata;
+                })
                 .allMatch(item ->
                         ocupadas.contains(
                                 item.getId()
