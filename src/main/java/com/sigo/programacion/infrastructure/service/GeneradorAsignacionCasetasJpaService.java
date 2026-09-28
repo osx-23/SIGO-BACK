@@ -534,8 +534,30 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             );
         }
 
+        /*
+         * Una vez conseguida la mejor cobertura, hacemos una segunda
+         * optimización local. Esta fase NO cambia el flujo asignado ni
+         * la cantidad de ubicaciones ocupadas: únicamente intercambia
+         * VIA/AUXILIAR entre agentes del mismo día, turno y flujo cuando
+         * con ello mejora la rotación individual.
+         */
+        mejorIntento =
+                repararRotacionMismoFlujo(
+                        mejorIntento,
+                        turnos,
+                        ubicaciones,
+                        configCaseta,
+                        restricciones,
+                        asignacionPorDiaAgente
+                );
+
         validarSinDuplicidadDeCaseta(
                 mejorIntento.asignaciones()
+        );
+
+        validarRestriccionesFinales(
+                mejorIntento.asignaciones(),
+                restricciones
         );
 
         return new Propuesta(
@@ -549,6 +571,654 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 mejorIntento.asignaciones(),
                 mejorIntento.conflictos()
         );
+    }
+
+    private IntentoGeneracion repararRotacionMismoFlujo(
+            IntentoGeneracion intento,
+            List<ProgramacionTurno> turnos,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta,
+            Set<String> restricciones,
+            Map<String, Long> historialBase
+    ) {
+        if (intento.asignaciones().size() < 2) {
+            return intento;
+        }
+
+        List<ItemPropuesta> reparadas =
+                new ArrayList<>(
+                        intento.asignaciones()
+                );
+
+        Map<Long, ProgramacionTurno> turnoPorId =
+                turnos.stream()
+                        .collect(
+                                Collectors.toMap(
+                                        ProgramacionTurno::getId,
+                                        Function.identity()
+                                )
+                        );
+
+        Map<Long, ProgramacionUbicacion> ubicacionPorId =
+                ubicaciones.stream()
+                        .collect(
+                                Collectors.toMap(
+                                        ProgramacionUbicacion::getId,
+                                        Function.identity()
+                                )
+                        );
+
+        Map<String, Long> historial =
+                new HashMap<>(
+                        historialBase
+                );
+
+        Map<String, List<Integer>> grupos =
+                new TreeMap<>();
+
+        for (int i = 0;
+                i < reparadas.size();
+                i++) {
+            ItemPropuesta item =
+                    reparadas.get(i);
+
+            grupos.computeIfAbsent(
+                    item.fecha()
+                            + "|"
+                            + item.turno(),
+                    ignored -> new ArrayList<>()
+            ).add(i);
+        }
+
+        for (List<Integer> indices :
+                grupos.values()) {
+            if (indices.size() < 2) {
+                actualizarHistorialReparacion(
+                        reparadas,
+                        indices,
+                        historial
+                );
+                continue;
+            }
+
+            boolean huboCambio;
+            int iteraciones = 0;
+
+            do {
+                huboCambio = false;
+                int mejorA = -1;
+                int mejorB = -1;
+                int mejorMejora = 0;
+
+                for (int x = 0;
+                        x < indices.size();
+                        x++) {
+                    int indiceA =
+                            indices.get(x);
+
+                    ItemPropuesta itemA =
+                            reparadas.get(
+                                    indiceA
+                            );
+
+                    ProgramacionTurno turnoA =
+                            turnoPorId.get(
+                                    itemA.programacionTurnoId()
+                            );
+
+                    ProgramacionUbicacion ubicacionA =
+                            ubicacionPorId.get(
+                                    itemA.ubicacionId()
+                            );
+
+                    if (turnoA == null
+                            || ubicacionA == null
+                            || turnoA.getEstado()
+                            == EstadoProgramacion.C
+                            || !esViaOAuxiliar(
+                                    ubicacionA
+                            )) {
+                        continue;
+                    }
+
+                    GrupoFlujoCaseta grupoA =
+                            grupo(
+                                    configCaseta.get(
+                                            ubicacionA.getId()
+                                    )
+                            );
+
+                    if (!flujoPermiteAlternanciaTipo(
+                            grupoA,
+                            turnoA.getEstado(),
+                            ubicaciones,
+                            configCaseta
+                    )) {
+                        continue;
+                    }
+
+                    for (int y = x + 1;
+                            y < indices.size();
+                            y++) {
+                        int indiceB =
+                                indices.get(y);
+
+                        ItemPropuesta itemB =
+                                reparadas.get(
+                                        indiceB
+                                );
+
+                        ProgramacionTurno turnoB =
+                                turnoPorId.get(
+                                        itemB.programacionTurnoId()
+                                );
+
+                        ProgramacionUbicacion ubicacionB =
+                                ubicacionPorId.get(
+                                        itemB.ubicacionId()
+                                );
+
+                        if (turnoB == null
+                                || ubicacionB == null
+                                || !esViaOAuxiliar(
+                                        ubicacionB
+                                )
+                                || ubicacionA.getTipo()
+                                == ubicacionB.getTipo()) {
+                            continue;
+                        }
+
+                        GrupoFlujoCaseta grupoB =
+                                grupo(
+                                        configCaseta.get(
+                                                ubicacionB.getId()
+                                        )
+                                );
+
+                        /*
+                         * Un intercambio nunca cambia el flujo del agente.
+                         * Así se conservan intactas las reglas ALTO/BAJO,
+                         * incluida la prohibición de tres días seguidos.
+                         */
+                        if (grupoA
+                                != grupoB) {
+                            continue;
+                        }
+
+                        Long trabajadorA =
+                                itemA.trabajadorId();
+
+                        Long trabajadorB =
+                                itemB.trabajadorId();
+
+                        if (restricciones.contains(
+                                key(
+                                        trabajadorA,
+                                        ubicacionB.getId()
+                                )
+                        ) || restricciones.contains(
+                                key(
+                                        trabajadorB,
+                                        ubicacionA.getId()
+                                )
+                        )) {
+                            continue;
+                        }
+
+                        int costoAntes =
+                                costoRotacionReparacion(
+                                        trabajadorA,
+                                        itemA.fecha(),
+                                        turnoA.getEstado(),
+                                        ubicacionA,
+                                        grupoA,
+                                        historial,
+                                        ubicaciones,
+                                        configCaseta
+                                )
+                                        + costoRotacionReparacion(
+                                                trabajadorB,
+                                                itemB.fecha(),
+                                                turnoB.getEstado(),
+                                                ubicacionB,
+                                                grupoB,
+                                                historial,
+                                                ubicaciones,
+                                                configCaseta
+                                        );
+
+                        int costoDespues =
+                                costoRotacionReparacion(
+                                        trabajadorA,
+                                        itemA.fecha(),
+                                        turnoA.getEstado(),
+                                        ubicacionB,
+                                        grupoA,
+                                        historial,
+                                        ubicaciones,
+                                        configCaseta
+                                )
+                                        + costoRotacionReparacion(
+                                                trabajadorB,
+                                                itemB.fecha(),
+                                                turnoB.getEstado(),
+                                                ubicacionA,
+                                                grupoB,
+                                                historial,
+                                                ubicaciones,
+                                                configCaseta
+                                        );
+
+                        int mejora =
+                                costoAntes
+                                        - costoDespues;
+
+                        if (mejora
+                                > mejorMejora) {
+                            mejorMejora =
+                                    mejora;
+                            mejorA =
+                                    indiceA;
+                            mejorB =
+                                    indiceB;
+                        }
+                    }
+                }
+
+                if (mejorA >= 0
+                        && mejorB >= 0
+                        && mejorMejora > 0) {
+                    ItemPropuesta itemA =
+                            reparadas.get(
+                                    mejorA
+                            );
+
+                    ItemPropuesta itemB =
+                            reparadas.get(
+                                    mejorB
+                            );
+
+                    reparadas.set(
+                            mejorA,
+                            intercambiarUbicacion(
+                                    itemA,
+                                    itemB
+                            )
+                    );
+
+                    reparadas.set(
+                            mejorB,
+                            intercambiarUbicacion(
+                                    itemB,
+                                    itemA
+                            )
+                    );
+
+                    huboCambio =
+                            true;
+                }
+
+                iteraciones++;
+            } while (huboCambio
+                    && iteraciones < 20);
+
+            actualizarHistorialReparacion(
+                    reparadas,
+                    indices,
+                    historial
+            );
+        }
+
+        return new IntentoGeneracion(
+                List.copyOf(
+                        reparadas
+                ),
+                intento.conflictos()
+        );
+    }
+
+    private ItemPropuesta intercambiarUbicacion(
+            ItemPropuesta agente,
+            ItemPropuesta origenUbicacion
+    ) {
+        return new ItemPropuesta(
+                agente.programacionTurnoId(),
+                agente.trabajadorId(),
+                agente.codigoTrabajador(),
+                agente.trabajador(),
+                agente.fecha(),
+                agente.turno(),
+                origenUbicacion.ubicacionId(),
+                origenUbicacion.ubicacionCodigo(),
+                origenUbicacion.ubicacionNombre(),
+                origenUbicacion.grupoFlujo(),
+                agente.puntaje()
+        );
+    }
+
+    private int costoRotacionReparacion(
+            Long trabajadorId,
+            LocalDate fecha,
+            EstadoProgramacion turno,
+            ProgramacionUbicacion ubicacion,
+            GrupoFlujoCaseta grupo,
+            Map<String, Long> historial,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta
+    ) {
+        int costo = 0;
+
+        if (flujoPermiteAlternanciaTipo(
+                grupo,
+                turno,
+                ubicaciones,
+                configCaseta
+        )) {
+            ProgramacionUbicacion ultimaMismoFlujo =
+                    ultimaUbicacionEnMismoFlujo(
+                            trabajadorId,
+                            fecha,
+                            grupo,
+                            historial,
+                            ubicaciones,
+                            configCaseta
+                    );
+
+            if (ultimaMismoFlujo != null
+                    && esViaOAuxiliar(
+                            ultimaMismoFlujo
+                    )
+                    && ultimaMismoFlujo.getTipo()
+                    == ubicacion.getTipo()) {
+                /*
+                 * Este es el defecto principal que queremos reparar:
+                 * BAJO/VIA -> ALTO/... -> BAJO/VIA, existiendo AUX.
+                 */
+                costo +=
+                        1_000;
+            }
+
+            costo +=
+                    desequilibrioTipoProyectado(
+                            trabajadorId,
+                            fecha,
+                            grupo,
+                            ubicacion.getTipo(),
+                            historial,
+                            ubicaciones,
+                            configCaseta
+                    ) * 55;
+        }
+
+        Long ayer =
+                historial.get(
+                        keyDia(
+                                trabajadorId,
+                                fecha.minusDays(1)
+                        )
+                );
+
+        if (Objects.equals(
+                ayer,
+                ubicacion.getId()
+        )) {
+            costo +=
+                    260;
+        }
+
+        int usosSemana =
+                usosUbicacionEnVentana(
+                        trabajadorId,
+                        ubicacion.getId(),
+                        fecha,
+                        7,
+                        historial
+                );
+
+        int usosMes =
+                usosUbicacionEnVentana(
+                        trabajadorId,
+                        ubicacion.getId(),
+                        fecha,
+                        31,
+                        historial
+                );
+
+        costo +=
+                (usosSemana * 65)
+                        + (usosMes * 15);
+
+        return costo;
+    }
+
+    private int penalizacionBalanceTipoMismoFlujo(
+            Long trabajadorId,
+            LocalDate fecha,
+            GrupoFlujoCaseta grupo,
+            ProgramacionUbicacion candidata,
+            Map<String, Long> historial,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta,
+            boolean alternanciaDisponible
+    ) {
+        if (!alternanciaDisponible
+                || candidata == null
+                || !esViaOAuxiliar(
+                        candidata
+                )) {
+            return 0;
+        }
+
+        return desequilibrioTipoProyectado(
+                trabajadorId,
+                fecha,
+                grupo,
+                candidata.getTipo(),
+                historial,
+                ubicaciones,
+                configCaseta
+        ) * 55;
+    }
+
+    private int desequilibrioTipoProyectado(
+            Long trabajadorId,
+            LocalDate fecha,
+            GrupoFlujoCaseta grupo,
+            TipoUbicacion tipoCandidato,
+            Map<String, Long> historial,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta
+    ) {
+        int vias = 0;
+        int auxiliares = 0;
+
+        LocalDate cursor =
+                fecha.minusDays(1);
+
+        LocalDate limite =
+                fecha.minusDays(31);
+
+        while (!cursor.isBefore(
+                limite
+        )) {
+            Long ubicacionId =
+                    historial.get(
+                            keyDia(
+                                    trabajadorId,
+                                    cursor
+                            )
+                    );
+
+            if (ubicacionId != null
+                    && grupoDeUbicacion(
+                            ubicacionId,
+                            configCaseta
+                    ) == grupo) {
+                ProgramacionUbicacion previa =
+                        ubicacionPorId(
+                                ubicaciones,
+                                ubicacionId
+                        );
+
+                if (previa != null) {
+                    if (previa.getTipo()
+                            == TipoUbicacion.VIA) {
+                        vias++;
+                    } else if (previa.getTipo()
+                            == TipoUbicacion.AUXILIAR) {
+                        auxiliares++;
+                    }
+                }
+            }
+
+            cursor =
+                    cursor.minusDays(1);
+        }
+
+        if (tipoCandidato
+                == TipoUbicacion.VIA) {
+            vias++;
+        } else if (tipoCandidato
+                == TipoUbicacion.AUXILIAR) {
+            auxiliares++;
+        }
+
+        return Math.abs(
+                vias - auxiliares
+        );
+    }
+
+    private int usosUbicacionEnVentana(
+            Long trabajadorId,
+            Long ubicacionId,
+            LocalDate fecha,
+            int dias,
+            Map<String, Long> historial
+    ) {
+        int usos = 0;
+
+        for (int offset = 1;
+                offset <= dias;
+                offset++) {
+            if (Objects.equals(
+                    historial.get(
+                            keyDia(
+                                    trabajadorId,
+                                    fecha.minusDays(
+                                            offset
+                                    )
+                            )
+                    ),
+                    ubicacionId
+            )) {
+                usos++;
+            }
+        }
+
+        return usos;
+    }
+
+    private void actualizarHistorialReparacion(
+            List<ItemPropuesta> asignaciones,
+            List<Integer> indices,
+            Map<String, Long> historial
+    ) {
+        for (Integer indice :
+                indices) {
+            ItemPropuesta item =
+                    asignaciones.get(
+                            indice
+                    );
+
+            historial.put(
+                    keyDia(
+                            item.trabajadorId(),
+                            item.fecha()
+                    ),
+                    item.ubicacionId()
+            );
+        }
+    }
+
+    private boolean flujoPermiteAlternanciaTipo(
+            GrupoFlujoCaseta grupo,
+            EstadoProgramacion turno,
+            List<ProgramacionUbicacion> ubicaciones,
+            Map<Long, ConfiguracionCaseta> configCaseta
+    ) {
+        if (grupo == null
+                || grupo
+                == GrupoFlujoCaseta.SIN_CLASIFICAR
+                || turno
+                == EstadoProgramacion.C) {
+            return false;
+        }
+
+        boolean tieneVia =
+                false;
+        boolean tieneAuxiliar =
+                false;
+
+        for (ProgramacionUbicacion ubicacion :
+                ubicaciones) {
+            if (!Boolean.TRUE.equals(
+                    ubicacion.getActivo()
+            )) {
+                continue;
+            }
+
+            if (grupo(
+                    configCaseta.get(
+                            ubicacion.getId()
+                    )
+            ) != grupo) {
+                continue;
+            }
+
+            if (ubicacion.getTipo()
+                    == TipoUbicacion.VIA) {
+                tieneVia =
+                        true;
+            } else if (ubicacion.getTipo()
+                    == TipoUbicacion.AUXILIAR
+                    && permiteTurno(
+                            ubicacion,
+                            turno
+                    )) {
+                tieneAuxiliar =
+                        true;
+            }
+
+            if (tieneVia
+                    && tieneAuxiliar) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void validarRestriccionesFinales(
+            List<ItemPropuesta> asignaciones,
+            Set<String> restricciones
+    ) {
+        for (ItemPropuesta item :
+                asignaciones) {
+            if (restricciones.contains(
+                    key(
+                            item.trabajadorId(),
+                            item.ubicacionId()
+                    )
+            )) {
+                throw new ProgramacionValidationException(
+                        "La reparación intentó asignar "
+                                + item.ubicacionCodigo()
+                                + " a "
+                                + item.trabajador()
+                                + ", pero existe una restricción activa"
+                );
+            }
+        }
     }
 
     private void validarSinDuplicidadDeCaseta(
@@ -2139,8 +2809,17 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
              * combinación válida. En flexible/reparación puede repetirse
              * el tipo para no dejar personal sin asignación.
              */
-            boolean repiteTipoEnMismoFlujo =
+            boolean alternanciaTipoDisponible =
                     !turnoC
+                            && flujoPermiteAlternanciaTipo(
+                                    grupo,
+                                    turno.getEstado(),
+                                    ubicaciones,
+                                    configCaseta
+                            );
+
+            boolean repiteTipoEnMismoFlujo =
+                    alternanciaTipoDisponible
                             && esViaOAuxiliar(
                                     ubicacion
                             )
@@ -2253,10 +2932,24 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                                         false,
                                         config.balancearFlujo()
                                 )
-                                + penalizacionTipoEnMismoFlujo(
-                                        ultimaUbicacionMismoFlujo,
+                                + (
+                                        alternanciaTipoDisponible
+                                                ? penalizacionTipoEnMismoFlujo(
+                                                        ultimaUbicacionMismoFlujo,
+                                                        ubicacion,
+                                                        coberturaForzada
+                                                )
+                                                : 0
+                                )
+                                + penalizacionBalanceTipoMismoFlujo(
+                                        trabajadorId,
+                                        turno.getFecha(),
+                                        grupo,
                                         ubicacion,
-                                        coberturaForzada
+                                        asignacionPorDiaAgente,
+                                        ubicaciones,
+                                        configCaseta,
+                                        alternanciaTipoDisponible
                                 )
                                 + penalizacionRecuperacionFlujo(
                                         flujoEstricto,
