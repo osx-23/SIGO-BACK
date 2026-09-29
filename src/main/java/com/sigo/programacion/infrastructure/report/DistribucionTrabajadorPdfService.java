@@ -20,7 +20,6 @@ import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -186,19 +185,12 @@ public class DistribucionTrabajadorPdfService
             Map<Long, List<DistribucionUseCase.MatrizItem>> porTrabajador =
                     reporte.items()
                             .stream()
-                            .sorted(
-                                    Comparator
-                                            .comparing(
-                                                    DistribucionUseCase.MatrizItem::nombreTrabajador,
-                                                    String.CASE_INSENSITIVE_ORDER
-                                            )
-                                            .thenComparing(
-                                                    item ->
-                                                            item.codigoTrabajador() == null
-                                                                    ? Integer.MAX_VALUE
-                                                                    : item.codigoTrabajador()
-                                            )
-                            )
+                            /*
+                             * El adapter ya entrega los agentes en el mismo
+                             * orden visual de la pantalla:
+                             * SECUENCIA_1..4 y luego PART_TIME.
+                             * LinkedHashMap conserva ese orden en el PDF.
+                             */
                             .collect(
                                     java.util.stream.Collectors.groupingBy(
                                             DistribucionUseCase.MatrizItem::trabajadorId,
