@@ -15,8 +15,10 @@ import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionU
 import com.sigo.shared.exception.BusinessException;
 import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.sql.PreparedStatement;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.TreeMap;
 
 @Component
@@ -36,6 +39,7 @@ public class DistribucionGestionJpaAdapter
     private final ProgramacionTurnoRepository programacionRepository;
     private final ProgramacionUbicacionRepository ubicacionRepository;
     private final TrabajadorRepository trabajadorRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     public List<DistribucionUseCase.Distribucion> listar(
@@ -250,81 +254,163 @@ public class DistribucionGestionJpaAdapter
                 ubicacionesActivas
         );
 
-        Map<Long, DistribucionPersonal> existentePorProgramacion =
-                distribucionesPeriodoConAnterior
-                        .stream()
-                        .filter(item ->
-                                programacionIds.contains(
-                                        item.getProgramacionTurno().getId()
-                                )
-                        )
-                        .collect(
-                                java.util.stream.Collectors.toMap(
-                                        item ->
-                                                item.getProgramacionTurno().getId(),
-                                        item -> item
-                                )
-                        );
-
-        List<DistribucionPersonal> paraGuardar =
-                new ArrayList<>(
-                        resueltos.size()
+        /*
+         * Escritura masiva real.
+         *
+         * Evita que Hibernate ejecute un SELECT + INSERT/UPDATE por cada
+         * asignación. programacion_turno_id es UNIQUE en PostgreSQL, por lo
+         * que una sola sentencia puede insertar o actualizar todo el lote.
+         */
+        Map<Long, Long> idDistribucionPorProgramacion =
+                guardarLotePostgres(
+                        resueltos,
+                        actual.getId()
                 );
 
-        for (ItemResuelto resuelto :
-                resueltos) {
-            DistribucionUseCase.Item item =
-                    resuelto.item();
-
-            ProgramacionTurno programacion =
-                    resuelto.programacion();
-
-            DistribucionPersonal distribucion =
-                    existentePorProgramacion.get(
-                            programacion.getId()
-                    );
-
-            if (distribucion == null) {
-                distribucion =
-                        new DistribucionPersonal();
-
-                distribucion.setProgramacionTurno(
-                        programacion
-                );
-
-                distribucion.setAsignadoPor(
-                        actual
-                );
-            }
-
-            distribucion.setUbicacion(
-                    resuelto.ubicacion()
-            );
-
-            distribucion.setObservacion(
-                    item.observacion()
-            );
-
-            distribucion.setActualizadoPor(
-                    actual
-            );
-
-            paraGuardar.add(
-                    distribucion
-            );
-        }
-
-        List<DistribucionPersonal> guardados =
-                distribucionRepository
-                        .saveAllAndFlush(
-                                paraGuardar
-                        );
-
-        return guardados
+        return resueltos
                 .stream()
-                .map(this::toData)
+                .map(resuelto ->
+                        toData(
+                                idDistribucionPorProgramacion.get(
+                                        resuelto.programacion().getId()
+                                ),
+                                resuelto
+                        )
+                )
                 .toList();
     }
+
+
+    private Map<Long, Long> guardarLotePostgres(
+            List<ItemResuelto> resueltos,
+            Long usuarioId
+    ) {
+        if (resueltos.isEmpty()) {
+            return Map.of();
+        }
+
+        StringJoiner values =
+                new StringJoiner(",");
+
+        for (int i = 0; i < resueltos.size(); i++) {
+            values.add("(?, ?, ?, ?, ?)");
+        }
+
+        String sql =
+                """
+                insert into distribucion_personal (
+                    programacion_turno_id,
+                    ubicacion_id,
+                    asignado_por,
+                    actualizado_por,
+                    observacion
+                )
+                values %s
+                on conflict (programacion_turno_id)
+                do update set
+                    ubicacion_id = excluded.ubicacion_id,
+                    actualizado_por = excluded.actualizado_por,
+                    observacion = excluded.observacion,
+                    updated_at = now()
+                returning id, programacion_turno_id
+                """.formatted(
+                        values
+                );
+
+        return jdbcTemplate.query(
+                connection -> {
+                    PreparedStatement statement =
+                            connection.prepareStatement(
+                                    sql
+                            );
+
+                    int index = 1;
+
+                    for (ItemResuelto resuelto :
+                            resueltos) {
+                        statement.setLong(
+                                index++,
+                                resuelto.programacion().getId()
+                        );
+
+                        statement.setLong(
+                                index++,
+                                resuelto.ubicacion().getId()
+                        );
+
+                        statement.setLong(
+                                index++,
+                                usuarioId
+                        );
+
+                        statement.setLong(
+                                index++,
+                                usuarioId
+                        );
+
+                        if (resuelto.item().observacion() == null) {
+                            statement.setNull(
+                                    index++,
+                                    java.sql.Types.VARCHAR
+                            );
+                        }
+                        else {
+                            statement.setString(
+                                    index++,
+                                    resuelto.item().observacion()
+                            );
+                        }
+                    }
+
+                    return statement;
+                },
+                resultSet -> {
+                    Map<Long, Long> ids =
+                            new HashMap<>();
+
+                    while (resultSet.next()) {
+                        ids.put(
+                                resultSet.getLong(
+                                        "programacion_turno_id"
+                                ),
+                                resultSet.getLong(
+                                        "id"
+                                )
+                        );
+                    }
+
+                    return ids;
+                }
+        );
+    }
+
+
+    private DistribucionUseCase.Distribucion toData(
+            Long distribucionId,
+            ItemResuelto resuelto
+    ) {
+        ProgramacionTurno programacion =
+                resuelto.programacion();
+
+        ProgramacionUbicacion ubicacion =
+                resuelto.ubicacion();
+
+        return new DistribucionUseCase.Distribucion(
+                distribucionId,
+                programacion.getId(),
+                programacion.getTrabajador().getId(),
+                programacion.getTrabajador().getCodigo(),
+                programacion.getTrabajador().getNombreCompleto(),
+                programacion.getFecha(),
+                programacion.getEstado().name(),
+                ubicacion.getId(),
+                ubicacion.getCodigo(),
+                ubicacion.getNombre(),
+                ubicacion.getTipo().name(),
+                resuelto.item().observacion()
+        );
+    }
+
 
     private void validarHabilitacionTurnos(
             List<ItemResuelto> resueltos,
