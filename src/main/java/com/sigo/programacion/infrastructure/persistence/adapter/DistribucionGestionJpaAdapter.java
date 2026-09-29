@@ -6,10 +6,12 @@ import com.sigo.programacion.application.port.in.DistribucionUseCase;
 import com.sigo.programacion.application.port.out.DistribucionGestionPort;
 import com.sigo.programacion.infrastructure.persistence.entity.DistribucionPersonal;
 import com.sigo.programacion.infrastructure.persistence.entity.EstadoProgramacion;
+import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionSecuenciaAgente;
 import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionTurno;
 import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionUbicacion;
 import com.sigo.programacion.infrastructure.persistence.entity.TipoUbicacion;
 import com.sigo.programacion.infrastructure.persistence.repository.DistribucionPersonalRepository;
+import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionSecuenciaAgenteRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionTurnoRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionUbicacionRepository;
 import com.sigo.shared.exception.BusinessException;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,6 +36,7 @@ public class DistribucionGestionJpaAdapter
         implements DistribucionGestionPort {
 
     private final DistribucionPersonalRepository distribucionRepository;
+    private final ProgramacionSecuenciaAgenteRepository secuenciaRepository;
     private final ProgramacionTurnoRepository programacionRepository;
     private final ProgramacionUbicacionRepository ubicacionRepository;
     private final TrabajadorRepository trabajadorRepository;
@@ -1007,8 +1011,76 @@ public class DistribucionGestionJpaAdapter
                                 )
                         );
 
+        List<ProgramacionSecuenciaAgente> secuencias =
+                secuenciaRepository
+                        .findActivasByPlazaId(
+                                plazaId
+                        )
+                        .stream()
+                        .filter(
+                                secuencia ->
+                                        secuencia.getGrupo() != null
+                        )
+                        .sorted(
+                                Comparator
+                                        .comparingInt(
+                                                secuencia ->
+                                                        ordenGrupo(
+                                                                secuencia.getGrupo()
+                                                        )
+                                        )
+                                        .thenComparing(
+                                                secuencia ->
+                                                        secuencia.getOrden() == null
+                                                                ? Integer.MAX_VALUE
+                                                                : secuencia.getOrden()
+                                        )
+                        )
+                        .toList();
+
+        Map<Long, Integer> ordenTrabajador =
+                new HashMap<>();
+
+        for (
+                int indice = 0;
+                indice < secuencias.size();
+                indice++
+        ) {
+            ordenTrabajador.put(
+                    secuencias
+                            .get(indice)
+                            .getAgente()
+                            .getId(),
+                    indice
+            );
+        }
+
         return programaciones
                 .stream()
+                /*
+                 * La pantalla de distribución solo muestra agentes que
+                 * pertenecen a una secuencia. El PDF debe conservar ese
+                 * mismo conjunto y exactamente el mismo orden visual.
+                 */
+                .filter(
+                        programacion ->
+                                ordenTrabajador.containsKey(
+                                        programacion.getTrabajadorId()
+                                )
+                )
+                .sorted(
+                        Comparator
+                                .comparingInt(
+                                        programacion ->
+                                                ordenTrabajador.get(
+                                                        programacion.getTrabajadorId()
+                                                )
+                                )
+                                .thenComparing(
+                                        ProgramacionTurnoRepository
+                                                .TurnoResumen::getFecha
+                                )
+                )
                 .map(programacion -> {
                     DistribucionPersonal distribucion =
                             distribucionPorProgramacion.get(
@@ -1043,6 +1115,30 @@ public class DistribucionGestionJpaAdapter
                     );
                 })
                 .toList();
+    }
+
+
+    private int ordenGrupo(
+            com.sigo.programacion.infrastructure.persistence.entity.GrupoProgramacion grupo
+    ) {
+        return switch (
+                grupo
+        ) {
+            case SECUENCIA_1 ->
+                    1;
+
+            case SECUENCIA_2 ->
+                    2;
+
+            case SECUENCIA_3 ->
+                    3;
+
+            case SECUENCIA_4 ->
+                    4;
+
+            case PART_TIME ->
+                    5;
+        };
     }
 
 
