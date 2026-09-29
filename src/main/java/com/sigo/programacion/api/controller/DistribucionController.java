@@ -8,7 +8,7 @@ import com.sigo.programacion.api.dto.ResumenTrabajadorResponse;
 import com.sigo.programacion.api.dto.UbicacionResponse;
 import com.sigo.programacion.application.port.in.DistribucionUseCase;
 import com.sigo.programacion.application.port.in.UbicacionUseCase;
-import com.sigo.programacion.infrastructure.report.DistribucionTrabajadorPdfService;
+import com.sigo.programacion.application.port.out.DistribucionReportePdfPort;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -28,7 +28,7 @@ public class DistribucionController {
 
     private final UbicacionUseCase ubicacionUseCase;
     private final DistribucionUseCase distribucionUseCase;
-    private final DistribucionTrabajadorPdfService pdfService;
+    private final DistribucionReportePdfPort pdfService;
 
     @GetMapping("/ubicaciones")
     public List<UbicacionResponse> ubicaciones(
