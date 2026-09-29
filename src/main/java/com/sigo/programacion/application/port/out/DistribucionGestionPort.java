@@ -21,6 +21,12 @@ public interface DistribucionGestionPort {
 
     Long plazaTrabajador(Long trabajadorId);
 
+    List<DistribucionUseCase.Distribucion> listarTrabajador(
+            Long trabajadorId,
+            LocalDate desde,
+            LocalDate hasta
+    );
+
     DistribucionUseCase.ResumenTrabajador resumen(
             Long trabajadorId,
             LocalDate desde,
