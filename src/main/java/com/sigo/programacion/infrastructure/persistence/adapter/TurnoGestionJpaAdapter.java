@@ -9,6 +9,7 @@ import com.sigo.programacion.application.port.in.ListarTurnosUseCase;
 import com.sigo.programacion.application.port.out.TurnoGestionPort;
 import com.sigo.programacion.infrastructure.persistence.entity.EstadoProgramacion;
 import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionTurno;
+import com.sigo.programacion.infrastructure.persistence.repository.DistribucionPersonalRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionTurnoRepository;
 import com.sigo.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class TurnoGestionJpaAdapter
         implements TurnoGestionPort {
 
     private final ProgramacionTurnoRepository programacionRepository;
+    private final DistribucionPersonalRepository distribucionRepository;
     private final TrabajadorRepository trabajadorRepository;
     private final PlazaRepository plazaRepository;
 
@@ -83,8 +85,7 @@ public class TurnoGestionJpaAdapter
         for (GuardarTurnosUseCase.Item item : programaciones) {
             if (item == null
                     || item.trabajadorId() == null
-                    || item.fecha() == null
-                    || item.estado() == null) {
+                    || item.fecha() == null) {
                 throw bad("La programación contiene datos incompletos");
             }
 
@@ -96,7 +97,11 @@ public class TurnoGestionJpaAdapter
                 );
             }
 
-            parseEstado(item.estado());
+            if (item.estado() != null
+                    && !item.estado().isBlank()) {
+                parseEstado(item.estado());
+            }
+
             trabajadorIds.add(item.trabajadorId());
 
             if (fechaMin == null || item.fecha().isBefore(fechaMin)) {
@@ -130,6 +135,9 @@ public class TurnoGestionJpaAdapter
         List<ProgramacionTurno> paraGuardar =
                 new ArrayList<>(programaciones.size());
 
+        List<ProgramacionTurno> paraEliminar =
+                new ArrayList<>();
+
         for (GuardarTurnosUseCase.Item item : programaciones) {
             Trabajador trabajador =
                     agentesPorId.get(item.trabajadorId());
@@ -142,6 +150,22 @@ public class TurnoGestionJpaAdapter
 
             ProgramacionTurno programacion =
                     porFecha.get(item.fecha());
+
+            boolean eliminar =
+                    item.estado() == null
+                            || item.estado().isBlank();
+
+            if (eliminar) {
+                /*
+                 * "-" en la matriz significa quitar la programación.
+                 * Si ya existía distribución de caseta, debe desaparecer
+                 * primero porque depende del turno mediante FK.
+                 */
+                if (programacion != null) {
+                    paraEliminar.add(programacion);
+                }
+                continue;
+            }
 
             if (programacion == null) {
                 programacion = new ProgramacionTurno();
@@ -159,6 +183,26 @@ public class TurnoGestionJpaAdapter
             programacion.setPlaza(plaza);
             programacion.setEstado(parseEstado(item.estado()));
             programacion.setActualizadoPor(supervisor);
+        }
+
+        if (!paraEliminar.isEmpty()) {
+            for (ProgramacionTurno turno : paraEliminar) {
+                distribucionRepository
+                        .findByProgramacionTurnoId(turno.getId())
+                        .ifPresent(distribucionRepository::delete);
+            }
+
+            distribucionRepository.flush();
+
+            programacionRepository.deleteAll(
+                    paraEliminar
+            );
+
+            programacionRepository.flush();
+        }
+
+        if (paraGuardar.isEmpty()) {
+            return List.of();
         }
 
         return programacionRepository
