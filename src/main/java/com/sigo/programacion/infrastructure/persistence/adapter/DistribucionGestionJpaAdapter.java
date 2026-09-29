@@ -15,10 +15,8 @@ import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionU
 import com.sigo.shared.exception.BusinessException;
 import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import java.sql.PreparedStatement;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.StringJoiner;
 import java.util.TreeMap;
 
 @Component
@@ -39,7 +36,6 @@ public class DistribucionGestionJpaAdapter
     private final ProgramacionTurnoRepository programacionRepository;
     private final ProgramacionUbicacionRepository ubicacionRepository;
     private final TrabajadorRepository trabajadorRepository;
-    private final JdbcTemplate jdbcTemplate;
 
     @Override
     public List<DistribucionUseCase.Distribucion> listar(
@@ -110,13 +106,6 @@ public class DistribucionGestionJpaAdapter
                                 )
                         );
 
-        if (programacionPorId.size()
-                != programacionIds.size()) {
-            throw bad(
-                    "Una o más programaciones no existen"
-            );
-        }
-
         Map<Long, ProgramacionUbicacion> ubicacionPorId =
                 ubicacionRepository
                         .findAllParaDistribucion(
@@ -130,8 +119,13 @@ public class DistribucionGestionJpaAdapter
                                 )
                         );
 
-        if (ubicacionPorId.size()
-                != ubicacionIds.size()) {
+        if (programacionPorId.size() != programacionIds.size()) {
+            throw bad(
+                    "Una o más programaciones no existen"
+            );
+        }
+
+        if (ubicacionPorId.size() != ubicacionIds.size()) {
             throw bad(
                     "Una o más ubicaciones no existen"
             );
@@ -144,14 +138,6 @@ public class DistribucionGestionJpaAdapter
 
         for (DistribucionUseCase.Item item :
                 distribuciones) {
-            if (item == null
-                    || item.programacionTurnoId() == null
-                    || item.ubicacionId() == null) {
-                throw bad(
-                        "La distribución contiene datos incompletos"
-                );
-            }
-
             ProgramacionTurno programacion =
                     programacionPorId.get(
                             item.programacionTurnoId()
@@ -203,225 +189,115 @@ public class DistribucionGestionJpaAdapter
             );
         }
 
-        LocalDate desde =
-                resueltos.stream()
-                        .map(item ->
-                                item.programacion().getFecha()
-                        )
-                        .min(LocalDate::compareTo)
-                        .orElseThrow();
+        /*
+         * Se conservan exactamente las validaciones de la versión estable.
+         * La optimización queda limitada a lecturas previas por lote.
+         */
+        validarHabilitacionTurnos(
+                plazaId,
+                resueltos
+        );
 
-        LocalDate hasta =
-                resueltos.stream()
-                        .map(item ->
-                                item.programacion().getFecha()
+        validarOcupacionFinal(
+                plazaId,
+                resueltos
+        );
+
+        Map<Long, DistribucionPersonal> existentePorProgramacion =
+                distribucionRepository
+                        .findByProgramacionTurnoIdIn(
+                                programacionIds
                         )
-                        .max(LocalDate::compareTo)
-                        .orElseThrow();
+                        .stream()
+                        .collect(
+                                java.util.stream.Collectors.toMap(
+                                        item ->
+                                                item.getProgramacionTurno().getId(),
+                                        item -> item
+                                )
+                        );
+
+        List<DistribucionPersonal> guardados =
+                new ArrayList<>(
+                        resueltos.size()
+                );
+
+        for (ItemResuelto resuelto :
+                resueltos) {
+            DistribucionUseCase.Item item =
+                    resuelto.item();
+
+            ProgramacionTurno programacion =
+                    resuelto.programacion();
+
+            DistribucionPersonal distribucion =
+                    existentePorProgramacion.get(
+                            programacion.getId()
+                    );
+
+            if (distribucion == null) {
+                distribucion =
+                        new DistribucionPersonal();
+
+                distribucion.setProgramacionTurno(
+                        programacion
+                );
+
+                distribucion.setAsignadoPor(
+                        actual
+                );
+            }
+
+            distribucion.setUbicacion(
+                    resuelto.ubicacion()
+            );
+
+            distribucion.setObservacion(
+                    item.observacion()
+            );
+
+            distribucion.setActualizadoPor(
+                    actual
+            );
+
+            guardados.add(
+                    distribucionRepository.save(
+                            distribucion
+                    )
+            );
+        }
+
+        distribucionRepository.flush();
+
+        return guardados
+                .stream()
+                .map(this::toData)
+                .toList();
+    }
+
+    private void validarHabilitacionTurnos(
+            Long plazaId,
+            List<ItemResuelto> resueltos
+    ) {
+        if (resueltos.isEmpty()) {
+            return;
+        }
+
+        LocalDate desde = resueltos.stream()
+                .map(item -> item.programacion().getFecha())
+                .min(LocalDate::compareTo)
+                .orElseThrow();
+
+        LocalDate hasta = resueltos.stream()
+                .map(item -> item.programacion().getFecha())
+                .max(LocalDate::compareTo)
+                .orElseThrow();
 
         List<ProgramacionUbicacion> ubicacionesActivas =
                 ubicacionRepository
                         .findByPlazaIdAndActivoTrueOrderByOrdenAscCodigoAsc(
                                 plazaId
                         );
-
-        List<ProgramacionTurno> programacionesPeriodo =
-                programacionRepository.findMes(
-                        plazaId,
-                        desde,
-                        hasta
-                );
-
-        List<DistribucionPersonal> distribucionesPeriodoConAnterior =
-                distribucionRepository.findMes(
-                        plazaId,
-                        desde.minusDays(1),
-                        hasta
-                );
-
-        validarHabilitacionTurnos(
-                resueltos,
-                desde,
-                programacionesPeriodo,
-                distribucionesPeriodoConAnterior,
-                ubicacionesActivas
-        );
-
-        validarOcupacionFinal(
-                resueltos,
-                desde,
-                distribucionesPeriodoConAnterior,
-                ubicacionesActivas
-        );
-
-        /*
-         * Escritura masiva real.
-         *
-         * Evita que Hibernate ejecute un SELECT + INSERT/UPDATE por cada
-         * asignación. programacion_turno_id es UNIQUE en PostgreSQL, por lo
-         * que una sola sentencia puede insertar o actualizar todo el lote.
-         */
-        Map<Long, Long> idDistribucionPorProgramacion =
-                guardarLotePostgres(
-                        resueltos,
-                        actual.getId()
-                );
-
-        return resueltos
-                .stream()
-                .map(resuelto ->
-                        toData(
-                                idDistribucionPorProgramacion.get(
-                                        resuelto.programacion().getId()
-                                ),
-                                resuelto
-                        )
-                )
-                .toList();
-    }
-
-
-    private Map<Long, Long> guardarLotePostgres(
-            List<ItemResuelto> resueltos,
-            Long usuarioId
-    ) {
-        if (resueltos.isEmpty()) {
-            return Map.of();
-        }
-
-        StringJoiner values =
-                new StringJoiner(",");
-
-        for (int i = 0; i < resueltos.size(); i++) {
-            values.add("(?, ?, ?, ?, ?)");
-        }
-
-        String sql =
-                """
-                insert into distribucion_personal (
-                    programacion_turno_id,
-                    ubicacion_id,
-                    asignado_por,
-                    actualizado_por,
-                    observacion
-                )
-                values %s
-                on conflict (programacion_turno_id)
-                do update set
-                    ubicacion_id = excluded.ubicacion_id,
-                    actualizado_por = excluded.actualizado_por,
-                    observacion = excluded.observacion,
-                    updated_at = now()
-                returning id, programacion_turno_id
-                """.formatted(
-                        values
-                );
-
-        return jdbcTemplate.query(
-                connection -> {
-                    PreparedStatement statement =
-                            connection.prepareStatement(
-                                    sql
-                            );
-
-                    int index = 1;
-
-                    for (ItemResuelto resuelto :
-                            resueltos) {
-                        statement.setLong(
-                                index++,
-                                resuelto.programacion().getId()
-                        );
-
-                        statement.setLong(
-                                index++,
-                                resuelto.ubicacion().getId()
-                        );
-
-                        statement.setLong(
-                                index++,
-                                usuarioId
-                        );
-
-                        statement.setLong(
-                                index++,
-                                usuarioId
-                        );
-
-                        if (resuelto.item().observacion() == null) {
-                            statement.setNull(
-                                    index++,
-                                    java.sql.Types.VARCHAR
-                            );
-                        }
-                        else {
-                            statement.setString(
-                                    index++,
-                                    resuelto.item().observacion()
-                            );
-                        }
-                    }
-
-                    return statement;
-                },
-                resultSet -> {
-                    Map<Long, Long> ids =
-                            new HashMap<>();
-
-                    while (resultSet.next()) {
-                        ids.put(
-                                resultSet.getLong(
-                                        "programacion_turno_id"
-                                ),
-                                resultSet.getLong(
-                                        "id"
-                                )
-                        );
-                    }
-
-                    return ids;
-                }
-        );
-    }
-
-
-    private DistribucionUseCase.Distribucion toData(
-            Long distribucionId,
-            ItemResuelto resuelto
-    ) {
-        ProgramacionTurno programacion =
-                resuelto.programacion();
-
-        ProgramacionUbicacion ubicacion =
-                resuelto.ubicacion();
-
-        return new DistribucionUseCase.Distribucion(
-                distribucionId,
-                programacion.getId(),
-                programacion.getTrabajador().getId(),
-                programacion.getTrabajador().getCodigo(),
-                programacion.getTrabajador().getNombreCompleto(),
-                programacion.getFecha(),
-                programacion.getEstado().name(),
-                ubicacion.getId(),
-                ubicacion.getCodigo(),
-                ubicacion.getNombre(),
-                ubicacion.getTipo().name(),
-                resuelto.item().observacion()
-        );
-    }
-
-
-    private void validarHabilitacionTurnos(
-            List<ItemResuelto> resueltos,
-            LocalDate desde,
-            List<ProgramacionTurno> programacionesPeriodo,
-            List<DistribucionPersonal> distribucionesPeriodoConAnterior,
-            List<ProgramacionUbicacion> ubicacionesActivas
-    ) {
-        if (resueltos.isEmpty()) {
-            return;
-        }
 
         Map<EstadoProgramacion, Integer> capacidadPorTurno =
                 new java.util.EnumMap<>(
@@ -457,7 +333,11 @@ public class DistribucionGestionJpaAdapter
                 new HashMap<>();
 
         for (ProgramacionTurno programacion :
-                programacionesPeriodo) {
+                programacionRepository.findMes(
+                        plazaId,
+                        desde,
+                        hasta
+                )) {
             if (!programacion.getEstado().esOperativo()) {
                 continue;
             }
@@ -493,13 +373,11 @@ public class DistribucionGestionJpaAdapter
                 new HashMap<>();
 
         for (DistribucionPersonal existente :
-                distribucionesPeriodoConAnterior) {
-            if (existente.getProgramacionTurno()
-                    .getFecha()
-                    .isBefore(desde)) {
-                continue;
-            }
-
+                distribucionRepository.findMes(
+                        plazaId,
+                        desde,
+                        hasta
+                )) {
             if (programacionesModificadas.contains(
                     existente.getProgramacionTurno().getId()
             )) {
@@ -679,14 +557,22 @@ public class DistribucionGestionJpaAdapter
     }
 
     private void validarOcupacionFinal(
-            List<ItemResuelto> resueltos,
-            LocalDate desde,
-            List<DistribucionPersonal> distribucionesPeriodoConAnterior,
-            List<ProgramacionUbicacion> ubicacionesActivas
+            Long plazaId,
+            List<ItemResuelto> resueltos
     ) {
         if (resueltos.isEmpty()) {
             return;
         }
+
+        LocalDate desde = resueltos.stream()
+                .map(item -> item.programacion().getFecha())
+                .min(LocalDate::compareTo)
+                .orElseThrow();
+
+        LocalDate hasta = resueltos.stream()
+                .map(item -> item.programacion().getFecha())
+                .max(LocalDate::compareTo)
+                .orElseThrow();
 
         Set<Long> programacionesModificadas =
                 resueltos.stream()
@@ -697,13 +583,11 @@ public class DistribucionGestionJpaAdapter
                 new HashMap<>();
 
         for (DistribucionPersonal existente :
-                distribucionesPeriodoConAnterior) {
-            if (existente.getProgramacionTurno()
-                    .getFecha()
-                    .isBefore(desde)) {
-                continue;
-            }
-
+                distribucionRepository.findMes(
+                        plazaId,
+                        desde,
+                        hasta
+                )) {
             if (programacionesModificadas.contains(
                     existente.getProgramacionTurno().getId()
             )) {
@@ -756,7 +640,11 @@ public class DistribucionGestionJpaAdapter
                 new HashMap<>();
 
         for (DistribucionPersonal existente :
-                distribucionesPeriodoConAnterior) {
+                distribucionRepository.findMes(
+                        plazaId,
+                        desde.minusDays(1),
+                        hasta
+                )) {
             if (programacionesModificadas.contains(
                     existente.getProgramacionTurno().getId()
             )) {
@@ -873,6 +761,12 @@ public class DistribucionGestionJpaAdapter
                 );
             }
         }
+
+        List<ProgramacionUbicacion> ubicacionesActivas =
+                ubicacionRepository
+                        .findByPlazaIdAndActivoTrueOrderByOrdenAscCodigoAsc(
+                                plazaId
+                        );
 
         Map<String, EstadoProgramacion> turnoPorClave =
                 new HashMap<>();
