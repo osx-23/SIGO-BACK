@@ -64,9 +64,74 @@ public class DistribucionGestionJpaAdapter
                         )
                 );
 
-        List<ItemResuelto> resueltos = new ArrayList<>();
+        Set<Long> programacionIds =
+                distribuciones.stream()
+                        .filter(Objects::nonNull)
+                        .map(DistribucionUseCase.Item::programacionTurnoId)
+                        .filter(Objects::nonNull)
+                        .collect(
+                                java.util.stream.Collectors.toSet()
+                        );
 
-        for (DistribucionUseCase.Item item : distribuciones) {
+        Set<Long> ubicacionIds =
+                distribuciones.stream()
+                        .filter(Objects::nonNull)
+                        .map(DistribucionUseCase.Item::ubicacionId)
+                        .filter(Objects::nonNull)
+                        .collect(
+                                java.util.stream.Collectors.toSet()
+                        );
+
+        if (programacionIds.size() != distribuciones.size()
+                || ubicacionIds.size() != distribuciones.size()) {
+            throw bad(
+                    "La distribución contiene datos incompletos o duplicados"
+            );
+        }
+
+        Map<Long, ProgramacionTurno> programacionPorId =
+                programacionRepository
+                        .findAllById(programacionIds)
+                        .stream()
+                        .collect(
+                                java.util.stream.Collectors.toMap(
+                                        ProgramacionTurno::getId,
+                                        item -> item
+                                )
+                        );
+
+        if (programacionPorId.size()
+                != programacionIds.size()) {
+            throw bad(
+                    "Una o más programaciones no existen"
+            );
+        }
+
+        Map<Long, ProgramacionUbicacion> ubicacionPorId =
+                ubicacionRepository
+                        .findAllById(ubicacionIds)
+                        .stream()
+                        .collect(
+                                java.util.stream.Collectors.toMap(
+                                        ProgramacionUbicacion::getId,
+                                        item -> item
+                                )
+                        );
+
+        if (ubicacionPorId.size()
+                != ubicacionIds.size()) {
+            throw bad(
+                    "Una o más ubicaciones no existen"
+            );
+        }
+
+        List<ItemResuelto> resueltos =
+                new ArrayList<>(
+                        distribuciones.size()
+                );
+
+        for (DistribucionUseCase.Item item :
+                distribuciones) {
             if (item == null
                     || item.programacionTurnoId() == null
                     || item.ubicacionId() == null) {
@@ -76,14 +141,9 @@ public class DistribucionGestionJpaAdapter
             }
 
             ProgramacionTurno programacion =
-                    programacionRepository
-                            .findById(item.programacionTurnoId())
-                            .orElseThrow(() ->
-                                    bad(
-                                            "Programación no encontrada: "
-                                                    + item.programacionTurnoId()
-                                    )
-                            );
+                    programacionPorId.get(
+                            item.programacionTurnoId()
+                    );
 
             if (!Objects.equals(
                     programacion.getPlaza().getId(),
@@ -101,14 +161,17 @@ public class DistribucionGestionJpaAdapter
             }
 
             ProgramacionUbicacion ubicacion =
-                    ubicacionRepository
-                            .findById(item.ubicacionId())
-                            .filter(x ->
-                                    Boolean.TRUE.equals(x.getActivo())
-                            )
-                            .orElseThrow(() ->
-                                    bad("Ubicación no válida")
-                            );
+                    ubicacionPorId.get(
+                            item.ubicacionId()
+                    );
+
+            if (!Boolean.TRUE.equals(
+                    ubicacion.getActivo()
+            )) {
+                throw bad(
+                        "Ubicación no válida"
+                );
+            }
 
             if (!Objects.equals(
                     ubicacion.getPlaza().getId(),
@@ -138,40 +201,73 @@ public class DistribucionGestionJpaAdapter
                 resueltos
         );
 
-        List<DistribucionPersonal> guardados =
-                new ArrayList<>();
+        Map<Long, DistribucionPersonal> existentePorProgramacion =
+                distribucionRepository
+                        .findByProgramacionTurnoIdIn(
+                                programacionIds
+                        )
+                        .stream()
+                        .collect(
+                                java.util.stream.Collectors.toMap(
+                                        item ->
+                                                item.getProgramacionTurno().getId(),
+                                        item -> item
+                                )
+                        );
 
-        for (ItemResuelto resuelto : resueltos) {
+        List<DistribucionPersonal> paraGuardar =
+                new ArrayList<>(
+                        resueltos.size()
+                );
+
+        for (ItemResuelto resuelto :
+                resueltos) {
             DistribucionUseCase.Item item =
                     resuelto.item();
+
             ProgramacionTurno programacion =
                     resuelto.programacion();
-            ProgramacionUbicacion ubicacion =
-                    resuelto.ubicacion();
 
             DistribucionPersonal distribucion =
-                    distribucionRepository
-                            .findByProgramacionTurnoId(
-                                    programacion.getId()
-                            )
-                            .orElseGet(() -> {
-                                DistribucionPersonal nueva =
-                                        new DistribucionPersonal();
-                                nueva.setProgramacionTurno(programacion);
-                                nueva.setAsignadoPor(actual);
-                                return nueva;
-                            });
+                    existentePorProgramacion.get(
+                            programacion.getId()
+                    );
 
-            distribucion.setUbicacion(ubicacion);
-            distribucion.setObservacion(item.observacion());
-            distribucion.setActualizadoPor(actual);
+            if (distribucion == null) {
+                distribucion =
+                        new DistribucionPersonal();
 
-            guardados.add(
-                    distribucionRepository.save(distribucion)
+                distribucion.setProgramacionTurno(
+                        programacion
+                );
+
+                distribucion.setAsignadoPor(
+                        actual
+                );
+            }
+
+            distribucion.setUbicacion(
+                    resuelto.ubicacion()
+            );
+
+            distribucion.setObservacion(
+                    item.observacion()
+            );
+
+            distribucion.setActualizadoPor(
+                    actual
+            );
+
+            paraGuardar.add(
+                    distribucion
             );
         }
 
-        distribucionRepository.flush();
+        List<DistribucionPersonal> guardados =
+                distribucionRepository
+                        .saveAllAndFlush(
+                                paraGuardar
+                        );
 
         return guardados
                 .stream()
