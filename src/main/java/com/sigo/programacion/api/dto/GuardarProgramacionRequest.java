@@ -1,7 +1,6 @@
 package com.sigo.programacion.api.dto;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
@@ -16,7 +15,7 @@ public record GuardarProgramacionRequest(
     public record TurnoItemRequest(
             @NotNull Long trabajadorId,
             @NotNull LocalDate fecha,
-            @NotBlank String estado
+            String estado
     ) {
     }
 }
