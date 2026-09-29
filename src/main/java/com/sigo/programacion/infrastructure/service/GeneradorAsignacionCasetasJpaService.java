@@ -648,6 +648,12 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
         for (IntentoGeneracion solucion :
                 solucionesCalidad) {
+            int cambiosRespectoBase =
+                    contarCambiosEntreIntentos(
+                            optimizadaBase,
+                            solucion
+                    );
+
             Calidad calidad =
                     calcularCalidad(
                             solucion,
@@ -656,7 +662,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             configCaseta,
                             restricciones,
                             asignacionPorDiaAgente,
-                            solucionesEvaluadas
+                            solucionesEvaluadas,
+                            cambiosRespectoBase
                     );
 
             if (elegida == null
@@ -758,7 +765,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             Map<Long, ConfiguracionCaseta> configCaseta,
             Set<String> restricciones,
             Map<String, Long> historialBase,
-            int solucionesEvaluadas
+            int solucionesEvaluadas,
+            int cambiosRespectoBase
     ) {
         Map<Long, ProgramacionTurno> turnoPorId =
                 turnos.stream()
@@ -1030,8 +1038,40 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 repeticionesExactas,
                 duplicidades,
                 restriccionesVioladas,
-                solucionesEvaluadas
+                solucionesEvaluadas,
+                cambiosRespectoBase
         );
+    }
+
+    private int contarCambiosEntreIntentos(
+            IntentoGeneracion base,
+            IntentoGeneracion candidato
+    ) {
+        Map<Long, Long> ubicacionBase =
+                base.asignaciones()
+                        .stream()
+                        .collect(
+                                Collectors.toMap(
+                                        ItemPropuesta::programacionTurnoId,
+                                        ItemPropuesta::ubicacionId
+                                )
+                        );
+
+        int cambios = 0;
+
+        for (ItemPropuesta item :
+                candidato.asignaciones()) {
+            if (!Objects.equals(
+                    ubicacionBase.get(
+                            item.programacionTurnoId()
+                    ),
+                    item.ubicacionId()
+            )) {
+                cambios++;
+            }
+        }
+
+        return cambios;
     }
 
     private boolean esMejorCalidad(
@@ -1064,14 +1104,32 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             return cobertura > 0;
         }
 
-        int puntuacion =
-                Double.compare(
-                        candidato.puntuacion(),
-                        actual.puntuacion()
-                );
+        /*
+         * Una mejora mínima no justifica reorganizar gran parte del mes.
+         * Solo permitimos que la puntuación gane directamente cuando la
+         * diferencia es significativa (>= 0.5 puntos).
+         *
+         * Dentro de esa banda preferimos estabilidad: menor cantidad de
+         * asignaciones distintas respecto a la solución base.
+         */
+        double diferenciaPuntuacion =
+                candidato.puntuacion()
+                        - actual.puntuacion();
 
-        if (puntuacion != 0) {
-            return puntuacion > 0;
+        final double umbralMejoraSignificativa =
+                0.5;
+
+        if (Math.abs(
+                diferenciaPuntuacion
+        ) >= umbralMejoraSignificativa) {
+            return diferenciaPuntuacion
+                    > 0;
+        }
+
+        if (candidato.cambiosRespectoBase()
+                != actual.cambiosRespectoBase()) {
+            return candidato.cambiosRespectoBase()
+                    < actual.cambiosRespectoBase();
         }
 
         if (candidato.repeticionesTipo()
@@ -1080,8 +1138,14 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                     < actual.repeticionesTipo();
         }
 
-        return candidato.repeticionesExactas()
-                < actual.repeticionesExactas();
+        if (candidato.repeticionesExactas()
+                != actual.repeticionesExactas()) {
+            return candidato.repeticionesExactas()
+                    < actual.repeticionesExactas();
+        }
+
+        return candidato.puntuacion()
+                > actual.puntuacion();
     }
 
     private double porcentaje(
