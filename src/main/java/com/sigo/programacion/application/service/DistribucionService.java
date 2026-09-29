@@ -176,14 +176,9 @@ public class DistribucionService
 
         String plazaCodigo =
                 items.isEmpty()
-                        ? "P" + plazaId
+                        ? "Plaza"
                         : items.get(0)
-                                .estado() != null
-                                ? obtenerCodigoPlaza(
-                                        plazaId,
-                                        items
-                                )
-                                : "P" + plazaId;
+                                .plazaCodigo();
 
         return new ReportePlaza(
                 plazaId,
@@ -192,20 +187,6 @@ public class DistribucionService
                 hasta,
                 items
         );
-    }
-
-
-    private String obtenerCodigoPlaza(
-            Long plazaId,
-            List<MatrizItem> items
-    ) {
-        /*
-         * El código de plaza no forma parte del MatrizItem para evitar
-         * repetirlo por cada celda. La vista usa P{id} como fallback.
-         * El controlador reemplaza este valor cuando puede resolverlo
-         * desde la programación mensual.
-         */
-        return "P" + plazaId;
     }
 
 
