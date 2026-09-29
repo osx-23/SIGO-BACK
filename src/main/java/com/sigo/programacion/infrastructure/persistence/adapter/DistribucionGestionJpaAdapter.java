@@ -95,7 +95,9 @@ public class DistribucionGestionJpaAdapter
 
         Map<Long, ProgramacionTurno> programacionPorId =
                 programacionRepository
-                        .findAllById(programacionIds)
+                        .findAllParaDistribucion(
+                                programacionIds
+                        )
                         .stream()
                         .collect(
                                 java.util.stream.Collectors.toMap(
@@ -113,7 +115,9 @@ public class DistribucionGestionJpaAdapter
 
         Map<Long, ProgramacionUbicacion> ubicacionPorId =
                 ubicacionRepository
-                        .findAllById(ubicacionIds)
+                        .findAllParaDistribucion(
+                                ubicacionIds
+                        )
                         .stream()
                         .collect(
                                 java.util.stream.Collectors.toMap(
