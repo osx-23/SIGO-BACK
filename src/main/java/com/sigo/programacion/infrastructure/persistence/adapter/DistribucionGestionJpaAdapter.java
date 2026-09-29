@@ -83,9 +83,13 @@ public class DistribucionGestionJpaAdapter
                         );
 
         if (programacionIds.size() != distribuciones.size()
-                || ubicacionIds.size() != distribuciones.size()) {
+                || distribuciones.stream()
+                        .anyMatch(item ->
+                                item == null
+                                        || item.ubicacionId() == null
+                        )) {
             throw bad(
-                    "La distribución contiene datos incompletos o duplicados"
+                    "La distribución contiene datos incompletos o programaciones duplicadas"
             );
         }
 
