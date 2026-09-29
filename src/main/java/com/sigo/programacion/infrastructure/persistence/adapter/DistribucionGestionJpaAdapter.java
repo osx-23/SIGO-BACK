@@ -856,6 +856,23 @@ public class DistribucionGestionJpaAdapter
     }
 
     @Override
+    public List<DistribucionUseCase.Distribucion> listarTrabajador(
+            Long trabajadorId,
+            LocalDate desde,
+            LocalDate hasta
+    ) {
+        return distribucionRepository
+                .findByTrabajadorMes(
+                        trabajadorId,
+                        desde,
+                        hasta
+                )
+                .stream()
+                .map(this::toData)
+                .toList();
+    }
+
+    @Override
     public DistribucionUseCase.ResumenTrabajador resumen(
             Long trabajadorId,
             LocalDate desde,
