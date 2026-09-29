@@ -8,7 +8,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Service
@@ -79,6 +81,56 @@ public class DistribucionService
                 trabajadorId,
                 periodo.atDay(1),
                 periodo.atEndOfMonth()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReporteTrabajador reporteTrabajador(
+            Long trabajadorId,
+            LocalDate desde,
+            LocalDate hasta
+    ) {
+        if (trabajadorId == null
+                || desde == null
+                || hasta == null) {
+            throw new ProgramacionValidationException(
+                    "Agente y rango de fechas son obligatorios"
+            );
+        }
+
+        if (desde.isAfter(hasta)) {
+            throw new ProgramacionValidationException(
+                    "La fecha desde no puede ser posterior a la fecha hasta"
+            );
+        }
+
+        if (ChronoUnit.DAYS.between(desde, hasta) > 366) {
+            throw new ProgramacionValidationException(
+                    "El reporte no puede superar 367 días"
+            );
+        }
+
+        Long plazaId =
+                distribucionGestionPort.plazaTrabajador(
+                        trabajadorId
+                );
+
+        accessPort.validarGestionPlaza(
+                plazaId
+        );
+
+        return new ReporteTrabajador(
+                distribucionGestionPort.resumen(
+                        trabajadorId,
+                        desde,
+                        hasta
+                ),
+                distribucionGestionPort.listarTrabajador(
+                        trabajadorId,
+                        desde,
+                        hasta
+                )
         );
     }
 
