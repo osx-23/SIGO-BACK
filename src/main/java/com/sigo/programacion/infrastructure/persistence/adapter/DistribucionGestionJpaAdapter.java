@@ -977,6 +977,75 @@ public class DistribucionGestionJpaAdapter
     }
 
     @Override
+    public List<DistribucionUseCase.MatrizItem> listarMatriz(
+            Long plazaId,
+            LocalDate desde,
+            LocalDate hasta
+    ) {
+        List<ProgramacionTurnoRepository.TurnoResumen> programaciones =
+                programacionRepository.findMesResumen(
+                        plazaId,
+                        desde,
+                        hasta
+                );
+
+        Map<Long, DistribucionPersonal> distribucionPorProgramacion =
+                distribucionRepository.findMes(
+                                plazaId,
+                                desde,
+                                hasta
+                        )
+                        .stream()
+                        .collect(
+                                java.util.stream.Collectors.toMap(
+                                        item ->
+                                                item.getProgramacionTurno().getId(),
+                                        item ->
+                                                item,
+                                        (a, b) ->
+                                                a
+                                )
+                        );
+
+        return programaciones
+                .stream()
+                .map(programacion -> {
+                    DistribucionPersonal distribucion =
+                            distribucionPorProgramacion.get(
+                                    programacion.getProgramacionId()
+                            );
+
+                    String ubicacionCodigo =
+                            distribucion == null
+                                    ? null
+                                    : distribucion
+                                            .getUbicacion()
+                                            .getCodigo();
+
+                    String ubicacionTipo =
+                            distribucion == null
+                                    ? null
+                                    : distribucion
+                                            .getUbicacion()
+                                            .getTipo()
+                                            .name();
+
+                    return new DistribucionUseCase.MatrizItem(
+                            programacion.getProgramacionId(),
+                            programacion.getTrabajadorId(),
+                            programacion.getCodigoTrabajador(),
+                            programacion.getNombreTrabajador(),
+                            programacion.getFecha(),
+                            programacion.getEstado().name(),
+                            ubicacionCodigo,
+                            ubicacionTipo
+                    );
+                })
+                .toList();
+    }
+
+
+    @Override
     public DistribucionUseCase.ResumenTrabajador resumen(
             Long trabajadorId,
             LocalDate desde,
