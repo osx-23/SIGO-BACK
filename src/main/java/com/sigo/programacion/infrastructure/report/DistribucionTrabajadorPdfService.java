@@ -12,6 +12,7 @@ import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import com.sigo.programacion.application.port.in.DistribucionUseCase;
+import com.sigo.programacion.application.port.out.DistribucionReportePdfPort;
 import org.springframework.stereotype.Component;
 
 import java.awt.Color;
@@ -20,7 +21,8 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
 @Component
-public class DistribucionTrabajadorPdfService {
+public class DistribucionTrabajadorPdfService
+        implements DistribucionReportePdfPort {
 
     private static final Color AZUL =
             new Color(29, 78, 216);
@@ -37,6 +39,7 @@ public class DistribucionTrabajadorPdfService {
     private static final DateTimeFormatter FECHA =
             DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
+    @Override
     public byte[] generar(
             DistribucionUseCase.ReporteTrabajador reporte,
             LocalDate desde,
