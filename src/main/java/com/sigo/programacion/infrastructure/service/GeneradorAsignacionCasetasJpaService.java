@@ -687,6 +687,125 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             }
         }
 
+        /*
+         * Refuerzo adaptativo de calidad.
+         *
+         * Si la mejor solución encontrada todavía queda por debajo de 80,
+         * probamos algunos arranques adicionales antes de responder. Esto
+         * evita que el primer clic entregue una solución mediocre solo por
+         * el orden aleatorio inicial. El límite mantiene controlado el tiempo.
+         */
+        if (baseCompleta
+                && !solucionesCalidad.isEmpty()) {
+            double mejorPuntuacionPreliminar =
+                    solucionesCalidad.stream()
+                            .mapToDouble(solucion ->
+                                    calcularCalidad(
+                                            solucion,
+                                            turnos,
+                                            ubicaciones,
+                                            configCaseta,
+                                            restricciones,
+                                            asignacionPorDiaAgente,
+                                            solucionesCalidad.size(),
+                                            contarCambiosEntreIntentos(
+                                                    optimizadaBase,
+                                                    solucion
+                                            )
+                                    ).puntuacion()
+                            )
+                            .max()
+                            .orElse(0.0);
+
+            final double objetivoCalidad =
+                    80.0;
+
+            final int maxRefuerzos =
+                    3;
+
+            for (int refuerzo = 0;
+                    refuerzo < maxRefuerzos
+                            && mejorPuntuacionPreliminar < objetivoCalidad
+                            && solucionesCalidad.size() < 10;
+                    refuerzo++) {
+                boolean flujoEstrictoRefuerzo =
+                        refuerzo % 2 == 0;
+
+                IntentoGeneracion adicional =
+                        ejecutarIntento(
+                                turnos,
+                                Set.of(),
+                                ubicaciones,
+                                configCaseta,
+                                restricciones,
+                                config,
+                                conteoMes,
+                                conteoSemana,
+                                flujo,
+                                asignacionPorDiaAgente,
+                                asignacionPorDiaTurnoAgente,
+                                flujoEstrictoRefuerzo,
+                                false
+                        );
+
+                if (!adicional.conflictos().isEmpty()
+                        || deficitCoberturaNormal(
+                                adicional,
+                                turnos,
+                                ubicaciones
+                        ) != 0) {
+                    continue;
+                }
+
+                adicional =
+                        optimizarIntentoPostGeneracion(
+                                adicional,
+                                turnos,
+                                ubicaciones,
+                                configCaseta,
+                                restricciones,
+                                config,
+                                asignacionPorDiaAgente
+                        );
+
+                String firma =
+                        firmaIntento(
+                                adicional
+                        );
+
+                if (!firmasCalidad.add(
+                        firma
+                )) {
+                    continue;
+                }
+
+                solucionesCalidad.add(
+                        adicional
+                );
+
+                Calidad calidadAdicional =
+                        calcularCalidad(
+                                adicional,
+                                turnos,
+                                ubicaciones,
+                                configCaseta,
+                                restricciones,
+                                asignacionPorDiaAgente,
+                                solucionesCalidad.size(),
+                                contarCambiosEntreIntentos(
+                                        optimizadaBase,
+                                        adicional
+                                )
+                        );
+
+                mejorPuntuacionPreliminar =
+                        Math.max(
+                                mejorPuntuacionPreliminar,
+                                calidadAdicional.puntuacion()
+                        );
+            }
+        }
+
         int solucionesEvaluadas =
                 solucionesCalidad.size();
 
@@ -1618,7 +1737,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
          * reducir estrictamente el costo, por lo que no puede oscilar.
          */
         for (int ronda = 0;
-                ronda < 4;
+                ronda < 6;
                 ronda++) {
             boolean cambioEnRonda =
                     false;
