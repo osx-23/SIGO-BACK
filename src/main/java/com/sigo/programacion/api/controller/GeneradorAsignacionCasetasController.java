@@ -14,12 +14,13 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/distribucion/generador")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('SUPERVISOR')")
+@PreAuthorize("hasAnyRole('SUPERVISOR','CONTROLADOR')")
 public class GeneradorAsignacionCasetasController {
 
     private final GeneradorAsignacionCasetasUseCase service;
 
     @GetMapping("/configuracion")
+    @PreAuthorize("hasRole('SUPERVISOR')")
     public GeneradorAsignacionCasetasUseCase.Configuracion configuracion(
             @RequestParam Long plazaId
     ) {
@@ -27,6 +28,7 @@ public class GeneradorAsignacionCasetasController {
     }
 
     @PutMapping("/configuracion")
+    @PreAuthorize("hasRole('SUPERVISOR')")
     public GeneradorAsignacionCasetasUseCase.Configuracion guardarConfiguracion(
             @Valid
             @RequestBody ConfiguracionRequest request
@@ -41,6 +43,7 @@ public class GeneradorAsignacionCasetasController {
     }
 
     @GetMapping("/casetas")
+    @PreAuthorize("hasRole('SUPERVISOR')")
     public List<GeneradorAsignacionCasetasUseCase.CasetaConfig> casetas(
             @RequestParam Long plazaId
     ) {
@@ -48,6 +51,7 @@ public class GeneradorAsignacionCasetasController {
     }
 
     @PutMapping("/casetas/{ubicacionId}")
+    @PreAuthorize("hasRole('SUPERVISOR')")
     public GeneradorAsignacionCasetasUseCase.CasetaConfig guardarCaseta(
             @PathVariable Long ubicacionId,
             @Valid
@@ -63,6 +67,7 @@ public class GeneradorAsignacionCasetasController {
     }
 
     @GetMapping("/restricciones")
+    @PreAuthorize("hasRole('SUPERVISOR')")
     public List<GeneradorAsignacionCasetasUseCase.Restriccion> restricciones(
             @RequestParam Long plazaId
     ) {
@@ -70,6 +75,7 @@ public class GeneradorAsignacionCasetasController {
     }
 
     @PutMapping("/restricciones")
+    @PreAuthorize("hasRole('SUPERVISOR')")
     public GeneradorAsignacionCasetasUseCase.Restriccion guardarRestriccion(
             @Valid
             @RequestBody RestriccionRequest request
@@ -84,6 +90,7 @@ public class GeneradorAsignacionCasetasController {
     }
 
     @DeleteMapping("/restricciones/{restriccionId}")
+    @PreAuthorize("hasRole('SUPERVISOR')")
     public void eliminarRestriccion(
             @PathVariable Long restriccionId
     ) {
