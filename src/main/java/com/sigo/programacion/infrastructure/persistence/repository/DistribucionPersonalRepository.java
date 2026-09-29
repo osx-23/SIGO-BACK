@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface DistribucionPersonalRepository
         extends JpaRepository<DistribucionPersonal, Long> {
@@ -21,6 +22,18 @@ public interface DistribucionPersonalRepository
     Optional<DistribucionPersonal>
     findByProgramacionTurnoId(
             Long programacionTurnoId
+    );
+
+    @Query("""
+        select d from DistribucionPersonal d
+        join fetch d.programacionTurno p
+        join fetch p.trabajador t
+        join fetch p.plaza pl
+        join fetch d.ubicacion u
+        where p.id in :programacionTurnoIds
+    """)
+    List<DistribucionPersonal> findByProgramacionTurnoIdIn(
+            @Param("programacionTurnoIds") Set<Long> programacionTurnoIds
     );
 
     @Query("""
