@@ -18,6 +18,12 @@ public interface DistribucionUseCase {
             LocalDate hasta
     );
 
+    ReportePlaza reportePlaza(
+            Long plazaId,
+            LocalDate desde,
+            LocalDate hasta
+    );
+
     List<CoberturaUbicacion> cobertura(Long plazaId, int anio, int mes);
 
     record Command(
@@ -67,6 +73,27 @@ public interface DistribucionUseCase {
     record ReporteTrabajador(
             ResumenTrabajador resumen,
             List<Distribucion> distribuciones
+    ) {
+    }
+
+    record MatrizItem(
+            Long programacionTurnoId,
+            Long trabajadorId,
+            Integer codigoTrabajador,
+            String nombreTrabajador,
+            LocalDate fecha,
+            String estado,
+            String ubicacionCodigo,
+            String ubicacionTipo
+    ) {
+    }
+
+    record ReportePlaza(
+            Long plazaId,
+            String plazaCodigo,
+            LocalDate desde,
+            LocalDate hasta,
+            List<MatrizItem> items
     ) {
     }
 
