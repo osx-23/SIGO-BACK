@@ -8,11 +8,16 @@ import com.sigo.programacion.api.dto.ResumenTrabajadorResponse;
 import com.sigo.programacion.api.dto.UbicacionResponse;
 import com.sigo.programacion.application.port.in.DistribucionUseCase;
 import com.sigo.programacion.application.port.in.UbicacionUseCase;
+import com.sigo.programacion.infrastructure.report.DistribucionTrabajadorPdfService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -23,6 +28,7 @@ public class DistribucionController {
 
     private final UbicacionUseCase ubicacionUseCase;
     private final DistribucionUseCase distribucionUseCase;
+    private final DistribucionTrabajadorPdfService pdfService;
 
     @GetMapping("/ubicaciones")
     public List<UbicacionResponse> ubicaciones(
@@ -143,6 +149,50 @@ public class DistribucionController {
                 )
         );
     }
+
+    @GetMapping(
+            value = "/reporte-trabajador/{trabajadorId}/pdf",
+            produces = MediaType.APPLICATION_PDF_VALUE
+    )
+    public ResponseEntity<byte[]> reporteTrabajadorPdf(
+            @PathVariable Long trabajadorId,
+            @RequestParam LocalDate desde,
+            @RequestParam LocalDate hasta
+    ) {
+        DistribucionUseCase.ReporteTrabajador reporte =
+                distribucionUseCase.reporteTrabajador(
+                        trabajadorId,
+                        desde,
+                        hasta
+                );
+
+        byte[] pdf =
+                pdfService.generar(
+                        reporte,
+                        desde,
+                        hasta
+                );
+
+        String archivo =
+                "distribucion-"
+                        + reporte.resumen().codigo()
+                        + "-"
+                        + desde
+                        + "-"
+                        + hasta
+                        + ".pdf";
+
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + archivo + "\""
+                )
+                .contentType(
+                        MediaType.APPLICATION_PDF
+                )
+                .body(pdf);
+    }
+
 
     @GetMapping("/cobertura")
     public List<CoberturaUbicacionResponse> cobertura(
