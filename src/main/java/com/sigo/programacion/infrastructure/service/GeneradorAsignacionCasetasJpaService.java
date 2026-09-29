@@ -967,6 +967,44 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         historialBase
                 );
 
+        /*
+         * Una repetición VIA -> VIA solo debe penalizar la métrica
+         * VIA/AUX cuando ese día el flujo realmente llegó a utilizar
+         * auxiliares. Si todavía quedaban vías libres, AUX no era una
+         * alternativa legal y no corresponde bajar la calidad.
+         */
+        Set<String> diasConAuxiliarPorFlujo =
+                new HashSet<>();
+
+        for (ItemPropuesta item :
+                ordenadas) {
+            ProgramacionUbicacion ubicacion =
+                    ubicacionPorId(
+                            ubicaciones,
+                            item.ubicacionId()
+                    );
+
+            if (ubicacion == null
+                    || ubicacion.getTipo()
+                    != TipoUbicacion.AUXILIAR) {
+                continue;
+            }
+
+            GrupoFlujoCaseta grupo =
+                    grupoDeUbicacion(
+                            item.ubicacionId(),
+                            configCaseta
+                    );
+
+            diasConAuxiliarPorFlujo.add(
+                    item.fecha()
+                            + "|"
+                            + item.turno()
+                            + "|"
+                            + grupo.name()
+            );
+        }
+
         Set<String> ocupacion =
                 new HashSet<>();
 
@@ -1112,13 +1150,35 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             && esViaOAuxiliar(
                                     ubicacion
                             )) {
-                        retornosTipo++;
+                        boolean cambioTipo =
+                                ultimaMismoFlujo.getTipo()
+                                        != ubicacion.getTipo();
 
-                        if (ultimaMismoFlujo.getTipo()
-                                != ubicacion.getTipo()) {
-                            cambiosTipo++;
-                        } else {
-                            repeticionesTipo++;
+                        boolean auxiliarInvolucrada =
+                                ultimaMismoFlujo.getTipo()
+                                        == TipoUbicacion.AUXILIAR
+                                        || ubicacion.getTipo()
+                                        == TipoUbicacion.AUXILIAR;
+
+                        boolean auxiliarDisponibleEseDia =
+                                diasConAuxiliarPorFlujo.contains(
+                                        item.fecha()
+                                                + "|"
+                                                + item.turno()
+                                                + "|"
+                                                + grupoActual.name()
+                                );
+
+                        if (cambioTipo
+                                || auxiliarInvolucrada
+                                || auxiliarDisponibleEseDia) {
+                            retornosTipo++;
+
+                            if (cambioTipo) {
+                                cambiosTipo++;
+                            } else {
+                                repeticionesTipo++;
+                            }
                         }
                     }
                 }
@@ -3026,8 +3086,16 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             turnos,
                             ubicaciones
                     ) == 0) {
+                busqueda.solucionesCompletas++;
+
+                /*
+                 * No cortamos en la primera cobertura perfecta. Evaluamos
+                 * algunas alternativas completas y conservamos la de menor
+                 * costo de rotación dentro del mismo presupuesto.
+                 */
                 busqueda.perfecto =
-                        true;
+                        busqueda.solucionesCompletas
+                                >= BusquedaPeriodo.OBJETIVO_SOLUCIONES_COMPLETAS;
             }
 
             return;
@@ -3430,6 +3498,8 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         private long nodos = 0;
         private IntentoGeneracion mejor;
         private boolean perfecto = false;
+        private int solucionesCompletas = 0;
+        private static final int OBJETIVO_SOLUCIONES_COMPLETAS = 3;
 
         private BusquedaPeriodo(
                 long maxNodos,
@@ -4413,12 +4483,11 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             && ultimaUbicacionMismoFlujo.getTipo()
                             == ubicacion.getTipo();
 
-            if (flujoEstricto
-                    && repiteTipoEnMismoFlujo) {
-                continue;
-            }
-
             /*
+             * La repetición de VIA/AUX dentro del mismo flujo ya tiene una
+             * penalización fuerte en el score. No la bloqueamos aquí porque
+             * AUXILIAR puede no ser legal todavía si quedan vías sin cubrir.
+             *
              * Alternancia de flujo para A/B:
              *
              * 1) En la pasada estricta primero intentamos SIEMPRE cambiar
