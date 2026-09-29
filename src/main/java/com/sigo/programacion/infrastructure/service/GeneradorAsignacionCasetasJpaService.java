@@ -459,6 +459,16 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
          * 4) menor puntaje total.
          */
         IntentoGeneracion mejorIntento = null;
+
+        /*
+         * Guardamos también las soluciones completas de cada fase.
+         * Antes se detenía la búsqueda en la PRIMERA solución completa,
+         * por lo que la calidad dependía demasiado del orden aleatorio
+         * obtenido en ese clic.
+         */
+        List<IntentoGeneracion> intentosCompletos =
+                new ArrayList<>();
+
         Set<Long> trabajadoresPrioritarios = Set.of();
 
         final int maxIntentos = 3;
@@ -513,9 +523,9 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                             turnos,
                             ubicaciones
                     ) == 0) {
-                mejorIntento =
-                        candidato;
-                break;
+                intentosCompletos.add(
+                        candidato
+                );
             }
 
             trabajadoresPrioritarios =
@@ -568,6 +578,39 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 )
         );
 
+        /*
+         * Evaluamos todas las soluciones completas encontradas en las
+         * fases normal/flexible/recuperación. De este modo la primera
+         * generación ya compara alternativas reales en lugar de devolver
+         * la primera combinación factible.
+         */
+        for (IntentoGeneracion completo :
+                intentosCompletos) {
+            IntentoGeneracion optimizado =
+                    optimizarIntentoPostGeneracion(
+                            completo,
+                            turnos,
+                            ubicaciones,
+                            configCaseta,
+                            restricciones,
+                            config,
+                            asignacionPorDiaAgente
+                    );
+
+            String firma =
+                    firmaIntento(
+                            optimizado
+                    );
+
+            if (firmasCalidad.add(
+                    firma
+            )) {
+                solucionesCalidad.add(
+                        optimizado
+                );
+            }
+        }
+
         boolean baseCompleta =
                 optimizadaBase.conflictos()
                         .isEmpty()
@@ -578,11 +621,18 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         ) == 0;
 
         if (baseCompleta) {
+            /*
+             * Intentos estrictos adicionales de calidad.
+             * El objetivo es reunir hasta cinco soluciones distintas,
+             * suficiente para reducir la dependencia del azar sin disparar
+             * el tiempo del generador.
+             */
             final int arranquesCalidadExtra =
-                    2;
+                    3;
 
             for (int inicio = 0;
-                    inicio < arranquesCalidadExtra;
+                    inicio < arranquesCalidadExtra
+                            && solucionesCalidad.size() < 5;
                     inicio++) {
                 IntentoGeneracion alternativo =
                         ejecutarIntento(
