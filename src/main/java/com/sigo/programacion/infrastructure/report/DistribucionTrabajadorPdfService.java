@@ -19,6 +19,12 @@ import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 @Component
 public class DistribucionTrabajadorPdfService
@@ -35,6 +41,39 @@ public class DistribucionTrabajadorPdfService
 
     private static final Color BORDE =
             new Color(226, 232, 240);
+
+    private static final Color MATRIZ_CABECERA =
+            new Color(173, 190, 211);
+
+    private static final Color MATRIZ_DIA =
+            new Color(31, 78, 121);
+
+    private static final Color MATRIZ_A =
+            new Color(198, 239, 206);
+
+    private static final Color MATRIZ_B =
+            new Color(255, 235, 156);
+
+    private static final Color MATRIZ_C =
+            new Color(255, 199, 206);
+
+    private static final Color MATRIZ_DESCANSO =
+            new Color(191, 191, 191);
+
+    private static final Color MATRIZ_VACACIONES =
+            new Color(189, 215, 238);
+
+    private static final Color MATRIZ_COMPENSACION =
+            new Color(217, 210, 233);
+
+    private static final Color MATRIZ_DM =
+            new Color(244, 204, 204);
+
+    private static final Color MATRIZ_LICENCIA =
+            new Color(234, 209, 220);
+
+    private static final Color MATRIZ_SIN_ASIGNAR =
+            new Color(255, 230, 230);
 
     private static final DateTimeFormatter FECHA =
             DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -98,6 +137,796 @@ public class DistribucionTrabajadorPdfService
             );
         }
     }
+
+    @Override
+    public byte[] generarMatriz(
+            DistribucionUseCase.ReportePlaza reporte
+    ) {
+        try {
+            ByteArrayOutputStream salida =
+                    new ByteArrayOutputStream();
+
+            Document documento =
+                    new Document(
+                            PageSize.A4.rotate(),
+                            18,
+                            18,
+                            18,
+                            18
+                    );
+
+            PdfWriter.getInstance(
+                    documento,
+                    salida
+            );
+
+            documento.open();
+
+            List<LocalDate> fechas =
+                    fechasEntre(
+                            reporte.desde(),
+                            reporte.hasta()
+                    );
+
+            List<List<LocalDate>> bloques =
+                    dividirFechas(
+                            fechas,
+                            7
+                    );
+
+            if (bloques.isEmpty()) {
+                bloques =
+                        List.of(
+                                List.of(
+                                        reporte.desde()
+                                )
+                        );
+            }
+
+            Map<Long, List<DistribucionUseCase.MatrizItem>> porTrabajador =
+                    reporte.items()
+                            .stream()
+                            .sorted(
+                                    Comparator
+                                            .comparing(
+                                                    DistribucionUseCase.MatrizItem::nombreTrabajador,
+                                                    String.CASE_INSENSITIVE_ORDER
+                                            )
+                                            .thenComparing(
+                                                    item ->
+                                                            item.codigoTrabajador() == null
+                                                                    ? Integer.MAX_VALUE
+                                                                    : item.codigoTrabajador()
+                                            )
+                            )
+                            .collect(
+                                    java.util.stream.Collectors.groupingBy(
+                                            DistribucionUseCase.MatrizItem::trabajadorId,
+                                            LinkedHashMap::new,
+                                            java.util.stream.Collectors.toList()
+                                    )
+                            );
+
+            for (
+                    int indice = 0;
+                    indice < bloques.size();
+                    indice++
+            ) {
+                if (indice > 0) {
+                    documento.newPage();
+                }
+
+                List<LocalDate> bloque =
+                        bloques.get(
+                                indice
+                        );
+
+                agregarCabeceraMatriz(
+                        documento,
+                        reporte,
+                        bloque,
+                        indice + 1,
+                        bloques.size()
+                );
+
+                agregarTablaMatriz(
+                        documento,
+                        porTrabajador,
+                        bloque
+                );
+
+                agregarLeyendaMatriz(
+                        documento
+                );
+            }
+
+            documento.close();
+
+            return salida.toByteArray();
+        }
+        catch (DocumentException exception) {
+            throw new IllegalStateException(
+                    "No se pudo construir el PDF matricial de distribución",
+                    exception
+            );
+        }
+    }
+
+
+    private void agregarCabeceraMatriz(
+            Document documento,
+            DistribucionUseCase.ReportePlaza reporte,
+            List<LocalDate> fechas,
+            int pagina,
+            int totalPaginas
+    ) throws DocumentException {
+
+        String mes =
+                reporte.desde()
+                        .format(
+                                DateTimeFormatter.ofPattern(
+                                        "MMMM",
+                                        new Locale(
+                                                "es",
+                                                "PE"
+                                        )
+                                )
+                        )
+                        .toUpperCase(
+                                new Locale(
+                                        "es",
+                                        "PE"
+                                )
+                        );
+
+        Font titulo =
+                FontFactory.getFont(
+                        FontFactory.HELVETICA_BOLD,
+                        17,
+                        new Color(
+                                15,
+                                23,
+                                42
+                        )
+                );
+
+        Paragraph encabezado =
+                new Paragraph(
+                        "DISTRIBUCIÓN "
+                                + mes
+                                + " "
+                                + reporte.plazaCodigo(),
+                        titulo
+                );
+
+        encabezado.setAlignment(
+                Element.ALIGN_CENTER
+        );
+
+        encabezado.setSpacingAfter(
+                4
+        );
+
+        documento.add(
+                encabezado
+        );
+
+        Font detalle =
+                FontFactory.getFont(
+                        FontFactory.HELVETICA,
+                        7.5f,
+                        GRIS
+                );
+
+        String rango =
+                FECHA.format(
+                        fechas.get(0)
+                )
+                        + " - "
+                        + FECHA.format(
+                                fechas.get(
+                                        fechas.size() - 1
+                                )
+                        );
+
+        Paragraph periodo =
+                new Paragraph(
+                        "Periodo visible: "
+                                + rango
+                                + (
+                                        totalPaginas > 1
+                                                ? "   ·   Página "
+                                                        + pagina
+                                                        + " de "
+                                                        + totalPaginas
+                                                : ""
+                                ),
+                        detalle
+                );
+
+        periodo.setAlignment(
+                Element.ALIGN_CENTER
+        );
+
+        periodo.setSpacingAfter(
+                8
+        );
+
+        documento.add(
+                periodo
+        );
+    }
+
+
+    private void agregarTablaMatriz(
+            Document documento,
+            Map<Long, List<DistribucionUseCase.MatrizItem>> porTrabajador,
+            List<LocalDate> fechas
+    ) throws DocumentException {
+
+        float[] anchos =
+                new float[
+                        3
+                                + fechas.size()
+                ];
+
+        anchos[0] =
+                .7f;
+
+        anchos[1] =
+                1.15f;
+
+        anchos[2] =
+                4.3f;
+
+        for (
+                int i = 3;
+                i < anchos.length;
+                i++
+        ) {
+            anchos[i] =
+                    1.15f;
+        }
+
+        PdfPTable tabla =
+                new PdfPTable(
+                        anchos
+                );
+
+        tabla.setWidthPercentage(
+                100
+        );
+
+        tabla.setHeaderRows(
+                2
+        );
+
+        tabla.addCell(
+                cabeceraMatrizFija(
+                        "N°"
+                )
+        );
+
+        tabla.addCell(
+                cabeceraMatrizFija(
+                        "Cod"
+                )
+        );
+
+        tabla.addCell(
+                cabeceraMatrizFija(
+                        "Nombre"
+                )
+        );
+
+        for (
+                LocalDate fecha :
+                fechas
+        ) {
+            tabla.addCell(
+                    cabeceraMatrizDia(
+                            diaSemanaCorto(
+                                    fecha
+                            )
+                    )
+            );
+        }
+
+        for (
+                LocalDate fecha :
+                fechas
+        ) {
+            tabla.addCell(
+                    cabeceraMatrizNumeroDia(
+                            String.valueOf(
+                                    fecha.getDayOfMonth()
+                            )
+                    )
+            );
+        }
+
+        if (
+                porTrabajador.isEmpty()
+        ) {
+            PdfPCell vacia =
+                    celda(
+                            "No existen programaciones para el periodo seleccionado"
+                    );
+
+            vacia.setColspan(
+                    3 + fechas.size()
+            );
+
+            vacia.setHorizontalAlignment(
+                    Element.ALIGN_CENTER
+            );
+
+            tabla.addCell(
+                    vacia
+            );
+        }
+        else {
+            int numero =
+                    1;
+
+            for (
+                    List<DistribucionUseCase.MatrizItem> items :
+                    porTrabajador.values()
+            ) {
+                DistribucionUseCase.MatrizItem base =
+                        items.get(0);
+
+                Map<LocalDate, DistribucionUseCase.MatrizItem> porFecha =
+                        items.stream()
+                                .collect(
+                                        java.util.stream.Collectors.toMap(
+                                                DistribucionUseCase.MatrizItem::fecha,
+                                                item ->
+                                                        item,
+                                                (a, b) ->
+                                                        a,
+                                                LinkedHashMap::new
+                                        )
+                                );
+
+                tabla.addCell(
+                        celdaMatrizTexto(
+                                String.valueOf(
+                                        numero++
+                                ),
+                                Element.ALIGN_CENTER,
+                                true
+                        )
+                );
+
+                tabla.addCell(
+                        celdaMatrizTexto(
+                                base.codigoTrabajador() == null
+                                        ? ""
+                                        : String.valueOf(
+                                                base.codigoTrabajador()
+                                        ),
+                                Element.ALIGN_CENTER,
+                                false
+                        )
+                );
+
+                tabla.addCell(
+                        celdaMatrizTexto(
+                                base.nombreTrabajador(),
+                                Element.ALIGN_LEFT,
+                                false
+                        )
+                );
+
+                for (
+                        LocalDate fecha :
+                        fechas
+                ) {
+                    DistribucionUseCase.MatrizItem item =
+                            porFecha.get(
+                                    fecha
+                            );
+
+                    tabla.addCell(
+                            celdaMatrizAsignacion(
+                                    item
+                            )
+                    );
+                }
+            }
+        }
+
+        documento.add(
+                tabla
+        );
+    }
+
+
+    private PdfPCell cabeceraMatrizFija(
+            String texto
+    ) {
+
+        PdfPCell cell =
+                nuevaCeldaMatriz(
+                        texto,
+                        8.5f,
+                        true,
+                        Color.BLACK,
+                        MATRIZ_CABECERA,
+                        Element.ALIGN_CENTER
+                );
+
+        cell.setRowspan(
+                2
+        );
+
+        return cell;
+    }
+
+
+    private PdfPCell cabeceraMatrizDia(
+            String texto
+    ) {
+
+        return nuevaCeldaMatriz(
+                texto,
+                7.5f,
+                true,
+                Color.BLACK,
+                MATRIZ_CABECERA,
+                Element.ALIGN_CENTER
+        );
+    }
+
+
+    private PdfPCell cabeceraMatrizNumeroDia(
+            String texto
+    ) {
+
+        return nuevaCeldaMatriz(
+                texto,
+                8.5f,
+                true,
+                Color.WHITE,
+                MATRIZ_DIA,
+                Element.ALIGN_CENTER
+        );
+    }
+
+
+    private PdfPCell celdaMatrizTexto(
+            String texto,
+            int alineacion,
+            boolean negrita
+    ) {
+
+        return nuevaCeldaMatriz(
+                texto,
+                7.3f,
+                negrita,
+                new Color(
+                        15,
+                        23,
+                        42
+                ),
+                Color.WHITE,
+                alineacion
+        );
+    }
+
+
+    private PdfPCell celdaMatrizAsignacion(
+            DistribucionUseCase.MatrizItem item
+    ) {
+
+        if (item == null) {
+            return nuevaCeldaMatriz(
+                    "",
+                    7.2f,
+                    false,
+                    GRIS,
+                    Color.WHITE,
+                    Element.ALIGN_CENTER
+            );
+        }
+
+        String estado =
+                item.estado() == null
+                        ? ""
+                        : item.estado()
+                                .trim()
+                                .toUpperCase();
+
+        boolean operativo =
+                estado.equals("A")
+                        || estado.equals("B")
+                        || estado.equals("C");
+
+        String texto =
+                operativo
+                        ? (
+                                item.ubicacionCodigo() == null
+                                        || item.ubicacionCodigo().isBlank()
+                                        ? "SIN ASIG."
+                                        : item.ubicacionCodigo()
+                        )
+                        : estado;
+
+        Color fondo =
+                colorEstadoMatriz(
+                        estado,
+                        operativo
+                                && (
+                                        item.ubicacionCodigo() == null
+                                                || item.ubicacionCodigo().isBlank()
+                                )
+                );
+
+        Color textoColor =
+                texto.equals(
+                        "SIN ASIG."
+                )
+                        ? new Color(
+                                185,
+                                28,
+                                28
+                        )
+                        : new Color(
+                                31,
+                                41,
+                                55
+                        );
+
+        return nuevaCeldaMatriz(
+                texto,
+                texto.length() > 7
+                        ? 6.1f
+                        : 7.5f,
+                true,
+                textoColor,
+                fondo,
+                Element.ALIGN_CENTER
+        );
+    }
+
+
+    private PdfPCell nuevaCeldaMatriz(
+            String texto,
+            float tamanio,
+            boolean negrita,
+            Color colorTexto,
+            Color fondo,
+            int alineacion
+    ) {
+
+        Font font =
+                FontFactory.getFont(
+                        negrita
+                                ? FontFactory.HELVETICA_BOLD
+                                : FontFactory.HELVETICA,
+                        tamanio,
+                        colorTexto
+                );
+
+        PdfPCell cell =
+                new PdfPCell(
+                        new Phrase(
+                                texto == null
+                                        ? ""
+                                        : texto,
+                                font
+                        )
+                );
+
+        cell.setBackgroundColor(
+                fondo
+        );
+
+        cell.setBorderColor(
+                new Color(
+                        71,
+                        85,
+                        105
+                )
+        );
+
+        cell.setBorderWidth(
+                .55f
+        );
+
+        cell.setPaddingTop(
+                5
+        );
+
+        cell.setPaddingBottom(
+                5
+        );
+
+        cell.setPaddingLeft(
+                4
+        );
+
+        cell.setPaddingRight(
+                4
+        );
+
+        cell.setHorizontalAlignment(
+                alineacion
+        );
+
+        cell.setVerticalAlignment(
+                Element.ALIGN_MIDDLE
+        );
+
+        return cell;
+    }
+
+
+    private Color colorEstadoMatriz(
+            String estado,
+            boolean sinAsignar
+    ) {
+
+        if (sinAsignar) {
+            return MATRIZ_SIN_ASIGNAR;
+        }
+
+        return switch (
+                estado
+        ) {
+            case "A" ->
+                    MATRIZ_A;
+
+            case "B" ->
+                    MATRIZ_B;
+
+            case "C" ->
+                    MATRIZ_C;
+
+            case "D" ->
+                    MATRIZ_DESCANSO;
+
+            case "V" ->
+                    MATRIZ_VACACIONES;
+
+            case "COM" ->
+                    MATRIZ_COMPENSACION;
+
+            case "DM" ->
+                    MATRIZ_DM;
+
+            case "LIC" ->
+                    MATRIZ_LICENCIA;
+
+            default ->
+                    Color.WHITE;
+        };
+    }
+
+
+    private void agregarLeyendaMatriz(
+            Document documento
+    ) throws DocumentException {
+
+        Font font =
+                FontFactory.getFont(
+                        FontFactory.HELVETICA,
+                        6.8f,
+                        GRIS
+                );
+
+        Paragraph leyenda =
+                new Paragraph(
+                        "Colores por turno: A 06:00–14:00 · B 14:00–22:00 · C 22:00–06:00 · "
+                                + "D descanso · V vacaciones · COM compensación · DM descanso médico · LIC licencia",
+                        font
+                );
+
+        leyenda.setSpacingBefore(
+                6
+        );
+
+        leyenda.setAlignment(
+                Element.ALIGN_LEFT
+        );
+
+        documento.add(
+                leyenda
+        );
+    }
+
+
+    private List<LocalDate> fechasEntre(
+            LocalDate desde,
+            LocalDate hasta
+    ) {
+
+        List<LocalDate> fechas =
+                new ArrayList<>();
+
+        LocalDate actual =
+                desde;
+
+        while (
+                !actual.isAfter(
+                        hasta
+                )
+        ) {
+            fechas.add(
+                    actual
+            );
+
+            actual =
+                    actual.plusDays(
+                            1
+                    );
+        }
+
+        return fechas;
+    }
+
+
+    private List<List<LocalDate>> dividirFechas(
+            List<LocalDate> fechas,
+            int tamanio
+    ) {
+
+        List<List<LocalDate>> bloques =
+                new ArrayList<>();
+
+        for (
+                int i = 0;
+                i < fechas.size();
+                i += tamanio
+        ) {
+            bloques.add(
+                    new ArrayList<>(
+                            fechas.subList(
+                                    i,
+                                    Math.min(
+                                            i + tamanio,
+                                            fechas.size()
+                                    )
+                            )
+                    )
+            );
+        }
+
+        return bloques;
+    }
+
+
+    private String diaSemanaCorto(
+            LocalDate fecha
+    ) {
+
+        return switch (
+                fecha.getDayOfWeek()
+        ) {
+            case MONDAY ->
+                    "LUN";
+
+            case TUESDAY ->
+                    "MAR";
+
+            case WEDNESDAY ->
+                    "MIÉ";
+
+            case THURSDAY ->
+                    "JUE";
+
+            case FRIDAY ->
+                    "VIE";
+
+            case SATURDAY ->
+                    "SÁB";
+
+            case SUNDAY ->
+                    "DOM";
+        };
+    }
+
 
     private void agregarCabecera(
             Document documento,
