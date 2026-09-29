@@ -74,7 +74,8 @@ public interface GeneradorAsignacionCasetasUseCase {
             int repeticionesExactas,
             int duplicidades,
             int restriccionesVioladas,
-            int solucionesEvaluadas
+            int solucionesEvaluadas,
+            int cambiosRespectoBase
     ) {}
 
     record Propuesta(
