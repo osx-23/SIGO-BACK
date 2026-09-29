@@ -1023,14 +1023,14 @@ public class DistribucionGestionJpaAdapter
                         )
                         .sorted(
                                 Comparator
-                                        .comparingInt(
-                                                secuencia ->
+                                        .<ProgramacionSecuenciaAgente>comparingInt(
+                                                (ProgramacionSecuenciaAgente secuencia) ->
                                                         ordenGrupo(
                                                                 secuencia.getGrupo()
                                                         )
                                         )
-                                        .thenComparing(
-                                                secuencia ->
+                                        .thenComparingInt(
+                                                (ProgramacionSecuenciaAgente secuencia) ->
                                                         secuencia.getOrden() == null
                                                                 ? Integer.MAX_VALUE
                                                                 : secuencia.getOrden()
@@ -1070,10 +1070,11 @@ public class DistribucionGestionJpaAdapter
                 )
                 .sorted(
                         Comparator
-                                .comparingInt(
-                                        programacion ->
-                                                ordenTrabajador.get(
-                                                        programacion.getTrabajadorId()
+                                .<ProgramacionTurnoRepository.TurnoResumen>comparingInt(
+                                        (ProgramacionTurnoRepository.TurnoResumen programacion) ->
+                                                ordenTrabajador.getOrDefault(
+                                                        programacion.getTrabajadorId(),
+                                                        Integer.MAX_VALUE
                                                 )
                                 )
                                 .thenComparing(
