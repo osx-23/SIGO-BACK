@@ -12,6 +12,12 @@ public interface DistribucionUseCase {
 
     ResumenTrabajador resumen(Long trabajadorId, int anio, int mes);
 
+    ReporteTrabajador reporteTrabajador(
+            Long trabajadorId,
+            LocalDate desde,
+            LocalDate hasta
+    );
+
     List<CoberturaUbicacion> cobertura(Long plazaId, int anio, int mes);
 
     record Command(
@@ -55,6 +61,12 @@ public interface DistribucionUseCase {
             Integer codigo,
             String nombre,
             List<ResumenUbicacion> ubicaciones
+    ) {
+    }
+
+    record ReporteTrabajador(
+            ResumenTrabajador resumen,
+            List<Distribucion> distribuciones
     ) {
     }
 
