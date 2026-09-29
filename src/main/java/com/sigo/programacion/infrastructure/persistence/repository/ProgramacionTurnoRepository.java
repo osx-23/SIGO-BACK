@@ -45,6 +45,16 @@ public interface ProgramacionTurnoRepository
             LocalDate fecha
     );
 
+    @Query("""
+        select p from ProgramacionTurno p
+        join fetch p.trabajador t
+        join fetch p.plaza pl
+        where p.id in :ids
+    """)
+    List<ProgramacionTurno> findAllParaDistribucion(
+            @Param("ids") Set<Long> ids
+    );
+
     /*
      * Proyección de solo lectura para la matriz mensual.
      * Evita hidratar entidades completas de trabajador/plaza
