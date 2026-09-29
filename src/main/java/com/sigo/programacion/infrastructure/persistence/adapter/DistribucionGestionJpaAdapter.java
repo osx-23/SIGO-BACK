@@ -726,7 +726,15 @@ public class DistribucionGestionJpaAdapter
                 throw bad(
                         "El agente "
                                 + actual.getTrabajador().getNombreCompleto()
-                                + " no puede estar dos días seguidos en una ubicación de tipo APOYO o AUXILIAR"
+                                + " tiene dos días seguidos en AUXILIAR/APOYO: "
+                                + actual.getFecha().minusDays(1)
+                                + " = "
+                                + ubicacionAnterior.getCodigo()
+                                + " y "
+                                + actual.getFecha()
+                                + " = "
+                                + resuelto.ubicacion().getCodigo()
+                                + ". Cambia una de esas dos asignaciones por una VIA."
                 );
             }
         }
