@@ -1035,6 +1035,7 @@ public class DistribucionGestionJpaAdapter
                             programacion.getTrabajadorId(),
                             programacion.getCodigoTrabajador(),
                             programacion.getNombreTrabajador(),
+                            programacion.getPlazaCodigo(),
                             programacion.getFecha(),
                             programacion.getEstado().name(),
                             ubicacionCodigo,
