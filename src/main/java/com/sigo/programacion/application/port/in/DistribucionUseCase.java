@@ -81,6 +81,7 @@ public interface DistribucionUseCase {
             Long trabajadorId,
             Integer codigoTrabajador,
             String nombreTrabajador,
+            String plazaCodigo,
             LocalDate fecha,
             String estado,
             String ubicacionCodigo,
