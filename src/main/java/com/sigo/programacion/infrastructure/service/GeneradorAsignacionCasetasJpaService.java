@@ -628,11 +628,11 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
              * el tiempo del generador.
              */
             final int arranquesCalidadExtra =
-                    3;
+                    5;
 
             for (int inicio = 0;
                     inicio < arranquesCalidadExtra
-                            && solucionesCalidad.size() < 5;
+                            && solucionesCalidad.size() < 7;
                     inicio++) {
                 IntentoGeneracion alternativo =
                         ejecutarIntento(
@@ -3983,6 +3983,19 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         ubicacionDiaAnterior
                 );
 
+        /*
+         * Regla dura compartida con el guardado:
+         * un agente no puede tener AUXILIAR/APOYO dos días seguidos.
+         *
+         * Antes el generador solo controlaba la alternancia VIA/AUX dentro
+         * del mismo flujo, por lo que podía construir una propuesta que el
+         * endpoint de guardado rechazaba después.
+         */
+        boolean diaAnteriorEsApoyoOAuxiliar =
+                esApoyoOAuxiliar(
+                        ubicacionAnterior
+                );
+
         List<ProgramacionUbicacion> ubicacionesAleatorias =
                 new ArrayList<>(ubicaciones);
 
@@ -3995,6 +4008,13 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
         for (ProgramacionUbicacion ubicacion :
                 ubicacionesAleatorias) {
+            if (diaAnteriorEsApoyoOAuxiliar
+                    && esApoyoOAuxiliar(
+                            ubicacion
+                    )) {
+                continue;
+            }
+
             boolean habilitadaParaTurno =
                     permiteTurno(
                             ubicacion,
@@ -5129,6 +5149,19 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
         return null;
     }
+
+    private boolean esApoyoOAuxiliar(
+            ProgramacionUbicacion ubicacion
+    ) {
+        return ubicacion != null
+                && (
+                        ubicacion.getTipo()
+                                == TipoUbicacion.AUXILIAR
+                                || ubicacion.getTipo()
+                                == TipoUbicacion.APOYO
+                );
+    }
+
 
     private boolean esViaOAuxiliar(
             ProgramacionUbicacion ubicacion
