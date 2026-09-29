@@ -192,21 +192,8 @@ public class DistribucionTrabajadorPdfService
                         )
                         .count();
 
-        long repeticiones =
-                reporte.resumen()
-                        .ubicaciones()
-                        .stream()
-                        .mapToLong(
-                                item ->
-                                        Math.max(
-                                                0,
-                                                item.veces() - 1
-                                        )
-                        )
-                        .sum();
-
         PdfPTable tabla =
-                new PdfPTable(3);
+                new PdfPTable(2);
 
         tabla.setWidthPercentage(100);
         tabla.setSpacingAfter(16);
@@ -222,13 +209,6 @@ public class DistribucionTrabajadorPdfService
                 tarjeta(
                         "Casetas distintas",
                         String.valueOf(distintas)
-                )
-        );
-
-        tabla.addCell(
-                tarjeta(
-                        "Repeticiones",
-                        String.valueOf(repeticiones)
                 )
         );
 
@@ -255,9 +235,8 @@ public class DistribucionTrabajadorPdfService
                 new PdfPTable(
                         new float[]{
                                 1.2f,
-                                3.5f,
-                                1f,
-                                1.2f
+                                4.2f,
+                                1f
                         }
                 );
 
@@ -279,11 +258,6 @@ public class DistribucionTrabajadorPdfService
                 "Veces"
         );
 
-        cabecera(
-                tabla,
-                "Repeticiones"
-        );
-
         if (
                 reporte.resumen()
                         .ubicaciones()
@@ -294,7 +268,7 @@ public class DistribucionTrabajadorPdfService
                             "Sin asignaciones en el periodo"
                     );
 
-            vacia.setColspan(4);
+            vacia.setColspan(3);
 
             tabla.addCell(
                     vacia
@@ -329,17 +303,6 @@ public class DistribucionTrabajadorPdfService
                                         celda(
                                                 String.valueOf(
                                                         item.veces()
-                                                )
-                                        )
-                                );
-
-                                tabla.addCell(
-                                        celda(
-                                                String.valueOf(
-                                                        Math.max(
-                                                                0,
-                                                                item.veces() - 1
-                                                        )
                                                 )
                                         )
                                 );
