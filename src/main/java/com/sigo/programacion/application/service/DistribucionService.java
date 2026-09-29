@@ -136,6 +136,81 @@ public class DistribucionService
 
     @Override
     @Transactional(readOnly = true)
+    public ReportePlaza reportePlaza(
+            Long plazaId,
+            LocalDate desde,
+            LocalDate hasta
+    ) {
+        if (
+                plazaId == null
+                        || desde == null
+                        || hasta == null
+        ) {
+            throw new ProgramacionValidationException(
+                    "Plaza y rango de fechas son obligatorios"
+            );
+        }
+
+        if (desde.isAfter(hasta)) {
+            throw new ProgramacionValidationException(
+                    "La fecha desde no puede ser posterior a la fecha hasta"
+            );
+        }
+
+        if (ChronoUnit.DAYS.between(desde, hasta) > 62) {
+            throw new ProgramacionValidationException(
+                    "El reporte matricial no puede superar 63 días"
+            );
+        }
+
+        accessPort.validarGestionPlaza(
+                plazaId
+        );
+
+        List<MatrizItem> items =
+                distribucionGestionPort.listarMatriz(
+                        plazaId,
+                        desde,
+                        hasta
+                );
+
+        String plazaCodigo =
+                items.isEmpty()
+                        ? "P" + plazaId
+                        : items.get(0)
+                                .estado() != null
+                                ? obtenerCodigoPlaza(
+                                        plazaId,
+                                        items
+                                )
+                                : "P" + plazaId;
+
+        return new ReportePlaza(
+                plazaId,
+                plazaCodigo,
+                desde,
+                hasta,
+                items
+        );
+    }
+
+
+    private String obtenerCodigoPlaza(
+            Long plazaId,
+            List<MatrizItem> items
+    ) {
+        /*
+         * El código de plaza no forma parte del MatrizItem para evitar
+         * repetirlo por cada celda. La vista usa P{id} como fallback.
+         * El controlador reemplaza este valor cuando puede resolverlo
+         * desde la programación mensual.
+         */
+        return "P" + plazaId;
+    }
+
+
+    @Override
+    @Transactional(readOnly = true)
     public List<CoberturaUbicacion> cobertura(
             Long plazaId,
             int anio,
