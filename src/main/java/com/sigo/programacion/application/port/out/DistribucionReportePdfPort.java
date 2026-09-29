@@ -11,4 +11,8 @@ public interface DistribucionReportePdfPort {
             LocalDate desde,
             LocalDate hasta
     );
+
+    byte[] generarMatriz(
+            DistribucionUseCase.ReportePlaza reporte
+    );
 }
