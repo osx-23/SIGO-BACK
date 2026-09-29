@@ -27,6 +27,12 @@ public interface DistribucionGestionPort {
             LocalDate hasta
     );
 
+    List<DistribucionUseCase.MatrizItem> listarMatriz(
+            Long plazaId,
+            LocalDate desde,
+            LocalDate hasta
+    );
+
     DistribucionUseCase.ResumenTrabajador resumen(
             Long trabajadorId,
             LocalDate desde,
