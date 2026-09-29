@@ -194,6 +194,48 @@ public class DistribucionController {
     }
 
 
+    @GetMapping(
+            value = "/reporte-plaza/pdf",
+            produces = MediaType.APPLICATION_PDF_VALUE
+    )
+    public ResponseEntity<byte[]> reportePlazaPdf(
+            @RequestParam Long plazaId,
+            @RequestParam LocalDate desde,
+            @RequestParam LocalDate hasta
+    ) {
+        DistribucionUseCase.ReportePlaza reporte =
+                distribucionUseCase.reportePlaza(
+                        plazaId,
+                        desde,
+                        hasta
+                );
+
+        byte[] pdf =
+                pdfService.generarMatriz(
+                        reporte
+                );
+
+        String archivo =
+                "distribucion-"
+                        + reporte.plazaCodigo()
+                        + "-"
+                        + desde
+                        + "-"
+                        + hasta
+                        + ".pdf";
+
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename="" + archivo + """
+                )
+                .contentType(
+                        MediaType.APPLICATION_PDF
+                )
+                .body(pdf);
+    }
+
+
     @GetMapping("/cobertura")
     public List<CoberturaUbicacionResponse> cobertura(
             @RequestParam Long plazaId,
