@@ -195,22 +195,65 @@ public class DistribucionGestionJpaAdapter
             );
         }
 
+        LocalDate desde =
+                resueltos.stream()
+                        .map(item ->
+                                item.programacion().getFecha()
+                        )
+                        .min(LocalDate::compareTo)
+                        .orElseThrow();
+
+        LocalDate hasta =
+                resueltos.stream()
+                        .map(item ->
+                                item.programacion().getFecha()
+                        )
+                        .max(LocalDate::compareTo)
+                        .orElseThrow();
+
+        List<ProgramacionUbicacion> ubicacionesActivas =
+                ubicacionRepository
+                        .findByPlazaIdAndActivoTrueOrderByOrdenAscCodigoAsc(
+                                plazaId
+                        );
+
+        List<ProgramacionTurno> programacionesPeriodo =
+                programacionRepository.findMes(
+                        plazaId,
+                        desde,
+                        hasta
+                );
+
+        List<DistribucionPersonal> distribucionesPeriodoConAnterior =
+                distribucionRepository.findMes(
+                        plazaId,
+                        desde.minusDays(1),
+                        hasta
+                );
+
         validarHabilitacionTurnos(
-                plazaId,
-                resueltos
+                resueltos,
+                desde,
+                programacionesPeriodo,
+                distribucionesPeriodoConAnterior,
+                ubicacionesActivas
         );
 
         validarOcupacionFinal(
-                plazaId,
-                resueltos
+                resueltos,
+                desde,
+                distribucionesPeriodoConAnterior,
+                ubicacionesActivas
         );
 
         Map<Long, DistribucionPersonal> existentePorProgramacion =
-                distribucionRepository
-                        .findByProgramacionTurnoIdIn(
-                                programacionIds
-                        )
+                distribucionesPeriodoConAnterior
                         .stream()
+                        .filter(item ->
+                                programacionIds.contains(
+                                        item.getProgramacionTurno().getId()
+                                )
+                        )
                         .collect(
                                 java.util.stream.Collectors.toMap(
                                         item ->
@@ -280,28 +323,15 @@ public class DistribucionGestionJpaAdapter
     }
 
     private void validarHabilitacionTurnos(
-            Long plazaId,
-            List<ItemResuelto> resueltos
+            List<ItemResuelto> resueltos,
+            LocalDate desde,
+            List<ProgramacionTurno> programacionesPeriodo,
+            List<DistribucionPersonal> distribucionesPeriodoConAnterior,
+            List<ProgramacionUbicacion> ubicacionesActivas
     ) {
         if (resueltos.isEmpty()) {
             return;
         }
-
-        LocalDate desde = resueltos.stream()
-                .map(item -> item.programacion().getFecha())
-                .min(LocalDate::compareTo)
-                .orElseThrow();
-
-        LocalDate hasta = resueltos.stream()
-                .map(item -> item.programacion().getFecha())
-                .max(LocalDate::compareTo)
-                .orElseThrow();
-
-        List<ProgramacionUbicacion> ubicacionesActivas =
-                ubicacionRepository
-                        .findByPlazaIdAndActivoTrueOrderByOrdenAscCodigoAsc(
-                                plazaId
-                        );
 
         Map<EstadoProgramacion, Integer> capacidadPorTurno =
                 new java.util.EnumMap<>(
@@ -337,11 +367,7 @@ public class DistribucionGestionJpaAdapter
                 new HashMap<>();
 
         for (ProgramacionTurno programacion :
-                programacionRepository.findMes(
-                        plazaId,
-                        desde,
-                        hasta
-                )) {
+                programacionesPeriodo) {
             if (!programacion.getEstado().esOperativo()) {
                 continue;
             }
@@ -377,11 +403,13 @@ public class DistribucionGestionJpaAdapter
                 new HashMap<>();
 
         for (DistribucionPersonal existente :
-                distribucionRepository.findMes(
-                        plazaId,
-                        desde,
-                        hasta
-                )) {
+                distribucionesPeriodoConAnterior) {
+            if (existente.getProgramacionTurno()
+                    .getFecha()
+                    .isBefore(desde)) {
+                continue;
+            }
+
             if (programacionesModificadas.contains(
                     existente.getProgramacionTurno().getId()
             )) {
@@ -561,22 +589,14 @@ public class DistribucionGestionJpaAdapter
     }
 
     private void validarOcupacionFinal(
-            Long plazaId,
-            List<ItemResuelto> resueltos
+            List<ItemResuelto> resueltos,
+            LocalDate desde,
+            List<DistribucionPersonal> distribucionesPeriodoConAnterior,
+            List<ProgramacionUbicacion> ubicacionesActivas
     ) {
         if (resueltos.isEmpty()) {
             return;
         }
-
-        LocalDate desde = resueltos.stream()
-                .map(item -> item.programacion().getFecha())
-                .min(LocalDate::compareTo)
-                .orElseThrow();
-
-        LocalDate hasta = resueltos.stream()
-                .map(item -> item.programacion().getFecha())
-                .max(LocalDate::compareTo)
-                .orElseThrow();
 
         Set<Long> programacionesModificadas =
                 resueltos.stream()
@@ -587,11 +607,13 @@ public class DistribucionGestionJpaAdapter
                 new HashMap<>();
 
         for (DistribucionPersonal existente :
-                distribucionRepository.findMes(
-                        plazaId,
-                        desde,
-                        hasta
-                )) {
+                distribucionesPeriodoConAnterior) {
+            if (existente.getProgramacionTurno()
+                    .getFecha()
+                    .isBefore(desde)) {
+                continue;
+            }
+
             if (programacionesModificadas.contains(
                     existente.getProgramacionTurno().getId()
             )) {
@@ -644,11 +666,7 @@ public class DistribucionGestionJpaAdapter
                 new HashMap<>();
 
         for (DistribucionPersonal existente :
-                distribucionRepository.findMes(
-                        plazaId,
-                        desde.minusDays(1),
-                        hasta
-                )) {
+                distribucionesPeriodoConAnterior) {
             if (programacionesModificadas.contains(
                     existente.getProgramacionTurno().getId()
             )) {
@@ -765,12 +783,6 @@ public class DistribucionGestionJpaAdapter
                 );
             }
         }
-
-        List<ProgramacionUbicacion> ubicacionesActivas =
-                ubicacionRepository
-                        .findByPlazaIdAndActivoTrueOrderByOrdenAscCodigoAsc(
-                                plazaId
-                        );
 
         Map<String, EstadoProgramacion> turnoPorClave =
                 new HashMap<>();
