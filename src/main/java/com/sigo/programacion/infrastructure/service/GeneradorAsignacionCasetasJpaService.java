@@ -5269,19 +5269,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         return null;
     }
 
-    private boolean esApoyoOAuxiliar(
-            ProgramacionUbicacion ubicacion
-    ) {
-        return ubicacion != null
-                && (
-                        ubicacion.getTipo()
-                                == TipoUbicacion.AUXILIAR
-                                || ubicacion.getTipo()
-                                == TipoUbicacion.APOYO
-                );
-    }
-
-
     private boolean esViaOAuxiliar(
             ProgramacionUbicacion ubicacion
     ) {
