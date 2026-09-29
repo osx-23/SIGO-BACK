@@ -227,7 +227,7 @@ public class DistribucionController {
         return ResponseEntity.ok()
                 .header(
                         HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename="" + archivo + """
+                        "attachment; filename=\"" + archivo + "\""
                 )
                 .contentType(
                         MediaType.APPLICATION_PDF
