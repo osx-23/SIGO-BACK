@@ -13,6 +13,7 @@ import com.sigo.programacion.application.port.in.GeneradorAsignacionCasetasUseCa
 import com.sigo.programacion.application.port.in.GeneradorAsignacionCasetasUseCase.Propuesta;
 import com.sigo.programacion.application.port.in.GeneradorAsignacionCasetasUseCase.Restriccion;
 import com.sigo.programacion.application.port.in.GeneradorAsignacionCasetasUseCase.TipoPeriodo;
+import com.sigo.programacion.application.port.out.ProgramacionAccessPort;
 import com.sigo.programacion.domain.GrupoFlujoCaseta;
 import com.sigo.programacion.domain.ProgramacionValidationException;
 import com.sigo.programacion.infrastructure.persistence.entity.*;
@@ -39,6 +40,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
     private final DistribucionPersonalRepository distribucionRepository;
     private final PlazaRepository plazaRepository;
     private final TrabajadorRepository trabajadorRepository;
+    private final ProgramacionAccessPort accessPort;
 
     @Transactional(readOnly = true)
     public Configuracion obtenerConfiguracion(Long plazaId) {
@@ -261,6 +263,10 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             TipoPeriodo periodo,
             Integer semana
     ) {
+        accessPort.validarGestionPlaza(
+                plazaId
+        );
+
         validarPlaza(plazaId);
 
         YearMonth ym;
