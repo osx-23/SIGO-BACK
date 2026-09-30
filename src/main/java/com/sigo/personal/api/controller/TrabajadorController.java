@@ -35,7 +35,7 @@ public class TrabajadorController {
 
     @GetMapping("/controladores")
     public ResponseEntity<List<TrabajadorPublicResponse>> listarControladoresPorPlaza(
-            @RequestParam Long plazaId
+            @RequestParam(required = false) Long plazaId
     ) {
         return ResponseEntity.ok(
                 useCase.listarControladoresPorPlaza(plazaId)
