@@ -33,6 +33,22 @@ public interface DashboardAsistenciaUseCase {
             Long turnoId
     );
 
+    List<TopAusencia> topAusencias(
+            LocalDate inicio,
+            LocalDate fin,
+            Long plazaId,
+            Long turnoId,
+            int limite
+    );
+
+    List<AusenciaTrabajador> buscarAusenciasTrabajador(
+            LocalDate inicio,
+            LocalDate fin,
+            Long plazaId,
+            Long turnoId,
+            String consulta
+    );
+
     record Punto(
             Integer periodo,
             Long presentes,
@@ -44,6 +60,26 @@ public interface DashboardAsistenciaUseCase {
     record Motivo(
             String motivo,
             Long total
+    ) {
+    }
+
+    record TopAusencia(
+            Long trabajadorId,
+            Integer codigo,
+            String nombre,
+            Long totalAusencias
+    ) {
+    }
+
+    record AusenciaTrabajador(
+            Long trabajadorId,
+            Integer codigo,
+            String nombre,
+            LocalDate fecha,
+            String motivo,
+            String observacion,
+            String plaza,
+            String turno
     ) {
     }
 
