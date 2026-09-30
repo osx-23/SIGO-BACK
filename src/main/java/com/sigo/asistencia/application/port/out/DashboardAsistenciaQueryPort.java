@@ -34,6 +34,22 @@ public interface DashboardAsistenciaQueryPort {
             Long turnoId
     );
 
+    List<TopAusenciaData> topAusencias(
+            LocalDate inicio,
+            LocalDate fin,
+            Long plazaId,
+            Long turnoId,
+            int limite
+    );
+
+    List<AusenciaTrabajadorData> buscarAusenciasTrabajador(
+            LocalDate inicio,
+            LocalDate fin,
+            Long plazaId,
+            Long turnoId,
+            String consulta
+    );
+
     record PuntoData(
             Integer periodo,
             Long presentes,
@@ -45,6 +61,26 @@ public interface DashboardAsistenciaQueryPort {
     record MotivoData(
             String motivo,
             Long total
+    ) {
+    }
+
+    record TopAusenciaData(
+            Long trabajadorId,
+            Integer codigo,
+            String nombre,
+            Long totalAusencias
+    ) {
+    }
+
+    record AusenciaTrabajadorData(
+            Long trabajadorId,
+            Integer codigo,
+            String nombre,
+            LocalDate fecha,
+            String motivo,
+            String observacion,
+            String plaza,
+            String turno
     ) {
     }
 
