@@ -1,8 +1,10 @@
 package com.sigo.asistencia.api.controller;
 
 import com.sigo.asistencia.api.dto.AusenciaMotivoResponse;
+import com.sigo.asistencia.api.dto.AusenciaTrabajadorDetalleResponse;
 import com.sigo.asistencia.api.dto.DashboardPuntoResponse;
 import com.sigo.asistencia.api.dto.ResumenAsistenciaResponse;
+import com.sigo.asistencia.api.dto.TopAusenciaResponse;
 import com.sigo.asistencia.application.port.in.DashboardAsistenciaUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -62,6 +64,76 @@ public class DashboardAsistenciaController {
                                 new AusenciaMotivoResponse(
                                         item.motivo(),
                                         item.total()
+                                )
+                        )
+                        .toList()
+        );
+    }
+
+    @GetMapping("/top-ausencias")
+    public ResponseEntity<List<TopAusenciaResponse>> topAusencias(
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate inicio,
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate fin,
+            @RequestParam(required = false) Long plazaId,
+            @RequestParam(required = false) Long turnoId,
+            @RequestParam(defaultValue = "5") int limite
+    ) {
+        return ResponseEntity.ok(
+                useCase.topAusencias(
+                                inicio,
+                                fin,
+                                plazaId,
+                                turnoId,
+                                limite
+                        )
+                        .stream()
+                        .map(item ->
+                                new TopAusenciaResponse(
+                                        item.trabajadorId(),
+                                        item.codigo(),
+                                        item.nombre(),
+                                        item.totalAusencias()
+                                )
+                        )
+                        .toList()
+        );
+    }
+
+    @GetMapping("/ausencias-trabajador")
+    public ResponseEntity<List<AusenciaTrabajadorDetalleResponse>> ausenciasTrabajador(
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate inicio,
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate fin,
+            @RequestParam String consulta,
+            @RequestParam(required = false) Long plazaId,
+            @RequestParam(required = false) Long turnoId
+    ) {
+        return ResponseEntity.ok(
+                useCase.buscarAusenciasTrabajador(
+                                inicio,
+                                fin,
+                                plazaId,
+                                turnoId,
+                                consulta
+                        )
+                        .stream()
+                        .map(item ->
+                                new AusenciaTrabajadorDetalleResponse(
+                                        item.trabajadorId(),
+                                        item.codigo(),
+                                        item.nombre(),
+                                        item.fecha(),
+                                        item.motivo(),
+                                        item.observacion(),
+                                        item.plaza(),
+                                        item.turno()
                                 )
                         )
                         .toList()
