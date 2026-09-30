@@ -107,6 +107,90 @@ public class DashboardAsistenciaService
 
     @Override
     @Transactional(readOnly = true)
+    public List<TopAusencia> topAusencias(
+            LocalDate inicio,
+            LocalDate fin,
+            Long plazaId,
+            Long turnoId,
+            int limite
+    ) {
+        validarRango(inicio, fin);
+
+        int limiteSeguro =
+                Math.max(
+                        1,
+                        Math.min(
+                                limite,
+                                20
+                        )
+                );
+
+        return queryPort
+                .topAusencias(
+                        inicio,
+                        fin,
+                        plazaId,
+                        turnoId,
+                        limiteSeguro
+                )
+                .stream()
+                .map(item ->
+                        new TopAusencia(
+                                item.trabajadorId(),
+                                item.codigo(),
+                                item.nombre(),
+                                item.totalAusencias()
+                        )
+                )
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AusenciaTrabajador> buscarAusenciasTrabajador(
+            LocalDate inicio,
+            LocalDate fin,
+            Long plazaId,
+            Long turnoId,
+            String consulta
+    ) {
+        validarRango(inicio, fin);
+
+        String filtro =
+                consulta == null
+                        ? ""
+                        : consulta.trim();
+
+        if (filtro.length() < 2) {
+            return List.of();
+        }
+
+        return queryPort
+                .buscarAusenciasTrabajador(
+                        inicio,
+                        fin,
+                        plazaId,
+                        turnoId,
+                        filtro
+                )
+                .stream()
+                .map(item ->
+                        new AusenciaTrabajador(
+                                item.trabajadorId(),
+                                item.codigo(),
+                                item.nombre(),
+                                item.fecha(),
+                                item.motivo(),
+                                item.observacion(),
+                                item.plaza(),
+                                item.turno()
+                        )
+                )
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Resumen resumen(
             LocalDate inicio,
             LocalDate fin,
