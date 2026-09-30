@@ -130,7 +130,7 @@ public class DashboardAsistenciaJpaAdapter
                                 numero(valor(fila, 0)).longValue(),
                                 numero(valor(fila, 1)).intValue(),
                                 String.valueOf(valor(fila, 2)),
-                                (LocalDate) valor(fila, 3),
+                                fecha(valor(fila, 3)),
                                 String.valueOf(valor(fila, 4)),
                                 valor(fila, 5) == null
                                         ? null
@@ -209,6 +209,24 @@ public class DashboardAsistenciaJpaAdapter
         } catch (NumberFormatException exception) {
             return 0;
         }
+    }
+
+    private LocalDate fecha(Object valor) {
+        if (valor == null) {
+            return null;
+        }
+
+        if (valor instanceof LocalDate fecha) {
+            return fecha;
+        }
+
+        if (valor instanceof java.sql.Date fechaSql) {
+            return fechaSql.toLocalDate();
+        }
+
+        return LocalDate.parse(
+                valor.toString()
+        );
     }
 
     private BigDecimal decimal(Object valor) {
