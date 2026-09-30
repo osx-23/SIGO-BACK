@@ -46,8 +46,14 @@ public class TrabajadorGestionJpaAdapter
     public List<TrabajadorUseCase.TrabajadorData> listarControladoresPorPlaza(
             Long plazaId
     ) {
-        return trabajadorRepository
-                .findControladoresByPlaza(plazaId)
+        List<Trabajador> controladores =
+                plazaId == null
+                        ? trabajadorRepository.findControladoresActivos()
+                        : trabajadorRepository.findControladoresByPlaza(
+                                plazaId
+                        );
+
+        return controladores
                 .stream()
                 .map(this::toData)
                 .toList();
