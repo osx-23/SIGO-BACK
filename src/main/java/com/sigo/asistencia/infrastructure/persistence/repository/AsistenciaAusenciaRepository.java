@@ -96,6 +96,114 @@ public interface AsistenciaAusenciaRepository
 
  /*
   * ============================================================
+  * DASHBOARD - TOP DE TRABAJADORES CON MÁS AUSENCIAS
+  * ============================================================
+  */
+
+ @Query(
+         value = """
+                    SELECT
+                        t.id,
+                        t.codigo,
+                        t.nombre_completo,
+                        COUNT(aa.id)::bigint AS total_ausencias
+                    FROM asistencia_ausencia aa
+                    INNER JOIN asistencia_registro ar
+                        ON ar.id = aa.asistencia_id
+                    INNER JOIN trabajadores t
+                        ON t.id = aa.trabajador_id
+                    WHERE ar.fecha >= :inicio
+                      AND ar.fecha <= :fin
+                      AND (
+                            :plazaId IS NULL
+                            OR ar.plaza_id = :plazaId
+                      )
+                      AND (
+                            :turnoId IS NULL
+                            OR ar.turno_id = :turnoId
+                      )
+                    GROUP BY
+                        t.id,
+                        t.codigo,
+                        t.nombre_completo
+                    ORDER BY
+                        total_ausencias DESC,
+                        t.nombre_completo ASC
+                    LIMIT :limite
+                    """,
+         nativeQuery = true
+ )
+ List<Object[]> topAusenciasDashboard(
+         @Param("inicio") LocalDate inicio,
+         @Param("fin") LocalDate fin,
+         @Param("plazaId") Long plazaId,
+         @Param("turnoId") Long turnoId,
+         @Param("limite") int limite
+ );
+
+
+ /*
+  * ============================================================
+  * DASHBOARD - DETALLE DE AUSENCIAS POR TRABAJADOR
+  * ============================================================
+  */
+
+ @Query(
+         value = """
+                    SELECT
+                        t.id,
+                        t.codigo,
+                        t.nombre_completo,
+                        ar.fecha,
+                        ma.nombre,
+                        aa.observacion,
+                        p.codigo,
+                        tu.codigo
+                    FROM asistencia_ausencia aa
+                    INNER JOIN asistencia_registro ar
+                        ON ar.id = aa.asistencia_id
+                    INNER JOIN trabajadores t
+                        ON t.id = aa.trabajador_id
+                    INNER JOIN motivos_ausencia ma
+                        ON ma.id = aa.motivo_id
+                    INNER JOIN plazas p
+                        ON p.id = ar.plaza_id
+                    INNER JOIN turnos tu
+                        ON tu.id = ar.turno_id
+                    WHERE ar.fecha >= :inicio
+                      AND ar.fecha <= :fin
+                      AND (
+                            :plazaId IS NULL
+                            OR ar.plaza_id = :plazaId
+                      )
+                      AND (
+                            :turnoId IS NULL
+                            OR ar.turno_id = :turnoId
+                      )
+                      AND (
+                            LOWER(t.nombre_completo)
+                                LIKE LOWER(CONCAT('%', :consulta, '%'))
+                            OR CAST(t.codigo AS text)
+                                LIKE CONCAT('%', :consulta, '%')
+                      )
+                    ORDER BY
+                        ar.fecha DESC,
+                        t.nombre_completo ASC
+                    LIMIT 100
+                    """,
+         nativeQuery = true
+ )
+ List<Object[]> buscarAusenciasTrabajadorDashboard(
+         @Param("inicio") LocalDate inicio,
+         @Param("fin") LocalDate fin,
+         @Param("plazaId") Long plazaId,
+         @Param("turnoId") Long turnoId,
+         @Param("consulta") String consulta
+ );
+
+
+ /*
+  * ============================================================
   * BUSCAR TRABAJADORES CON FALTAS
   * ============================================================
   */
