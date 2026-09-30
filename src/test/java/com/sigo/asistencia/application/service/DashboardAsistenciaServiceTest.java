@@ -84,6 +84,28 @@ class DashboardAsistenciaServiceTest {
         }
 
         @Override
+        public List<TopAusenciaData> topAusencias(
+                LocalDate inicio,
+                LocalDate fin,
+                Long plazaId,
+                Long turnoId,
+                int limite
+        ) {
+            return List.of();
+        }
+
+        @Override
+        public List<AusenciaTrabajadorData> buscarAusenciasTrabajador(
+                LocalDate inicio,
+                LocalDate fin,
+                Long plazaId,
+                Long turnoId,
+                String consulta
+        ) {
+            return List.of();
+        }
+
+        @Override
         public ResumenData resumen(
                 LocalDate inicio,
                 LocalDate fin,
