@@ -81,6 +81,68 @@ public class DashboardAsistenciaJpaAdapter
     }
 
     @Override
+    public List<TopAusenciaData> topAusencias(
+            LocalDate inicio,
+            LocalDate fin,
+            Long plazaId,
+            Long turnoId,
+            int limite
+    ) {
+        return ausenciaRepository
+                .topAusenciasDashboard(
+                        inicio,
+                        fin,
+                        plazaId,
+                        turnoId,
+                        limite
+                )
+                .stream()
+                .map(fila ->
+                        new TopAusenciaData(
+                                numero(valor(fila, 0)).longValue(),
+                                numero(valor(fila, 1)).intValue(),
+                                String.valueOf(valor(fila, 2)),
+                                numero(valor(fila, 3)).longValue()
+                        )
+                )
+                .toList();
+    }
+
+    @Override
+    public List<AusenciaTrabajadorData> buscarAusenciasTrabajador(
+            LocalDate inicio,
+            LocalDate fin,
+            Long plazaId,
+            Long turnoId,
+            String consulta
+    ) {
+        return ausenciaRepository
+                .buscarAusenciasTrabajadorDashboard(
+                        inicio,
+                        fin,
+                        plazaId,
+                        turnoId,
+                        consulta
+                )
+                .stream()
+                .map(fila ->
+                        new AusenciaTrabajadorData(
+                                numero(valor(fila, 0)).longValue(),
+                                numero(valor(fila, 1)).intValue(),
+                                String.valueOf(valor(fila, 2)),
+                                (LocalDate) valor(fila, 3),
+                                String.valueOf(valor(fila, 4)),
+                                valor(fila, 5) == null
+                                        ? null
+                                        : String.valueOf(valor(fila, 5)),
+                                String.valueOf(valor(fila, 6)),
+                                String.valueOf(valor(fila, 7))
+                        )
+                )
+                .toList();
+    }
+
+    @Override
     public ResumenData resumen(
             LocalDate inicio,
             LocalDate fin,
