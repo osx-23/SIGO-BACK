@@ -58,7 +58,8 @@ public class DistribucionGestionJpaAdapter
     public List<DistribucionUseCase.Distribucion> guardar(
             Long plazaId,
             List<DistribucionUseCase.Item> distribuciones,
-            Long usuarioId
+            Long usuarioId,
+            boolean forzar
     ) {
         Trabajador actual = trabajadorRepository
                 .findById(usuarioId)
@@ -251,15 +252,27 @@ public class DistribucionGestionJpaAdapter
             distribucionRepository.flush();
         }
 
-        validarHabilitacionTurnos(
-                plazaId,
-                resueltos
-        );
+        /*
+         * En modo normal se aplican todas las reglas operativas:
+         * habilitación, capacidad, rotación, secuencia y ocupación.
+         *
+         * En modo forzado se conservan únicamente las validaciones
+         * estructurales realizadas arriba (programación existente,
+         * plaza correcta, turno operativo, ubicación existente/activa
+         * y perteneciente a la plaza), permitiendo registrar una
+         * excepción operativa consciente.
+         */
+        if (!forzar) {
+            validarHabilitacionTurnos(
+                    plazaId,
+                    resueltos
+            );
 
-        validarOcupacionFinal(
-                plazaId,
-                resueltos
-        );
+            validarOcupacionFinal(
+                    plazaId,
+                    resueltos
+            );
+        }
 
         List<DistribucionPersonal> guardados =
                 new ArrayList<>(
