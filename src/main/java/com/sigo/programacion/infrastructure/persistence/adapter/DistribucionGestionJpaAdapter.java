@@ -90,10 +90,10 @@ public class DistribucionGestionJpaAdapter
                 || distribuciones.stream()
                         .anyMatch(item ->
                                 item == null
-                                        || item.ubicacionId() == null
+                                        || item.programacionTurnoId() == null
                         )) {
             throw bad(
-                    "La distribución contiene datos incompletos o programaciones duplicadas"
+                    "La distribución contiene programaciones inválidas o duplicadas"
             );
         }
 
@@ -111,17 +111,19 @@ public class DistribucionGestionJpaAdapter
                         );
 
         Map<Long, ProgramacionUbicacion> ubicacionPorId =
-                ubicacionRepository
-                        .findAllParaDistribucion(
-                                ubicacionIds
-                        )
-                        .stream()
-                        .collect(
-                                java.util.stream.Collectors.toMap(
-                                        ProgramacionUbicacion::getId,
-                                        item -> item
+                ubicacionIds.isEmpty()
+                        ? Map.of()
+                        : ubicacionRepository
+                                .findAllParaDistribucion(
+                                        ubicacionIds
                                 )
-                        );
+                                .stream()
+                                .collect(
+                                        java.util.stream.Collectors.toMap(
+                                                ProgramacionUbicacion::getId,
+                                                item -> item
+                                        )
+                                );
 
         if (programacionPorId.size() != programacionIds.size()) {
             throw bad(
@@ -162,6 +164,15 @@ public class DistribucionGestionJpaAdapter
                 );
             }
 
+            if (item.ubicacionId() == null) {
+                /*
+                 * Una ubicación nula representa explícitamente
+                 * "Sin asignar". La programación sigue siendo válida,
+                 * pero no se crea una nueva distribución para ella.
+                 */
+                continue;
+            }
+
             ProgramacionUbicacion ubicacion =
                     ubicacionPorId.get(
                             item.ubicacionId()
@@ -193,20 +204,6 @@ public class DistribucionGestionJpaAdapter
             );
         }
 
-        /*
-         * Se conservan exactamente las validaciones de la versión estable.
-         * La optimización queda limitada a lecturas previas por lote.
-         */
-        validarHabilitacionTurnos(
-                plazaId,
-                resueltos
-        );
-
-        validarOcupacionFinal(
-                plazaId,
-                resueltos
-        );
-
         Map<Long, DistribucionPersonal> existentePorProgramacion =
                 distribucionRepository
                         .findByProgramacionTurnoIdIn(
@@ -220,6 +217,49 @@ public class DistribucionGestionJpaAdapter
                                         item -> item
                                 )
                         );
+
+        boolean huboDesasignaciones = false;
+
+        for (DistribucionUseCase.Item item :
+                distribuciones) {
+            if (item.ubicacionId() != null) {
+                continue;
+            }
+
+            DistribucionPersonal existente =
+                    existentePorProgramacion.remove(
+                            item.programacionTurnoId()
+                    );
+
+            if (existente != null) {
+                distribucionRepository.delete(
+                        existente
+                );
+                huboDesasignaciones = true;
+            }
+        }
+
+        /*
+         * Las desasignaciones forman parte del estado final que deben ver
+         * las validaciones del lote. Forzamos el flush para que las consultas
+         * posteriores no vuelvan a considerar registros eliminados.
+         *
+         * Esto permite guardar una distribución parcial: los turnos/días
+         * todavía no definidos pueden quedar sin caseta y completarse después.
+         */
+        if (huboDesasignaciones) {
+            distribucionRepository.flush();
+        }
+
+        validarHabilitacionTurnos(
+                plazaId,
+                resueltos
+        );
+
+        validarOcupacionFinal(
+                plazaId,
+                resueltos
+        );
 
         List<DistribucionPersonal> guardados =
                 new ArrayList<>(
