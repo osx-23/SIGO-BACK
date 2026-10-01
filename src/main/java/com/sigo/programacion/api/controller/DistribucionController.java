@@ -129,7 +129,10 @@ public class DistribucionController {
                 );
 
         return distribucionUseCase
-                .guardar(command)
+                .guardar(
+                        command,
+                        request.forzar()
+                )
                 .stream()
                 .map(this::toDistribucionResponse)
                 .toList();
