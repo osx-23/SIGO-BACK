@@ -41,6 +41,18 @@ public class DistribucionService
     @Override
     @Transactional
     public List<Distribucion> guardar(Command command) {
+        return guardar(
+                command,
+                false
+        );
+    }
+
+    @Override
+    @Transactional
+    public List<Distribucion> guardar(
+            Command command,
+            boolean forzar
+    ) {
         if (command == null
                 || command.plazaId() == null
                 || command.distribuciones() == null
@@ -58,7 +70,8 @@ public class DistribucionService
         return distribucionGestionPort.guardar(
                 command.plazaId(),
                 command.distribuciones(),
-                usuarioId
+                usuarioId,
+                forzar
         );
     }
 
