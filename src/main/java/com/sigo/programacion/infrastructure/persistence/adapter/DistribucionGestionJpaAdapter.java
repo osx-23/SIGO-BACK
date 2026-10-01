@@ -138,6 +138,19 @@ public class DistribucionGestionJpaAdapter
             );
         }
 
+        /*
+         * Un controlador puede tener ProgramacionTurno, pero la
+         * distribución de casetas pertenece exclusivamente a agentes.
+         */
+        Set<Long> agenteIds =
+                trabajadorRepository
+                        .findAgentesByPlaza(plazaId)
+                        .stream()
+                        .map(Trabajador::getId)
+                        .collect(
+                                java.util.stream.Collectors.toSet()
+                        );
+
         List<ItemResuelto> resueltos =
                 new ArrayList<>(
                         distribuciones.size()
@@ -168,10 +181,18 @@ public class DistribucionGestionJpaAdapter
             if (item.ubicacionId() == null) {
                 /*
                  * Una ubicación nula representa explícitamente
-                 * "Sin asignar". La programación sigue siendo válida,
-                 * pero no se crea una nueva distribución para ella.
+                 * "Sin asignar". También permite limpiar una posible
+                 * asignación histórica sin crear una nueva.
                  */
                 continue;
+            }
+
+            if (!agenteIds.contains(
+                    programacion.getTrabajador().getId()
+            )) {
+                throw bad(
+                        "Los controladores no pueden recibir asignación de caseta"
+                );
             }
 
             ProgramacionUbicacion ubicacion =
