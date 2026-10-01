@@ -8,7 +8,8 @@ import java.util.List;
 
 public record GuardarDistribucionRequest(
         @NotNull Long plazaId,
-        @NotEmpty List<@Valid DistribucionItemRequest> distribuciones
+        @NotEmpty List<@Valid DistribucionItemRequest> distribuciones,
+        boolean forzar
 ) {
 
     public record DistribucionItemRequest(
