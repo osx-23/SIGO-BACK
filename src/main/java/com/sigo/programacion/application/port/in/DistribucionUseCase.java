@@ -10,6 +10,11 @@ public interface DistribucionUseCase {
 
     List<Distribucion> guardar(Command command);
 
+    List<Distribucion> guardar(
+            Command command,
+            boolean forzar
+    );
+
     ResumenTrabajador resumen(Long trabajadorId, int anio, int mes);
 
     ReporteTrabajador reporteTrabajador(
