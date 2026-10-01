@@ -70,13 +70,31 @@ public class TurnoGestionJpaAdapter
                         )
                 );
 
-        Map<Long, Trabajador> agentesPorId = trabajadorRepository
+        /*
+         * La programación mensual puede incluir tanto agentes como
+         * controladores. La autorización del endpoint garantiza que
+         * únicamente un SUPERVISOR pueda modificar estos turnos.
+         */
+        Map<Long, Trabajador> trabajadoresProgramablesPorId =
+                new HashMap<>();
+
+        trabajadorRepository
                 .findAgentesByPlaza(plazaId)
-                .stream()
-                .collect(Collectors.toMap(
-                        Trabajador::getId,
-                        trabajador -> trabajador
-                ));
+                .forEach(trabajador ->
+                        trabajadoresProgramablesPorId.put(
+                                trabajador.getId(),
+                                trabajador
+                        )
+                );
+
+        trabajadorRepository
+                .findControladoresByPlaza(plazaId)
+                .forEach(trabajador ->
+                        trabajadoresProgramablesPorId.put(
+                                trabajador.getId(),
+                                trabajador
+                        )
+                );
 
         Set<Long> trabajadorIds = new HashSet<>();
         LocalDate fechaMin = null;
@@ -89,11 +107,13 @@ public class TurnoGestionJpaAdapter
                 throw bad("La programación contiene datos incompletos");
             }
 
-            if (!agentesPorId.containsKey(item.trabajadorId())) {
+            if (!trabajadoresProgramablesPorId.containsKey(
+                    item.trabajadorId()
+            )) {
                 throw bad(
                         "El trabajador "
                                 + item.trabajadorId()
-                                + " no es un agente activo de la plaza"
+                                + " no es un agente o controlador activo de la plaza"
                 );
             }
 
@@ -140,7 +160,9 @@ public class TurnoGestionJpaAdapter
 
         for (GuardarTurnosUseCase.Item item : programaciones) {
             Trabajador trabajador =
-                    agentesPorId.get(item.trabajadorId());
+                    trabajadoresProgramablesPorId.get(
+                            item.trabajadorId()
+                    );
 
             Map<LocalDate, ProgramacionTurno> porFecha =
                     existentesPorTrabajador.computeIfAbsent(
