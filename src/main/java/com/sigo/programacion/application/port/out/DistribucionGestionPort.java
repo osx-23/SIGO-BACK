@@ -16,7 +16,8 @@ public interface DistribucionGestionPort {
     List<DistribucionUseCase.Distribucion> guardar(
             Long plazaId,
             List<DistribucionUseCase.Item> distribuciones,
-            Long usuarioId
+            Long usuarioId,
+            boolean forzar
     );
 
     Long plazaTrabajador(Long trabajadorId);
