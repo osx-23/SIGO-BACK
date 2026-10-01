@@ -13,7 +13,7 @@ public record GuardarDistribucionRequest(
 
     public record DistribucionItemRequest(
             @NotNull Long programacionTurnoId,
-            @NotNull Long ubicacionId,
+            Long ubicacionId,
             String observacion
     ) {
     }
