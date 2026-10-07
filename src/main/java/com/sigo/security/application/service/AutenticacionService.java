@@ -50,6 +50,32 @@ public class AutenticacionService
     }
 
     @Override
+    public LoginResult loginAvi(Integer codigo) {
+        if (codigo == null) {
+            throw credencialesInvalidas();
+        }
+
+        UsuarioSeguridad usuario = usuarioPort
+                .buscarPorCodigo(codigo)
+                .filter(UsuarioSeguridad::estaActivo)
+                .orElseThrow(this::credencialesInvalidas);
+
+        if (usuario.plazaId() == null) {
+            throw new AutenticacionException(
+                    AutenticacionException.Tipo.BAD_REQUEST,
+                    "El usuario no tiene una plaza asignada"
+            );
+        }
+
+        return new LoginResult(
+                tokenPort.generarAvi(usuario),
+                "Bearer",
+                tokenPort.aviExpirationSeconds(),
+                toSesion(usuario)
+        );
+    }
+
+    @Override
     public Sesion me() {
         return toSesion(requireCurrent());
     }

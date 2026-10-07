@@ -13,6 +13,7 @@ import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -30,8 +31,37 @@ public class JwtTokenSeguridadAdapter
     @Value("${app.jwt.expiration-seconds:28800}")
     private long expirationSeconds;
 
+    @Value("${app.jwt.avi-expiration-seconds:28800}")
+    private long aviExpirationSeconds;
+
     @Override
     public String generar(UsuarioSeguridad usuario) {
+        return generarToken(
+                usuario,
+                usuario.rol().name(),
+                moduloPolicy.modulosPara(
+                        usuario.rol()
+                ),
+                expirationSeconds
+        );
+    }
+
+    @Override
+    public String generarAvi(UsuarioSeguridad usuario) {
+        return generarToken(
+                usuario,
+                "AVI",
+                List.of("AVI"),
+                aviExpirationSeconds
+        );
+    }
+
+    private String generarToken(
+            UsuarioSeguridad usuario,
+            String rolToken,
+            List<String> modulos,
+            long duracionSegundos
+    ) {
         Instant now = Instant.now();
 
         JwtClaimsSet.Builder builder =
@@ -40,7 +70,7 @@ public class JwtTokenSeguridadAdapter
                         .issuedAt(now)
                         .expiresAt(
                                 now.plusSeconds(
-                                        expirationSeconds
+                                        duracionSegundos
                                 )
                         )
                         .subject(
@@ -56,13 +86,15 @@ public class JwtTokenSeguridadAdapter
                         )
                         .claim(
                                 "rol",
+                                rolToken
+                        )
+                        .claim(
+                                "rolSistema",
                                 usuario.rol().name()
                         )
                         .claim(
                                 "modulos",
-                                moduloPolicy.modulosPara(
-                                        usuario.rol()
-                                )
+                                modulos
                         );
 
         if (usuario.plazaId() != null) {
@@ -90,5 +122,10 @@ public class JwtTokenSeguridadAdapter
     @Override
     public long expirationSeconds() {
         return expirationSeconds;
+    }
+
+    @Override
+    public long aviExpirationSeconds() {
+        return aviExpirationSeconds;
     }
 }

@@ -50,9 +50,27 @@ public class SecurityConfig {
 
                         .requestMatchers(
                                 "/api/auth/login",
+                                "/api/avi/auth/login",
                                 "/error"
                         )
                         .permitAll()
+
+
+                        /*
+                         * =====================================================
+                         * AVI
+                         * =====================================================
+                         */
+
+                        .requestMatchers(
+                                "/api/avi/**"
+                        )
+                        .hasAnyRole(
+                                "AVI",
+                                "SUPERVISOR",
+                                "CONTROLADOR",
+                                "OPERADOR"
+                        )
 
 
                         /*
@@ -416,7 +434,11 @@ public class SecurityConfig {
                          */
 
                         .anyRequest()
-                        .authenticated()
+                        .hasAnyRole(
+                                "SUPERVISOR",
+                                "CONTROLADOR",
+                                "OPERADOR"
+                        )
                 )
 
 
