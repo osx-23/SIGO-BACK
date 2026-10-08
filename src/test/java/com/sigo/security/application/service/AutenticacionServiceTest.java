@@ -57,6 +57,34 @@ class AutenticacionServiceTest {
     }
 
     @Test
+    void loginAviUsaSoloCodigoYTokenLimitado() {
+        StubUsuarioPort usuarios = new StubUsuarioPort();
+        usuarios.add(usuario(
+                1L,
+                2396,
+                RolSeguridad.OPERADOR,
+                true,
+                "hash"
+        ));
+
+        AutenticacionService service =
+                new AutenticacionService(
+                        usuarios,
+                        new StubPasswordPort(),
+                        new StubTokenPort(),
+                        () -> 2396
+                );
+
+        AutenticacionUseCase.LoginResult result =
+                service.loginAvi(2396);
+
+        assertEquals("avi-token-2396", result.token());
+        assertEquals(14400, result.expiresIn());
+        assertEquals("OPERADOR", result.usuario().rol());
+        assertEquals(4L, result.usuario().plazaId());
+    }
+
+    @Test
     void loginRechazaPasswordIncorrecta() {
         StubUsuarioPort usuarios = new StubUsuarioPort();
         usuarios.add(usuario(
@@ -423,8 +451,18 @@ class AutenticacionServiceTest {
         }
 
         @Override
+        public String generarAvi(UsuarioSeguridad usuario) {
+            return "avi-token-" + usuario.codigo();
+        }
+
+        @Override
         public long expirationSeconds() {
             return 28800;
+        }
+
+        @Override
+        public long aviExpirationSeconds() {
+            return 14400;
         }
     }
 }

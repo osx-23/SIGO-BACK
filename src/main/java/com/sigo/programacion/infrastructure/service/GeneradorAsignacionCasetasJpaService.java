@@ -327,10 +327,27 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         )
                         .collect(Collectors.toSet());
 
+        /*
+         * Los controladores pueden tener turno mensual, pero nunca deben
+         * participar en la asignación de casetas. El generador trabaja
+         * exclusivamente con agentes activos de la plaza.
+         */
+        Set<Long> agenteIds =
+                trabajadorRepository
+                        .findAgentesByPlaza(plazaId)
+                        .stream()
+                        .map(Trabajador::getId)
+                        .collect(Collectors.toSet());
+
         List<ProgramacionTurno> turnos =
                 new ArrayList<>(
                         turnoRepository.findMes(plazaId, desde, hasta)
                                 .stream()
+                                .filter(item ->
+                                        agenteIds.contains(
+                                                item.getTrabajador().getId()
+                                        )
+                                )
                                 .filter(item ->
                                         item.getEstado() == EstadoProgramacion.A
                                                 || item.getEstado() == EstadoProgramacion.B

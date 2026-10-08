@@ -6,5 +6,9 @@ public interface TokenSeguridadPort {
 
     String generar(UsuarioSeguridad usuario);
 
+    String generarAvi(UsuarioSeguridad usuario);
+
     long expirationSeconds();
+
+    long aviExpirationSeconds();
 }

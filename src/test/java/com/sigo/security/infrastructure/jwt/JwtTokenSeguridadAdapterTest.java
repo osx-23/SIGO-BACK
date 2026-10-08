@@ -101,6 +101,61 @@ class JwtTokenSeguridadAdapterTest {
     }
 
     @Test
+    void generaTokenAviConRolRestringido() {
+        SecretKey key = new SecretKeySpec(
+                "01234567890123456789012345678901"
+                        .getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256"
+        );
+
+        JwtTokenSeguridadAdapter adapter =
+                new JwtTokenSeguridadAdapter(
+                        new NimbusJwtEncoder(
+                                new ImmutableSecret<>(key)
+                        )
+                );
+
+        ReflectionTestUtils.setField(adapter, "issuer", "sigo-api");
+        ReflectionTestUtils.setField(
+                adapter,
+                "aviExpirationSeconds",
+                1800L
+        );
+
+        String token = adapter.generarAvi(
+                new UsuarioSeguridad(
+                        20L,
+                        2396,
+                        "Operador AVI",
+                        RolSeguridad.OPERADOR,
+                        4L,
+                        "P4",
+                        "hash",
+                        false,
+                        true
+                )
+        );
+
+        JwtDecoder decoder = NimbusJwtDecoder
+                .withSecretKey(key)
+                .macAlgorithm(MacAlgorithm.HS256)
+                .build();
+
+        var jwt = decoder.decode(token);
+
+        assertEquals("AVI", jwt.getClaimAsString("rol"));
+        assertEquals(
+                "OPERADOR",
+                jwt.getClaimAsString("rolSistema")
+        );
+        assertEquals(
+                java.util.List.of("AVI"),
+                jwt.getClaimAsStringList("modulos")
+        );
+        assertEquals(1800L, adapter.aviExpirationSeconds());
+    }
+
+    @Test
     void tokenDeOperadorNoIncluyeModulosAdministrativos() {
         SecretKey key = new SecretKeySpec(
                 "01234567890123456789012345678901"

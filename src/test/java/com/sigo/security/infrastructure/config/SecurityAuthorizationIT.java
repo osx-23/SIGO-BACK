@@ -142,6 +142,27 @@ class SecurityAuthorizationIT {
     }
 
     @Test
+    void tokenAviSoloPuedeAccederARutasAvi() throws Exception {
+        mockMvc.perform(
+                        get("/api/avi/probe")
+                                .with(jwtRol("AVI"))
+                )
+                .andExpect(status().isOk());
+
+        mockMvc.perform(
+                        get("/api/relevos/probe")
+                                .with(jwtRol("AVI"))
+                )
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(
+                        get("/api/other/probe")
+                                .with(jwtRol("AVI"))
+                )
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void cualquierUsuarioAutenticadoPuedeRutaNoEspecial() throws Exception {
         mockMvc.perform(
                         get("/api/other/probe")
@@ -209,6 +230,11 @@ class SecurityAuthorizationIT {
 
         @GetMapping("/api/programacion/grupos/probe")
         String grupos() {
+            return "ok";
+        }
+
+        @GetMapping("/api/avi/probe")
+        String avi() {
             return "ok";
         }
 

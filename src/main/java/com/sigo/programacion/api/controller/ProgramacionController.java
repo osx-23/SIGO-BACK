@@ -26,6 +26,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -167,6 +168,7 @@ public class ProgramacionController {
 
 
     @PutMapping("/turnos")
+    @PreAuthorize("hasRole('SUPERVISOR')")
     public List<ProgramacionDiaResponse> guardarTurnos(
             @Valid
             @RequestBody GuardarProgramacionRequest request
