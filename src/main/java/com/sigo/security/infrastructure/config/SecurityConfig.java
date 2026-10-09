@@ -386,7 +386,6 @@ public class SecurityConfig {
                                 "/api/vias/**"
                         )
                         .hasAnyRole(
-                                "AVI",
                                 "SUPERVISOR",
                                 "CONTROLADOR",
                                 "OPERADOR"
