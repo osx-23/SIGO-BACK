@@ -11,7 +11,7 @@ public class Via {
  @Column(nullable=false) private Integer numero;
  @Column(length=50) private String nombre;
  @Column(nullable=false) private Boolean activa=true;
- @Column(name="avi_visible", nullable=false) private Boolean aviVisible=true;
+ @Column(name="avi_visible", nullable=false, columnDefinition="boolean default true") private Boolean aviVisible=true;
  @Column(nullable=false) private Integer orden=0;
  @Column(name="created_at",insertable=false,updatable=false) private OffsetDateTime createdAt;
 
