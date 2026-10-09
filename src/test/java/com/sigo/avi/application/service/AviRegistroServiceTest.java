@@ -40,7 +40,7 @@ class AviRegistroServiceTest {
 
         when(actualUseCase.requireActual())
                 .thenReturn(usuario("OPERADOR"));
-        when(persistence.viaActivaEnPlaza(4L, 151))
+        when(persistence.viaVisibleAviEnPlaza(4L, 151))
                 .thenReturn(true);
         when(persistence.buscarPorId(id))
                 .thenReturn(Optional.empty());
@@ -80,6 +80,57 @@ class AviRegistroServiceTest {
     }
 
     @Test
+    void registrarRechazaViaOcultaPorSupervisor() {
+        AviRegistroPersistencePort persistence =
+                mock(AviRegistroPersistencePort.class);
+        UsuarioActualUseCase actualUseCase =
+                mock(UsuarioActualUseCase.class);
+
+        AviRegistroService service =
+                new AviRegistroService(
+                        persistence,
+                        actualUseCase
+                );
+
+        UUID id = UUID.randomUUID();
+        OffsetDateTime evento =
+                OffsetDateTime.parse(
+                        "2026-10-09T16:00:00-05:00"
+                );
+
+        when(actualUseCase.requireActual())
+                .thenReturn(usuario("OPERADOR"));
+        when(persistence.viaVisibleAviEnPlaza(4L, 102))
+                .thenReturn(false);
+
+        assertThrows(
+                RuntimeException.class,
+                () -> service.registrar(
+                        new AviRegistroUseCase.Command(
+                                id,
+                                "ABC123",
+                                102,
+                                AviAccion.LIBERADO,
+                                evento,
+                                "liberado vía 102"
+                        )
+                )
+        );
+
+        verify(persistence, never())
+                .crearORecuperar(
+                        any(),
+                        anyLong(),
+                        anyLong(),
+                        anyString(),
+                        anyInt(),
+                        any(),
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
     void reenvioMismoUuidConContenidoDistintoDaConflicto() {
         AviRegistroPersistencePort persistence =
                 mock(AviRegistroPersistencePort.class);
@@ -100,7 +151,7 @@ class AviRegistroServiceTest {
 
         when(actualUseCase.requireActual())
                 .thenReturn(usuario("OPERADOR"));
-        when(persistence.viaActivaEnPlaza(4L, 151))
+        when(persistence.viaVisibleAviEnPlaza(4L, 151))
                 .thenReturn(true);
         when(persistence.buscarPorId(id))
                 .thenReturn(Optional.of(
@@ -256,7 +307,7 @@ class AviRegistroServiceTest {
                                 "dictado original"
                         )
                 ));
-        when(persistence.viaActivaEnPlaza(4L, 102))
+        when(persistence.viaVisibleAviEnPlaza(4L, 102))
                 .thenReturn(true);
         when(persistence.actualizar(
                 eq(id),
@@ -396,7 +447,7 @@ class AviRegistroServiceTest {
                                 null
                         )
                 ));
-        when(persistence.viaActivaEnPlaza(4L, 999))
+        when(persistence.viaVisibleAviEnPlaza(4L, 999))
                 .thenReturn(false);
 
         assertThrows(
