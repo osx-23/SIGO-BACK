@@ -24,9 +24,9 @@ public class AviRegistroJpaAdapter
 
     @Override
     @Transactional(readOnly = true)
-    public boolean viaActivaEnPlaza(Long plazaId, Integer via) {
+    public boolean viaVisibleAviEnPlaza(Long plazaId, Integer via) {
         return viaRepository
-                .findByPlazaIdAndActivaTrueOrderByOrdenAscNumeroAsc(
+                .findByPlazaIdAndActivaTrueAndAviVisibleTrueOrderByOrdenAscNumeroAsc(
                         plazaId
                 )
                 .stream()
