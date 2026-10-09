@@ -75,6 +75,33 @@ public class AviRegistroJpaAdapter
     }
 
     @Override
+    @Transactional
+    public RegistroData actualizar(
+            UUID id,
+            String placa,
+            Integer via,
+            AviAccion accion,
+            OffsetDateTime fechaHoraEvento,
+            String textoReconocido
+    ) {
+        AviRegistroEntity entity = repository
+                .findById(id)
+                .orElseThrow(() ->
+                        new BusinessException(
+                                "Registro AVI no encontrado"
+                        )
+                );
+
+        entity.setPlaca(placa);
+        entity.setVia(via);
+        entity.setAccion(accion);
+        entity.setFechaHoraEvento(fechaHoraEvento);
+        entity.setTextoReconocido(textoReconocido);
+
+        return map(repository.save(entity));
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<RegistroData> listar(
             OffsetDateTime desde,
