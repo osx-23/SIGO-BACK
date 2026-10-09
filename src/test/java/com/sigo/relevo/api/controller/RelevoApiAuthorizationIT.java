@@ -102,6 +102,22 @@ class RelevoApiAuthorizationIT {
     }
 
     @Test
+    void tokenAviPuedeConsultarViasDePlaza() throws Exception {
+        when(listarViasUseCase.listarPorPlaza(anyLong()))
+                .thenReturn(List.of());
+
+        mockMvc.perform(
+                        get("/api/vias")
+                                .param("plazaId", "3")
+                                .with(jwtRol("AVI"))
+                )
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+
+        verify(listarViasUseCase).listarPorPlaza(3L);
+    }
+
+    @Test
     void controladorPuedeConsultarElementos() throws Exception {
         when(consultaUseCase.listarElementos())
                 .thenReturn(List.of());
