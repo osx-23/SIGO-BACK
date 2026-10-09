@@ -383,8 +383,17 @@ public class SecurityConfig {
                          */
 
                         .requestMatchers(
-                                "/api/relevos/**",
                                 "/api/vias/**"
+                        )
+                        .hasAnyRole(
+                                "AVI",
+                                "SUPERVISOR",
+                                "CONTROLADOR",
+                                "OPERADOR"
+                        )
+
+                        .requestMatchers(
+                                "/api/relevos/**"
                         )
                         .hasAnyRole(
                                 "SUPERVISOR",
