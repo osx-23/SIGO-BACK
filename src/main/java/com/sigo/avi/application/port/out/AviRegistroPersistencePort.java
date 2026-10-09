@@ -9,7 +9,7 @@ import java.util.UUID;
 
 public interface AviRegistroPersistencePort {
 
-    boolean viaActivaEnPlaza(Long plazaId, Integer via);
+    boolean viaVisibleAviEnPlaza(Long plazaId, Integer via);
 
     Optional<RegistroData> buscarPorId(UUID id);
 
