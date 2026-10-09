@@ -65,12 +65,12 @@ public class AviRegistroService
         String texto =
                 normalizarTexto(command.textoReconocido());
 
-        if (!persistence.viaActivaEnPlaza(
+        if (!persistence.viaVisibleAviEnPlaza(
                 actual.plazaId(),
                 command.via()
         )) {
             throw new BusinessException(
-                    "La vía no existe o no está activa en la plaza del usuario"
+                    "La vía no está habilitada para AVIX en la plaza del usuario"
             );
         }
 
@@ -153,12 +153,12 @@ public class AviRegistroService
             );
         }
 
-        if (!persistence.viaActivaEnPlaza(
+        if (!persistence.viaVisibleAviEnPlaza(
                 existente.plazaId(),
                 command.via()
         )) {
             throw new BusinessException(
-                    "La vía no existe o no está activa en la plaza del registro"
+                    "La vía no está habilitada para AVIX en la plaza del registro"
             );
         }
 
