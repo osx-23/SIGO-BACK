@@ -24,6 +24,15 @@ public interface AviRegistroPersistencePort {
             String textoReconocido
     );
 
+    RegistroData actualizar(
+            UUID id,
+            String placa,
+            Integer via,
+            AviAccion accion,
+            OffsetDateTime fechaHoraEvento,
+            String textoReconocido
+    );
+
     List<RegistroData> listar(
             OffsetDateTime desde,
             OffsetDateTime hasta,
