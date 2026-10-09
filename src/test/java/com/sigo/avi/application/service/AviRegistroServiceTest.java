@@ -224,6 +224,232 @@ class AviRegistroServiceTest {
         );
     }
 
+    @Test
+    void operadorPuedeEditarSuPropioRegistro() {
+        AviRegistroPersistencePort persistence =
+                mock(AviRegistroPersistencePort.class);
+        UsuarioActualUseCase actualUseCase =
+                mock(UsuarioActualUseCase.class);
+
+        AviRegistroService service =
+                new AviRegistroService(
+                        persistence,
+                        actualUseCase
+                );
+
+        UUID id = UUID.randomUUID();
+        OffsetDateTime evento =
+                OffsetDateTime.parse(
+                        "2026-10-08T20:10:00-05:00"
+                );
+
+        when(actualUseCase.requireActual())
+                .thenReturn(usuario("OPERADOR"));
+        when(persistence.buscarPorId(id))
+                .thenReturn(Optional.of(
+                        data(
+                                id,
+                                "I1L111",
+                                101,
+                                AviAccion.FUGA,
+                                evento,
+                                "dictado original"
+                        )
+                ));
+        when(persistence.viaActivaEnPlaza(4L, 102))
+                .thenReturn(true);
+        when(persistence.actualizar(
+                eq(id),
+                eq("I1L110"),
+                eq(102),
+                eq(AviAccion.DERIVADO),
+                eq(evento),
+                eq("dictado original")
+        )).thenReturn(
+                data(
+                        id,
+                        "I1L110",
+                        102,
+                        AviAccion.DERIVADO,
+                        evento,
+                        "dictado original"
+                )
+        );
+
+        AviRegistroUseCase.Registro result =
+                service.actualizar(
+                        id,
+                        new AviRegistroUseCase.Command(
+                                id,
+                                "i1l-110",
+                                102,
+                                AviAccion.DERIVADO,
+                                evento,
+                                " dictado original "
+                        )
+                );
+
+        assertEquals("I1L110", result.placa());
+        assertEquals(102, result.via());
+        assertEquals(
+                AviAccion.DERIVADO,
+                result.accion()
+        );
+
+        verify(persistence).actualizar(
+                id,
+                "I1L110",
+                102,
+                AviAccion.DERIVADO,
+                evento,
+                "dictado original"
+        );
+    }
+
+    @Test
+    void operadorNoPuedeEditarRegistroDeOtroUsuario() {
+        AviRegistroPersistencePort persistence =
+                mock(AviRegistroPersistencePort.class);
+        UsuarioActualUseCase actualUseCase =
+                mock(UsuarioActualUseCase.class);
+
+        AviRegistroService service =
+                new AviRegistroService(
+                        persistence,
+                        actualUseCase
+                );
+
+        UUID id = UUID.randomUUID();
+        OffsetDateTime evento =
+                OffsetDateTime.parse(
+                        "2026-10-08T20:10:00-05:00"
+                );
+
+        when(actualUseCase.requireActual())
+                .thenReturn(usuario("OPERADOR"));
+        when(persistence.buscarPorId(id))
+                .thenReturn(Optional.of(
+                        dataConUsuario(
+                                id,
+                                99L,
+                                "I1L111",
+                                101,
+                                AviAccion.FUGA,
+                                evento
+                        )
+                ));
+
+        assertThrows(
+                ForbiddenException.class,
+                () -> service.actualizar(
+                        id,
+                        new AviRegistroUseCase.Command(
+                                id,
+                                "I1L110",
+                                101,
+                                AviAccion.FUGA,
+                                evento,
+                                null
+                        )
+                )
+        );
+
+        verify(persistence, never()).actualizar(
+                any(),
+                anyString(),
+                anyInt(),
+                any(),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    void editarRechazaViaQueNoPerteneceALaPlaza() {
+        AviRegistroPersistencePort persistence =
+                mock(AviRegistroPersistencePort.class);
+        UsuarioActualUseCase actualUseCase =
+                mock(UsuarioActualUseCase.class);
+
+        AviRegistroService service =
+                new AviRegistroService(
+                        persistence,
+                        actualUseCase
+                );
+
+        UUID id = UUID.randomUUID();
+        OffsetDateTime evento =
+                OffsetDateTime.parse(
+                        "2026-10-08T20:10:00-05:00"
+                );
+
+        when(actualUseCase.requireActual())
+                .thenReturn(usuario("OPERADOR"));
+        when(persistence.buscarPorId(id))
+                .thenReturn(Optional.of(
+                        data(
+                                id,
+                                "I1L111",
+                                101,
+                                AviAccion.FUGA,
+                                evento,
+                                null
+                        )
+                ));
+        when(persistence.viaActivaEnPlaza(4L, 999))
+                .thenReturn(false);
+
+        assertThrows(
+                RuntimeException.class,
+                () -> service.actualizar(
+                        id,
+                        new AviRegistroUseCase.Command(
+                                id,
+                                "I1L110",
+                                999,
+                                AviAccion.FUGA,
+                                evento,
+                                null
+                        )
+                )
+        );
+
+        verify(persistence, never()).actualizar(
+                any(),
+                anyString(),
+                anyInt(),
+                any(),
+                any(),
+                any()
+        );
+    }
+
+    private AviRegistroPersistencePort.RegistroData dataConUsuario(
+            UUID id,
+            Long usuarioId,
+            String placa,
+            Integer via,
+            AviAccion accion,
+            OffsetDateTime evento
+    ) {
+        return new AviRegistroPersistencePort.RegistroData(
+                id,
+                usuarioId,
+                9999,
+                "Otro operador",
+                4L,
+                "P4",
+                placa,
+                via,
+                accion,
+                evento,
+                OffsetDateTime.parse(
+                        "2026-10-08T20:10:02-05:00"
+                ),
+                null
+        );
+    }
+
     private UsuarioActualUseCase.UsuarioActual usuario(
             String rol
     ) {

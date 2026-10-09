@@ -10,6 +10,8 @@ public interface AviRegistroUseCase {
 
     Registro registrar(Command command);
 
+    Registro actualizar(UUID id, Command command);
+
     List<Registro> listar(
             OffsetDateTime desde,
             OffsetDateTime hasta,
