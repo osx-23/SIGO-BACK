@@ -14,4 +14,23 @@ public class Via {
  @Column(name="avi_visible", nullable=false) private Boolean aviVisible=true;
  @Column(nullable=false) private Integer orden=0;
  @Column(name="created_at",insertable=false,updatable=false) private OffsetDateTime createdAt;
+
+ public Via(
+         Long id,
+         Plaza plaza,
+         Integer numero,
+         String nombre,
+         Boolean activa,
+         Integer orden,
+         OffsetDateTime createdAt
+ ) {
+  this.id = id;
+  this.plaza = plaza;
+  this.numero = numero;
+  this.nombre = nombre;
+  this.activa = activa;
+  this.aviVisible = true;
+  this.orden = orden;
+  this.createdAt = createdAt;
+ }
 }
