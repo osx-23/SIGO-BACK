@@ -146,9 +146,9 @@ class RelevoHttpJpaE2EIT {
         viaId = jdbc.queryForObject(
                 """
                 insert into vias(
-                    plaza_id, numero, nombre, activa, orden
+                    plaza_id, numero, nombre, activa, avi_visible, orden
                 )
-                values (?, 1, 'Vía 1 E2E', true, 1)
+                values (?, 1, 'Vía 1 E2E', true, true, 1)
                 returning id
                 """,
                 Long.class,
