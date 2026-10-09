@@ -7,6 +7,7 @@ import com.sigo.security.application.port.in.UsuarioActualUseCase;
 import com.sigo.shared.exception.BusinessException;
 import com.sigo.shared.exception.ConflictException;
 import com.sigo.shared.exception.ForbiddenException;
+import com.sigo.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -111,6 +112,71 @@ public class AviRegistroService
     }
 
     @Override
+    @Transactional
+    public Registro actualizar(
+            UUID id,
+            Command command
+    ) {
+        if (id == null || command == null) {
+            throw new BusinessException(
+                    "El registro y sus datos son obligatorios"
+            );
+        }
+
+        UsuarioActualUseCase.UsuarioActual actual =
+                usuarioActualUseCase.requireActual();
+
+        AviRegistroPersistencePort.RegistroData existente =
+                persistence.buscarPorId(id)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Registro AVI no encontrado"
+                                )
+                        );
+
+        validarPermisoEdicion(actual, existente);
+
+        String placa = normalizarPlaca(command.placa());
+
+        if (command.via() == null || command.via() <= 0) {
+            throw new BusinessException("La vía es obligatoria");
+        }
+
+        if (command.accion() == null) {
+            throw new BusinessException("La acción es obligatoria");
+        }
+
+        if (command.fechaHoraEvento() == null) {
+            throw new BusinessException(
+                    "La hora del evento es obligatoria"
+            );
+        }
+
+        if (!persistence.viaActivaEnPlaza(
+                existente.plazaId(),
+                command.via()
+        )) {
+            throw new BusinessException(
+                    "La vía no existe o no está activa en la plaza del registro"
+            );
+        }
+
+        String texto =
+                normalizarTexto(command.textoReconocido());
+
+        return map(
+                persistence.actualizar(
+                        id,
+                        placa,
+                        command.via(),
+                        command.accion(),
+                        command.fechaHoraEvento(),
+                        texto
+                )
+        );
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<Registro> listar(
             OffsetDateTime desde,
@@ -186,6 +252,46 @@ public class AviRegistroService
                 .stream()
                 .map(this::map)
                 .toList();
+    }
+
+    private void validarPermisoEdicion(
+            UsuarioActualUseCase.UsuarioActual actual,
+            AviRegistroPersistencePort.RegistroData registro
+    ) {
+        String rol = actual.rol() == null
+                ? ""
+                : actual.rol()
+                        .trim()
+                        .toUpperCase(Locale.ROOT);
+
+        switch (rol) {
+            case "SUPERVISOR" -> {
+                return;
+            }
+            case "CONTROLADOR" -> {
+                if (!Objects.equals(
+                        actual.plazaId(),
+                        registro.plazaId()
+                )) {
+                    throw new ForbiddenException(
+                            "No puedes editar registros AVI de otra plaza"
+                    );
+                }
+            }
+            case "OPERADOR" -> {
+                if (!Objects.equals(
+                        actual.id(),
+                        registro.usuarioId()
+                )) {
+                    throw new ForbiddenException(
+                            "Solo puedes editar tus propios registros AVI"
+                    );
+                }
+            }
+            default -> throw new ForbiddenException(
+                    "El usuario no tiene permiso para editar registros AVI"
+            );
+        }
     }
 
     private Long exigirPlazaPropia(
