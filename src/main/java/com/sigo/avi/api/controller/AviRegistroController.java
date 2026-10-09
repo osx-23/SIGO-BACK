@@ -2,6 +2,7 @@ package com.sigo.avi.api.controller;
 
 import com.sigo.avi.api.dto.AviRegistroRequest;
 import com.sigo.avi.api.dto.AviRegistroResponse;
+import com.sigo.avi.api.dto.AviRegistroUpdateRequest;
 import com.sigo.avi.application.port.in.AviRegistroUseCase;
 import com.sigo.avi.domain.AviAccion;
 import jakarta.validation.Valid;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/avi/registros")
@@ -27,6 +29,26 @@ public class AviRegistroController {
                 useCase.registrar(
                         new AviRegistroUseCase.Command(
                                 request.id(),
+                                request.placa(),
+                                request.via(),
+                                request.accion(),
+                                request.fechaHoraEvento(),
+                                request.textoReconocido()
+                        )
+                )
+        );
+    }
+
+    @PutMapping("/{id}")
+    public AviRegistroResponse actualizar(
+            @PathVariable UUID id,
+            @Valid @RequestBody AviRegistroUpdateRequest request
+    ) {
+        return map(
+                useCase.actualizar(
+                        id,
+                        new AviRegistroUseCase.Command(
+                                id,
                                 request.placa(),
                                 request.via(),
                                 request.accion(),
