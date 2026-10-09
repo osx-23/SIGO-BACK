@@ -8,7 +8,15 @@ Proyecto Spring Boot para el módulo de asistencia de SIGO usando Supabase Postg
 - Proyecto Supabase
 
 ## Base de datos
-Ejecuta `src/main/resources/schema.sql` en Supabase SQL Editor.
+Para una instalación base, ejecuta `src/main/resources/schema.sql` en Supabase SQL Editor.
+
+El proyecto usa `spring.jpa.hibernate.ddl-auto=validate`, por lo que los cambios de esquema deben aplicarse antes de desplegar. Para AVIX ejecuta también:
+
+```text
+src/main/resources/avi-migration.sql
+```
+
+Esta migración agrega la visibilidad central de vías para AVIX y habilita la acción `LIBERADO`.
 
 ## Configuración
 Obtén desde Supabase la conexión PostgreSQL/Session Pooler y define:
