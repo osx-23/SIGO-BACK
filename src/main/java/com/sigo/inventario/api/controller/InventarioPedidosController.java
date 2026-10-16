@@ -92,28 +92,55 @@ public class InventarioPedidosController {
         Long plaza = plazaSolicitada(u, plazaId);
         LocalDate mes = periodo(periodo);
         return jdbc.queryForList("""
-            SELECT s."productoId",s."producto",s."unidadMedida",s."stockActual",
-                   s."stockMinimo",s."stockVerificado", h.promedio AS "promedioMensual",
-                   CASE WHEN h.promedio IS NULL OR NOT s."stockVerificado" THEN NULL
-                   ELSE GREATEST(0, CEIL(h.promedio - s."stockActual")) END AS "sugerido",
-                   (h.promedio IS NOT NULL) AS "conHistorico"
+            SELECT s."productoId", s."producto", s."unidadMedida",
+                   s."stockActual", s."stockMinimo", s."stockVerificado",
+                   s."stockOrigen",
+                   COALESCE(h.promedio, ref.consumo_reportado) AS "promedioMensual",
+                   CASE
+                     WHEN CAST(:mes AS DATE) > DATE '2026-09-01'
+                       AND ref.cantidad_solicitada IS NOT NULL
+                       THEN ref.cantidad_solicitada
+                     WHEN h.promedio IS NOT NULL AND s."stockVerificado"
+                       THEN GREATEST(0,CEIL(h.promedio-s."stockActual"))
+                     ELSE NULL
+                   END AS "sugerido",
+                   (h.promedio IS NOT NULL OR ref.consumo_reportado IS NOT NULL) AS "conHistorico",
+                   CASE WHEN h.promedio IS NOT NULL THEN 'CONTEOS'
+                        WHEN ref.consumo_reportado IS NOT NULL THEN 'EXCEL_SEPTIEMBRE'
+                        ELSE 'SIN_DATOS' END AS "fuenteConsumo",
+                   CASE WHEN CAST(:mes AS DATE)>DATE '2026-09-01'
+                             AND ref.cantidad_solicitada IS NOT NULL
+                          THEN 'SOLICITUD_SEPTIEMBRE'
+                        WHEN h.promedio IS NOT NULL AND s."stockVerificado" THEN 'CONSUMO_CALCULADO'
+                        ELSE 'SIN_DATOS' END AS "fuenteSugerencia",
+                   CASE WHEN ref.producto_id IS NULL THEN NULL
+                        ELSE TO_CHAR(ref.periodo,'YYYY-MM') END AS "periodoReferencia"
             FROM (
-              SELECT v.producto_id AS "productoId",v.producto,v.unidad_medida AS "unidadMedida",
+              SELECT v.producto_id AS "productoId",
+                     v.producto, v.unidad_medida AS "unidadMedida",
                      v.cantidad_actual AS "stockActual",
-                     (v.actualizado_en IS NOT NULL) AS "stockVerificado",
+                     (v.origen_stock='CONTEO') AS "stockVerificado",
+                     v.origen_stock AS "stockOrigen",
                      COALESCE(pp.stock_minimo,0) AS "stockMinimo"
               FROM v_inventario_stock_actual v
-              JOIN inventario_producto_plaza pp ON pp.producto_id=v.producto_id AND pp.plaza_id=v.plaza_id
+              JOIN inventario_producto_plaza pp
+                ON pp.producto_id=v.producto_id AND pp.plaza_id=v.plaza_id
               JOIN inventario_producto pr ON pr.id=v.producto_id
               WHERE v.plaza_id=:plaza AND pr.activo=true
             ) s
             LEFT JOIN (
-              SELECT producto_id,ROUND(SUM(consumo)/NULLIF(COUNT(DISTINCT periodo),0),2) promedio
+              SELECT producto_id,
+                     ROUND(SUM(consumo)/NULLIF(COUNT(DISTINCT periodo),0),2) promedio
               FROM v_inventario_consumo_mensual
-              WHERE plaza_id=:plaza AND periodo>=CAST(:mes AS DATE)-INTERVAL '6 months'
+              WHERE plaza_id=:plaza
+                AND periodo>=CAST(:mes AS DATE)-INTERVAL '6 months'
                 AND periodo<CAST(:mes AS DATE)
               GROUP BY producto_id
             ) h ON h.producto_id=s."productoId"
+            LEFT JOIN inventario_referencia_mensual ref
+              ON ref.producto_id=s."productoId"
+             AND ref.plaza_id=:plaza
+             AND ref.periodo=DATE '2026-09-01'
             ORDER BY s."producto"
             """, parametros("plaza",plaza,"mes",mes));
     }
