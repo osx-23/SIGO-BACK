@@ -108,7 +108,7 @@ public class InventarioPedidosController {
                    CASE WHEN h.promedio IS NOT NULL THEN 'CONTEOS'
                         WHEN ref.consumo_reportado IS NOT NULL THEN 'EXCEL_SEPTIEMBRE'
                         ELSE 'SIN_DATOS' END AS "fuenteConsumo",
-                   CASE WHEN CAST(:mes AS DATE)>DATE '2026-09-01'
+                   CASE WHEN CAST(:mes AS DATE)>=DATE '2026-09-01'
                              AND ref.cantidad_solicitada IS NOT NULL
                           THEN 'SOLICITUD_SEPTIEMBRE'
                         WHEN h.promedio IS NOT NULL AND s."stockVerificado" THEN 'CONSUMO_CALCULADO'
