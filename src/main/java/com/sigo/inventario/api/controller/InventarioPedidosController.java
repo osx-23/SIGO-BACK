@@ -97,7 +97,7 @@ public class InventarioPedidosController {
                    s."stockOrigen",
                    COALESCE(h.promedio, ref.consumo_reportado) AS "promedioMensual",
                    CASE
-                     WHEN CAST(:mes AS DATE) > DATE '2026-09-01'
+                     WHEN CAST(:mes AS DATE) >= DATE '2026-09-01'
                        AND ref.cantidad_solicitada IS NOT NULL
                        THEN ref.cantidad_solicitada
                      WHEN h.promedio IS NOT NULL AND s."stockVerificado"
