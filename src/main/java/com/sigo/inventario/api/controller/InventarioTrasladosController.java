@@ -60,7 +60,7 @@ public class InventarioTrasladosController {
             JOIN plazas o ON o.id=t.origen_plaza_id
             JOIN plazas d ON d.id=t.destino_plaza_id
             JOIN inventario_producto pr ON pr.id=t.producto_id
-            WHERE (:plaza IS NULL OR t.origen_plaza_id=:plaza OR t.destino_plaza_id=:plaza)
+            WHERE (CAST(:plaza AS BIGINT) IS NULL OR t.origen_plaza_id=:plaza OR t.destino_plaza_id=:plaza)
             ORDER BY t.enviado_en DESC,t.id DESC LIMIT 300
             """, p("plaza", filtro));
     }
