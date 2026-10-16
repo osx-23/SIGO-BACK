@@ -93,13 +93,14 @@ public class InventarioPedidosController {
         LocalDate mes = periodo(periodo);
         return jdbc.queryForList("""
             SELECT s."productoId",s."producto",s."unidadMedida",s."stockActual",
-                   s."stockMinimo", h.promedio AS "promedioMensual",
-                   CASE WHEN h.promedio IS NULL THEN NULL
+                   s."stockMinimo",s."stockVerificado", h.promedio AS "promedioMensual",
+                   CASE WHEN h.promedio IS NULL OR NOT s."stockVerificado" THEN NULL
                    ELSE GREATEST(0, CEIL(h.promedio - s."stockActual")) END AS "sugerido",
                    (h.promedio IS NOT NULL) AS "conHistorico"
             FROM (
               SELECT v.producto_id AS "productoId",v.producto,v.unidad_medida AS "unidadMedida",
                      v.cantidad_actual AS "stockActual",
+                     (v.actualizado_en IS NOT NULL) AS "stockVerificado",
                      COALESCE(pp.stock_minimo,0) AS "stockMinimo"
               FROM v_inventario_stock_actual v
               JOIN inventario_producto_plaza pp ON pp.producto_id=v.producto_id AND pp.plaza_id=v.plaza_id
