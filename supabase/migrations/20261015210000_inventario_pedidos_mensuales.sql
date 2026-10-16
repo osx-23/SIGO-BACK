@@ -67,9 +67,9 @@ SELECT
   pp.plaza_id,
   pl.codigo AS plaza,
   pp.producto_id,
-  pr.nombre AS producto,
-  pr.unidad_medida,
-  (COALESCE(uc.cantidad_encontrada, 0) + COALESCE(entradas.cantidad, 0))::numeric(14,2) AS cantidad_actual,
+  pr.nombre::varchar(200) AS producto,
+  pr.unidad_medida::varchar(80) AS unidad_medida,
+  (COALESCE(uc.cantidad_encontrada, 0) + COALESCE(entradas.cantidad, 0))::numeric(12,2) AS cantidad_actual,
   COALESCE(uc.inventario_id, 0)::bigint AS inventario_id,
   GREATEST(uc.fecha_finalizacion, entradas.ultima_fecha) AS actualizado_en
 FROM public.inventario_producto_plaza pp
