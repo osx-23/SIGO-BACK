@@ -70,6 +70,21 @@ public class InventarioPedidosController {
         return p;
     }
 
+    @GetMapping("/consumo")
+    public List<Map<String,Object>> consumo(@RequestParam(required=false) Long plazaId) {
+        var u=usuario();
+        Long plaza=plazaSolicitada(u,plazaId);
+        return jdbc.queryForList("""
+            SELECT h.plaza_id AS "plazaId",h.producto_id AS "productoId",
+                   pr.nombre AS producto,TO_CHAR(h.periodo,'YYYY-MM') AS periodo,
+                   h.consumo
+            FROM v_inventario_consumo_mensual h
+            JOIN inventario_producto pr ON pr.id=h.producto_id
+            WHERE h.plaza_id=:plaza
+            ORDER BY h.periodo DESC,pr.nombre LIMIT 500
+            """,parametros("plaza",plaza));
+    }
+
     @GetMapping("/sugerencias")
     public List<Map<String,Object>> sugerencias(@RequestParam(required=false) Long plazaId,
                                                  @RequestParam String periodo) {
