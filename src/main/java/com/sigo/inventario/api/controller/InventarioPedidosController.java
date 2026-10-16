@@ -136,8 +136,8 @@ public class InventarioPedidosController {
             FROM inventario_pedido ped
             JOIN plazas p ON p.id=ped.plaza_id
             LEFT JOIN inventario_pedido_detalle d ON d.pedido_id=ped.id
-            WHERE (:plaza IS NULL OR ped.plaza_id=:plaza)
-              AND (:mes IS NULL OR ped.periodo=CAST(:mes AS DATE))
+            WHERE (CAST(:plaza AS BIGINT) IS NULL OR ped.plaza_id=:plaza)
+              AND (CAST(:mes AS DATE) IS NULL OR ped.periodo=CAST(:mes AS DATE))
             GROUP BY ped.id,p.codigo
             ORDER BY ped.periodo DESC,p.codigo
             """, parametros("plaza",filtro,"mes",periodo==null?null:periodo(periodo)));
