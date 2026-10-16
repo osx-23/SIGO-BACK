@@ -98,8 +98,8 @@ public class InventarioPedidosController {
                    ELSE GREATEST(0, CEIL(h.promedio - s."stockActual")) END AS "sugerido",
                    (h.promedio IS NOT NULL) AS "conHistorico"
             FROM (
-              SELECT producto_id AS "productoId",producto,unidad_medida AS "unidadMedida",
-                     cantidad_actual AS "stockActual",
+              SELECT v.producto_id AS "productoId",v.producto,v.unidad_medida AS "unidadMedida",
+                     v.cantidad_actual AS "stockActual",
                      COALESCE(pp.stock_minimo,0) AS "stockMinimo"
               FROM v_inventario_stock_actual v
               JOIN inventario_producto_plaza pp ON pp.producto_id=v.producto_id AND pp.plaza_id=v.plaza_id
