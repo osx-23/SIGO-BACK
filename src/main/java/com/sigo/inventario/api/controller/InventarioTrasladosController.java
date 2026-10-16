@@ -295,9 +295,19 @@ public class InventarioTrasladosController {
         InventarioUsuarioActual actual = usuarios.obtenerActual();
         var params = p("id", id, "usuario", actual.trabajadorId());
         List<Map<String, Object>> filas = jdbc.queryForList("""
-            SELECT destino_plaza_id,estado FROM inventario_traslado WHERE id=:id FOR UPDATE
+            SELECT grupo_id,destino_plaza_id,estado
+            FROM inventario_traslado WHERE id=:id FOR UPDATE
             """, params);
         if (filas.isEmpty()) throw error(HttpStatus.NOT_FOUND, "Traslado no encontrado");
+        var grupoId = (UUID) filas.get(0).get("grupo_id");
+        params.addValue("grupo", grupoId);
+        Integer cantidadGrupo = jdbc.queryForObject("""
+            SELECT COUNT(*) FROM inventario_traslado WHERE grupo_id=:grupo
+            """, params, Integer.class);
+        if (cantidadGrupo != null && cantidadGrupo > 1) {
+            throw error(HttpStatus.CONFLICT,
+                    "Este envío contiene varios materiales. Confirme la recepción del grupo completo");
+        }
         Long destino = ((Number) filas.get(0).get("destino_plaza_id")).longValue();
         permisos.exigirPuedeAdministrarPlaza(actual, destino);
         if (!"EN_TRANSITO".equals(filas.get(0).get("estado"))) {
