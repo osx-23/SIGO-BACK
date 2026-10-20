@@ -8,6 +8,7 @@ import com.sigo.relevo.application.port.in.RelevoSesionUseCase;
 import com.sigo.relevo.application.port.out.RelevoSesionPort;
 import com.sigo.relevo.application.port.out.RelevoUsuarioActualPort;
 import com.sigo.shared.exception.ForbiddenException;
+import com.sigo.shared.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,7 +37,7 @@ class RelevoSesionServiceTest {
 
     private final RelevoSesionUseCase.Sesion abierta = new RelevoSesionUseCase.Sesion(
             17L, 100L, 4L, 1L, "EN_PROCESO",
-            OffsetDateTime.parse("2026-10-20T06:00:00-05:00"),
+            OffsetDateTime.now().minusMinutes(30),
             null, null, null);
 
     @BeforeEach
@@ -86,6 +87,18 @@ class RelevoSesionServiceTest {
         assertEquals(55L, result.relevoId());
         assertEquals("FINALIZADO", result.estado());
         verify(sesiones).finalizar(17L, 55L);
+    }
+
+    @Test
+    void noPermiteFinalizarUnaSesionVencidaHaceOchoHoras() {
+        var vencida = new RelevoSesionUseCase.Sesion(
+                17L, 100L, 4L, 1L, "EN_PROCESO",
+                OffsetDateTime.now().minusHours(8).minusMinutes(1),
+                null, null, null);
+        when(sesiones.obtener(17L)).thenReturn(Optional.of(vencida));
+
+        assertThrows(BusinessException.class, () -> servicio.finalizar(17L, solicitud()));
+        verifyNoInteractions(gestionar);
     }
 
     private GestionarRelevoUseCase.Command solicitud() {
