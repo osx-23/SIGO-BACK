@@ -8,6 +8,7 @@ import com.sigo.inventario.application.port.in.InventarioStockUseCase;
 import com.sigo.inventario.application.port.in.ObtenerInventarioUsuarioUseCase;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
 import com.sigo.inventario.domain.InventarioEstado;
+import com.sigo.inventario.application.service.InventarioExcelService;
 import com.sigo.security.infrastructure.config.SecurityConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,6 +63,9 @@ class InventarioApiAuthorizationIT {
 
     @MockBean
     private ObtenerInventarioUsuarioUseCase usuarios;
+
+    @MockBean
+    private InventarioExcelService excelService;
 
     private InventarioUsuarioActual operador;
     private InventarioUsuarioActual controlador;
