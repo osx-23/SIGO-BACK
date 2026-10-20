@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
+import java.util.List;
+import java.time.LocalDate;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +22,7 @@ public class RelevoSesionService implements RelevoSesionUseCase {
     private final RelevoUsuarioActualPort usuarios;
     private final GestionarRelevoUseCase gestionar;
     private final RelevoAccesoUseCase acceso;
+    private final com.sigo.relevo.application.port.in.RelevoHistorialUseCase historialUseCase;
 
     @Override
     @Transactional
@@ -75,6 +78,19 @@ public class RelevoSesionService implements RelevoSesionUseCase {
         var actual = usuarios.requireActual();
         exigirEnProceso(id, actual.id());
         return sesiones.cancelar(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Sesion> historial(LocalDate inicio, LocalDate fin) {
+        var accesibles = historialUseCase.listarPara(acceso.usuarioActual(), inicio, fin);
+        var ids = accesibles.stream().map(relevo -> relevo.id()).toList();
+        return sesiones.listarPorRelevos(ids).stream()
+                .filter(sesion -> "FINALIZADO".equals(sesion.estado()))
+                .map(sesion -> new Sesion(sesion.id(), sesion.operadorId(), sesion.plazaId(),
+                        sesion.turnoId(), sesion.estado(), sesion.iniciadoEn(),
+                        sesion.finalizadoEn(), sesion.relevoId(), null))
+                .toList();
     }
 
     private Sesion exigirEnProceso(Long id, Long operadorId) {

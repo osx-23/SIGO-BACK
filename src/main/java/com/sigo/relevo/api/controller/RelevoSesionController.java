@@ -6,6 +6,9 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.format.annotation.DateTimeFormat;
+import java.time.LocalDate;
+import java.util.List;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -21,6 +24,15 @@ public class RelevoSesionController {
     @ResponseStatus(HttpStatus.CREATED)
     public RelevoSesionUseCase.Sesion iniciar(@Valid @RequestBody InicioRequest request) {
         return sesiones.iniciar(request.plazaId(), request.turnoId());
+    }
+
+    @GetMapping("/historial")
+    public List<RelevoSesionUseCase.Sesion> historial(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
+        return sesiones.historial(inicio, fin);
     }
 
     @GetMapping("/actual")

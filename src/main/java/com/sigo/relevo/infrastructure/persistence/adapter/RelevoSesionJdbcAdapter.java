@@ -9,6 +9,8 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.Collections;
 
 @Repository
 @RequiredArgsConstructor
@@ -45,6 +47,16 @@ public class RelevoSesionJdbcAdapter implements RelevoSesionPort {
     @Override
     public Optional<RelevoSesionUseCase.Sesion> obtener(Long id) {
         return jdbc.query(SELECT + " WHERE id = ?", mapper, id).stream().findFirst();
+    }
+
+    @Override
+    public List<RelevoSesionUseCase.Sesion> listarPorRelevos(List<Long> relevos) {
+        if (relevos == null || relevos.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = String.join(",", Collections.nCopies(relevos.size(), "?"));
+        return jdbc.query(SELECT + " WHERE relevo_id IN (" + placeholders + ")",
+                mapper, relevos.toArray());
     }
 
     @Override
