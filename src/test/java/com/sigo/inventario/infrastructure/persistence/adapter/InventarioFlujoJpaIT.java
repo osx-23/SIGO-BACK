@@ -510,7 +510,7 @@ class InventarioFlujoJpaIT {
     }
 
     @Test
-    void agenteSoloVeProductosRecurrentes() {
+    void agenteVeProductosNoRecurrentesCuandoEstanAsignadosARolYPlaza() {
         InventarioProducto noRecurrente = producto(
                 "BATERIA",
                 "Batería 9V",
@@ -525,16 +525,15 @@ class InventarioFlujoJpaIT {
                 plaza.getId()
         );
 
-        assertEquals(2, permitidos.size());
+        assertEquals(3, permitidos.size());
 
         assertTrue(
-                permitidos.stream().allMatch(
-                        item ->
-                                !"BATERIA".equals(item.codigo())
+                permitidos.stream().anyMatch(
+                        item -> "BATERIA".equals(item.codigo())
                 )
         );
 
-        assertFalse(
+        assertTrue(
                 visibilidadAdapter.esVisiblePara(
                         noRecurrente.getId(),
                         rol.getId(),

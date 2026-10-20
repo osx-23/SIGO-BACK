@@ -21,7 +21,7 @@ class InventarioExcelServiceTest {
                 OffsetDateTime.parse("2026-10-19T13:20:00-05:00"),
                 InventarioEstado.FINALIZADO, "Revisado", null,
                 List.of(new InventarioConsultaUseCase.DetalleItem(
-                        8L, "Conos de seguridad", "unidad", "Seguridad", "PLAZA", new BigDecimal("12.5")))
+                        8L, "CON-008", "Conos de seguridad", "unidad", "Seguridad", "PLAZA", new BigDecimal("12.5")))
         );
 
         byte[] contenido = new InventarioExcelService().generar(datos);
