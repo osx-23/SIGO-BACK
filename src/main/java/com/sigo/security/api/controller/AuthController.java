@@ -8,7 +8,6 @@ import com.sigo.security.api.dto.MeResponse;
 import com.sigo.security.application.port.in.AutenticacionUseCase;
 import com.sigo.security.application.service.LoginAttemptService;
 import com.sigo.security.domain.AutenticacionException;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,16 +22,8 @@ public class AuthController {
     private final LoginAttemptService loginAttemptService;
 
     @PostMapping("/login")
-    public LoginResponse login(
-            @Valid @RequestBody LoginRequest request,
-            HttpServletRequest httpRequest
-    ) {
-        String ip = httpRequest.getRemoteAddr();
-
-        loginAttemptService.verificar(
-                request.codigo(),
-                ip
-        );
+    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+        loginAttemptService.verificar(request.codigo());
 
         try {
             AutenticacionUseCase.LoginResult result =
@@ -43,25 +34,15 @@ public class AuthController {
                             )
                     );
 
-            loginAttemptService.limpiar(
-                    request.codigo(),
-                    ip
-            );
+            loginAttemptService.limpiar(request.codigo());
 
             return toLoginResponse(result);
 
         } catch (AutenticacionException exception) {
             if (exception.tipo()
                     == AutenticacionException.Tipo.UNAUTHORIZED) {
-                loginAttemptService.registrarFallo(
-                        request.codigo(),
-                        ip
-                );
-
-                loginAttemptService.verificar(
-                        request.codigo(),
-                        ip
-                );
+                loginAttemptService.registrarFallo(request.codigo());
+                loginAttemptService.verificar(request.codigo());
             }
 
             throw exception;

@@ -10,14 +10,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class LoginAttemptService {
 
-    private static final int MAX_INTENTOS = 5;
+    private static final int MAX_INTENTOS = 10;
     private static final Duration VENTANA = Duration.ofMinutes(10);
     private static final Duration BLOQUEO = Duration.ofMinutes(15);
 
-    private final ConcurrentHashMap<String, EstadoIntentos> intentos = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, EstadoIntentos> intentos = new ConcurrentHashMap<>();
 
-    public void verificar(Integer codigo, String ip) {
-        EstadoIntentos estado = intentos.get(clave(codigo, ip));
+    public void verificar(Integer codigo) {
+        EstadoIntentos estado = intentos.get(codigo);
         if (estado == null) return;
 
         Instant ahora = Instant.now();
@@ -32,15 +32,14 @@ public class LoginAttemptService {
             }
 
             if (estado.primero != null && Duration.between(estado.primero, ahora).compareTo(VENTANA) > 0) {
-                intentos.remove(clave(codigo, ip), estado);
+                intentos.remove(codigo, estado);
             }
         }
     }
 
-    public void registrarFallo(Integer codigo, String ip) {
-        String clave = clave(codigo, ip);
+    public void registrarFallo(Integer codigo) {
         Instant ahora = Instant.now();
-        EstadoIntentos estado = intentos.computeIfAbsent(clave, k -> new EstadoIntentos());
+        EstadoIntentos estado = intentos.computeIfAbsent(codigo, k -> new EstadoIntentos());
 
         synchronized (estado) {
             if (estado.primero == null || Duration.between(estado.primero, ahora).compareTo(VENTANA) > 0) {
@@ -56,12 +55,8 @@ public class LoginAttemptService {
         }
     }
 
-    public void limpiar(Integer codigo, String ip) {
-        intentos.remove(clave(codigo, ip));
-    }
-
-    private String clave(Integer codigo, String ip) {
-        return String.valueOf(codigo) + "|" + (ip == null ? "unknown" : ip);
+    public void limpiar(Integer codigo) {
+        intentos.remove(codigo);
     }
 
     private static final class EstadoIntentos {
