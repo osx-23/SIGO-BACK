@@ -31,8 +31,9 @@ class InventarioExcelServiceTest {
             assertEquals(2, libro.getNumberOfSheets());
             assertEquals("SIGO - REPORTE DE INVENTARIO", libro.getSheet("Resumen").getRow(0).getCell(0).getStringCellValue());
             assertEquals("P1", libro.getSheet("Resumen").getRow(3).getCell(1).getStringCellValue());
-            assertEquals("Conos de seguridad", libro.getSheet("Productos").getRow(1).getCell(1).getStringCellValue());
-            assertEquals(12.5, libro.getSheet("Productos").getRow(1).getCell(5).getNumericCellValue());
+            assertEquals("CON-008", libro.getSheet("Productos").getRow(1).getCell(1).getStringCellValue());
+            assertEquals("Conos de seguridad", libro.getSheet("Productos").getRow(1).getCell(2).getStringCellValue());
+            assertEquals(12.5, libro.getSheet("Productos").getRow(1).getCell(6).getNumericCellValue());
         }
     }
 }
