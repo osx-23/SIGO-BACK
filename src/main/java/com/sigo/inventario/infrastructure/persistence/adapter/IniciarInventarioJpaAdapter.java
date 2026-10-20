@@ -35,6 +35,8 @@ public class IniciarInventarioJpaAdapter
     public Optional<Long> inventarioEnProcesoId(
             Long responsableId
     ) {
+        // Libera conteos vencidos antes de impedir una nueva sesion.
+        conteoRepository.anularVencidos();
         return conteoRepository
                 .buscarEnProceso(
                         responsableId,

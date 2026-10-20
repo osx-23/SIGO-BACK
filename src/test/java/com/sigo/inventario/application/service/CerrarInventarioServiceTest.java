@@ -7,6 +7,7 @@ import com.sigo.inventario.application.port.out.InventarioCierrePort;
 import com.sigo.inventario.application.port.out.InventarioConsultaPort;
 import com.sigo.inventario.domain.InventarioEstado;
 import org.junit.jupiter.api.Test;
+import com.sigo.shared.exception.ConflictException;
 import com.sigo.shared.exception.BusinessException;
 
 import java.math.BigDecimal;
@@ -69,6 +70,20 @@ class CerrarInventarioServiceTest {
         );
     }
 
+    @Test
+    void noFinalizaInventarioDespuesDeOchoHoras() {
+        StubCierrePort cierrePort = new StubCierrePort();
+        var service = new CerrarInventarioService(
+                new StubConsultaPort(false, OffsetDateTime.now().minusHours(8).minusMinutes(1)),
+                cierrePort,
+                new StubConsultaUseCase(),
+                new StubAuditoriaPort()
+        );
+        assertThrows(ConflictException.class, () -> service.finalizar(
+                new CerrarInventarioUseCase.Usuario(10L, 4L, "CONTROLADOR"), 1L));
+        org.junit.jupiter.api.Assertions.assertNull(cierrePort.finalizadoId);
+    }
+
     private static class StubCierrePort
             implements InventarioCierrePort {
 
@@ -106,13 +121,19 @@ class CerrarInventarioServiceTest {
             implements InventarioConsultaPort {
 
         private final boolean agregarFaltante;
+        private final OffsetDateTime inicio;
 
         StubConsultaPort() {
             this(false);
         }
 
         StubConsultaPort(boolean agregarFaltante) {
+            this(agregarFaltante, OffsetDateTime.now());
+        }
+
+        StubConsultaPort(boolean agregarFaltante, OffsetDateTime inicio) {
             this.agregarFaltante = agregarFaltante;
+            this.inicio = inicio;
         }
 
         @Override
@@ -126,7 +147,7 @@ class CerrarInventarioServiceTest {
                     "Controlador",
                     2L,
                     "CONTROLADOR",
-                    OffsetDateTime.now(),
+                    inicio,
                     null,
                     InventarioEstado.EN_PROCESO,
                     null,

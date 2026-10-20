@@ -22,18 +22,10 @@ public class InventarioCierreJpaAdapter
 
     @Override
     public void finalizar(Long inventarioId) {
-        InventarioConteo inventario =
-                requireInventario(inventarioId);
-
-        inventario.setEstado(
-                EstadoInventario.FINALIZADO
-        );
-
-        inventario.setFechaFinalizacion(
-                OffsetDateTime.now()
-        );
-
-        conteoRepository.save(inventario);
+        if (conteoRepository.finalizarSiVigente(inventarioId) != 1) {
+            throw new com.sigo.shared.exception.ConflictException(
+                    "No se puede finalizar: el inventario fue cerrado o supero las 8 horas");
+        }
     }
 
     @Override

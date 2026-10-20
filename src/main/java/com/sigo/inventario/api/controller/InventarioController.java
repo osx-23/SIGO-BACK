@@ -13,6 +13,7 @@ import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
 import com.sigo.inventario.application.security.InventarioUsuarioActual;
 import com.sigo.inventario.application.port.in.ObtenerInventarioUsuarioUseCase;
 import com.sigo.inventario.domain.InventarioEstado;
+import com.sigo.inventario.application.service.InventarioExcelService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -20,6 +21,9 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -36,6 +40,7 @@ public class InventarioController {
     private final IniciarInventarioUseCase iniciarUseCase;
     private final InventarioConsultaUseCase consultaUseCase;
     private final ObtenerInventarioUsuarioUseCase usuarios;
+    private final InventarioExcelService excelService;
 
     @PostMapping
     public InventarioResumenResponse iniciar() {
@@ -161,6 +166,24 @@ public class InventarioController {
                         id
                 )
         );
+    }
+
+    @GetMapping(value = "/{id}/excel", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> exportarExcel(@PathVariable Long id) {
+        InventarioUsuarioActual actual = usuarios.obtenerActual();
+        if (!actual.esControladorSistema() && !actual.esSupervisorSistema()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Solo controladores y supervisores pueden exportar inventarios");
+        }
+        var detalle = consultaUseCase.detalle(toUsuarioConsulta(actual), id);
+        byte[] archivo = excelService.generar(detalle);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"inventario-" + id + ".xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentLength(archivo.length)
+                .body(archivo);
     }
 
     @GetMapping

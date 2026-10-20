@@ -174,7 +174,7 @@ public class RelevoController {
         );
     }
 
-    private GestionarRelevoUseCase.Command toCommand(
+    static GestionarRelevoUseCase.Command toCommand(
             RelevoRequest request
     ) {
         return new GestionarRelevoUseCase.Command(

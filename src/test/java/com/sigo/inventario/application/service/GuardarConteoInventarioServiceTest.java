@@ -8,6 +8,7 @@ import com.sigo.inventario.application.port.out.InventarioDetalleGestionPort;
 import com.sigo.inventario.application.port.out.InventarioProductoVisibilidadPort;
 import com.sigo.inventario.domain.InventarioEstado;
 import org.junit.jupiter.api.Test;
+import com.sigo.shared.exception.ConflictException;
 import com.sigo.shared.exception.BusinessException;
 
 import java.math.BigDecimal;
@@ -91,6 +92,23 @@ class GuardarConteoInventarioServiceTest {
         );
     }
 
+    @Test
+    void noGuardaDespuesDeOchoHorasDeConteo() {
+        var service = new GuardarConteoInventarioService(
+                new StubConsultaPort(OffsetDateTime.now().minusHours(8).minusMinutes(1)),
+                new StubDetallePort(),
+                (productoId, rolId, plazaId) -> true,
+                new StubConsultaUseCase(),
+                new StubAuditoriaPort()
+        );
+
+        assertThrows(ConflictException.class, () -> service.guardar(
+                new GuardarConteoInventarioUseCase.Usuario(10L, 4L, 2L, "CONTROLADOR"),
+                1L,
+                List.of(new GuardarConteoInventarioUseCase.Item(100L, BigDecimal.ONE))
+        ));
+    }
+
     private static class StubDetallePort
             implements InventarioDetalleGestionPort {
 
@@ -124,6 +142,9 @@ class GuardarConteoInventarioServiceTest {
 
     private static class StubConsultaPort
             implements InventarioConsultaPort {
+        private final OffsetDateTime inicio;
+        StubConsultaPort() { this(OffsetDateTime.now()); }
+        StubConsultaPort(OffsetDateTime inicio) { this.inicio = inicio; }
 
         @Override
         public Cabecera requireInventario(Long inventarioId) {
@@ -136,7 +157,7 @@ class GuardarConteoInventarioServiceTest {
                     "Controlador",
                     2L,
                     "CONTROLADOR",
-                    OffsetDateTime.now(),
+                    inicio,
                     null,
                     InventarioEstado.EN_PROCESO,
                     null,
