@@ -52,7 +52,7 @@ public class InventarioExcelService {
             Sheet productos = libro.createSheet("Productos");
             productos.createFreezePane(0, 1);
             Row columnas = productos.createRow(0);
-            String[] titulos = {"ID producto", "Material", "Categoría", "Ámbito", "Unidad", "Cantidad"};
+            String[] titulos = {"ID producto", "Código", "Material", "Categoría", "Ámbito", "Unidad", "Cantidad"};
             for (int i = 0; i < titulos.length; i++) {
                 celda(columnas, i, titulos[i], cabecera);
             }
@@ -61,20 +61,21 @@ public class InventarioExcelService {
                 for (var producto : inventario.productos()) {
                     Row row = productos.createRow(fila++);
                     numero(row, 0, producto.productoId(), regular);
-                    celda(row, 1, producto.nombre(), regular);
-                    celda(row, 2, producto.categoria(), regular);
-                    celda(row, 3, producto.ambito(), regular);
-                    celda(row, 4, producto.unidad(), regular);
+                    celda(row, 1, producto.codigo(), regular);
+                    celda(row, 2, producto.nombre(), regular);
+                    celda(row, 3, producto.categoria(), regular);
+                    celda(row, 4, producto.ambito(), regular);
+                    celda(row, 5, producto.unidad(), regular);
                     if (producto.cantidad() != null) {
-                        Cell numero = row.createCell(5);
+                        Cell numero = row.createCell(6);
                         numero.setCellValue(producto.cantidad().doubleValue());
                         numero.setCellStyle(cantidad);
                     }
                 }
             }
             productos.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(
-                    0, Math.max(0, productos.getLastRowNum()), 0, 5));
-            int[] anchos = {16, 50, 27, 27, 18, 20};
+                    0, Math.max(0, productos.getLastRowNum()), 0, 6));
+            int[] anchos = {16, 19, 50, 27, 27, 18, 20};
             for (int i = 0; i < anchos.length; i++) {
                 productos.setColumnWidth(i, anchos[i] * 256);
             }

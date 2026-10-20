@@ -76,7 +76,7 @@ public class InventarioPedidosController {
         Long plaza=plazaSolicitada(u,plazaId);
         return jdbc.queryForList("""
             SELECT h.plaza_id AS "plazaId",h.producto_id AS "productoId",
-                   pr.nombre AS producto,TO_CHAR(h.periodo,'YYYY-MM') AS periodo,
+                   pr.nombre AS producto,pr.codigo AS codigo,TO_CHAR(h.periodo,'YYYY-MM') AS periodo,
                    h.consumo
             FROM v_inventario_consumo_mensual h
             JOIN inventario_producto pr ON pr.id=h.producto_id
@@ -92,7 +92,7 @@ public class InventarioPedidosController {
         Long plaza = plazaSolicitada(u, plazaId);
         LocalDate mes = periodo(periodo);
         return jdbc.queryForList("""
-            SELECT s."productoId", s."producto", s."unidadMedida",
+            SELECT s."productoId", s."codigo", s."producto", s."unidadMedida",
                    s."stockActual", s."stockMinimo", s."stockVerificado",
                    s."stockOrigen",
                    COALESCE(h.promedio, ref.consumo_reportado) AS "promedioMensual",
@@ -117,7 +117,7 @@ public class InventarioPedidosController {
                         ELSE TO_CHAR(ref.periodo,'YYYY-MM') END AS "periodoReferencia"
             FROM (
               SELECT v.producto_id AS "productoId",
-                     v.producto, v.unidad_medida AS "unidadMedida",
+                     v.producto, pr.codigo AS "codigo", v.unidad_medida AS "unidadMedida",
                      v.cantidad_actual AS "stockActual",
                      (v.origen_stock='CONTEO') AS "stockVerificado",
                      v.origen_stock AS "stockOrigen",
@@ -177,7 +177,7 @@ public class InventarioPedidosController {
         Map<String,Object> ped=pedido(id,false);
         verPlaza(u, ((Number)ped.get("plazaId")).longValue());
         ped.put("items", jdbc.queryForList("""
-            SELECT d.producto_id AS "productoId",p.nombre AS producto,p.unidad_medida AS unidad,
+            SELECT d.producto_id AS "productoId",p.nombre AS producto,p.codigo AS codigo,p.unidad_medida AS unidad,
                    d.cantidad_solicitada AS cantidad,d.cantidad_sugerida AS sugerida,
                    d.promedio_mensual AS promedio,d.stock_referencia AS stock,
                    COALESCE(SUM(rd.cantidad),0) AS recibida,
@@ -187,12 +187,12 @@ public class InventarioPedidosController {
             LEFT JOIN inventario_pedido_recepcion r ON r.pedido_id=d.pedido_id
             LEFT JOIN inventario_pedido_recepcion_detalle rd
               ON rd.recepcion_id=r.id AND rd.producto_id=d.producto_id
-            WHERE d.pedido_id=:id GROUP BY d.id,p.nombre,p.unidad_medida
+            WHERE d.pedido_id=:id GROUP BY d.id,p.nombre,p.codigo,p.unidad_medida
             ORDER BY p.nombre
             """,parametros("id",id)));
         ped.put("recepciones",jdbc.queryForList("""
             SELECT r.id,r.creado_en AS fecha,r.observacion,r.recibido_por AS "recibidoPor",
-                   p.nombre AS producto,rd.producto_id AS "productoId",rd.cantidad
+                   p.nombre AS producto,p.codigo AS codigo,rd.producto_id AS "productoId",rd.cantidad
             FROM inventario_pedido_recepcion r
             JOIN inventario_pedido_recepcion_detalle rd ON rd.recepcion_id=r.id
             JOIN inventario_producto p ON p.id=rd.producto_id
@@ -338,7 +338,7 @@ public class InventarioPedidosController {
     public List<Map<String,Object>> consolidado(@RequestParam String periodo) {
         supervisor(usuario());
         return jdbc.queryForList("""
-            SELECT d.producto_id AS "productoId",pr.nombre AS producto,
+            SELECT d.producto_id AS "productoId",pr.nombre AS producto,pr.codigo AS codigo,
                    pr.unidad_medida AS unidad,
                    SUM(d.cantidad_solicitada) AS "cantidadTotal",
                    COUNT(DISTINCT ped.plaza_id) AS plazas
@@ -347,7 +347,7 @@ public class InventarioPedidosController {
             JOIN inventario_producto pr ON pr.id=d.producto_id
             WHERE ped.periodo=CAST(:mes AS DATE) AND ped.estado IN
               ('APROBADO','ENVIADO','PARCIAL','COMPLETADO','CERRADO_FALTANTES')
-            GROUP BY d.producto_id,pr.nombre,pr.unidad_medida ORDER BY pr.nombre
+            GROUP BY d.producto_id,pr.nombre,pr.codigo,pr.unidad_medida ORDER BY pr.nombre
             """,parametros("mes",periodo(periodo)));
     }
 

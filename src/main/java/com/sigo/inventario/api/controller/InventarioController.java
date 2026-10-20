@@ -299,6 +299,7 @@ public class InventarioController {
                         .map(item ->
                                 new InventarioDetalleItemResponse(
                                         item.productoId(),
+                                        item.codigo(),
                                         item.nombre(),
                                         item.unidad(),
                                         item.categoria(),

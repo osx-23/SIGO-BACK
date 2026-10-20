@@ -220,6 +220,7 @@ public class InventarioConsultaJpaAdapter
     ) {
         return new InventarioConsultaUseCase.DetalleItem(
                 detalle.getProducto().getId(),
+                detalle.getProducto().getCodigo(),
                 detalle.getNombreProductoSnapshot(),
                 detalle.getUnidadSnapshot(),
                 detalle.getCategoriaSnapshot(),

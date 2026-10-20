@@ -38,6 +38,7 @@ public class InventarioStockController {
                                 stock.plazaId(),
                                 stock.plaza(),
                                 stock.productoId(),
+                                stock.codigo(),
                                 stock.producto(),
                                 stock.unidadMedida(),
                                 stock.cantidadActual(),

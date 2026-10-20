@@ -18,6 +18,7 @@ public interface InventarioStockUseCase {
             Long plazaId,
             String plaza,
             Long productoId,
+            String codigo,
             String producto,
             String unidadMedida,
             BigDecimal cantidadActual,

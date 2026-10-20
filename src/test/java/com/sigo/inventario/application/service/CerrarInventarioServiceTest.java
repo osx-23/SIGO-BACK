@@ -177,6 +177,7 @@ class CerrarInventarioServiceTest {
             return List.of(
                     new InventarioConsultaUseCase.DetalleItem(
                             100L,
+                            "CONOS",
                             "Conos",
                             "UNIDAD",
                             null,

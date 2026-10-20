@@ -66,7 +66,7 @@ public class InventarioTrasladosController {
                    t.origen_plaza_id AS "origenPlazaId",
                    o.codigo AS "origen", t.destino_plaza_id AS "destinoPlazaId",
                    d.codigo AS "destino", t.producto_id AS "productoId",
-                   pr.nombre AS "producto",pr.unidad_medida AS "unidad",
+                   pr.codigo AS "codigo",pr.nombre AS "producto",pr.unidad_medida AS "unidad",
                    t.cantidad,t.estado,t.observacion,
                    t.enviado_en AS "enviadoEn",t.recibido_en AS "recibidoEn",
                    t.enviado_por AS "enviadoPor",t.recibido_por AS "recibidoPor"

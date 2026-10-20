@@ -21,7 +21,7 @@ class InventarioExcelServiceTest {
                 OffsetDateTime.parse("2026-10-19T13:20:00-05:00"),
                 InventarioEstado.FINALIZADO, "Revisado", null,
                 List.of(new InventarioConsultaUseCase.DetalleItem(
-                        8L, "Conos de seguridad", "unidad", "Seguridad", "PLAZA", new BigDecimal("12.5")))
+                        8L, "CON-008", "Conos de seguridad", "unidad", "Seguridad", "PLAZA", new BigDecimal("12.5")))
         );
 
         byte[] contenido = new InventarioExcelService().generar(datos);
@@ -31,8 +31,9 @@ class InventarioExcelServiceTest {
             assertEquals(2, libro.getNumberOfSheets());
             assertEquals("SIGO - REPORTE DE INVENTARIO", libro.getSheet("Resumen").getRow(0).getCell(0).getStringCellValue());
             assertEquals("P1", libro.getSheet("Resumen").getRow(3).getCell(1).getStringCellValue());
-            assertEquals("Conos de seguridad", libro.getSheet("Productos").getRow(1).getCell(1).getStringCellValue());
-            assertEquals(12.5, libro.getSheet("Productos").getRow(1).getCell(5).getNumericCellValue());
+            assertEquals("CON-008", libro.getSheet("Productos").getRow(1).getCell(1).getStringCellValue());
+            assertEquals("Conos de seguridad", libro.getSheet("Productos").getRow(1).getCell(2).getStringCellValue());
+            assertEquals(12.5, libro.getSheet("Productos").getRow(1).getCell(6).getNumericCellValue());
         }
     }
 }

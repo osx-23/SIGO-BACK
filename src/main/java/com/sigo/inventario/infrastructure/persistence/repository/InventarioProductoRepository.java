@@ -19,13 +19,6 @@ public interface InventarioProductoRepository
         where p.activo = true
           and pr.rol.id = :rolId
           and pp.plaza.id = :plazaId
-          and (
-              upper(pr.rol.codigo) <> 'AGENTE'
-              or (
-                  p.ambito is not null
-                  and upper(p.ambito.nombre) = 'RECURRENTES'
-              )
-          )
         order by p.nombre
     """)
     List<InventarioProducto> buscarPermitidos(
@@ -42,13 +35,6 @@ public interface InventarioProductoRepository
           and p.activo = true
           and pr.rol.id = :rolId
           and pp.plaza.id = :plazaId
-          and (
-              upper(pr.rol.codigo) <> 'AGENTE'
-              or (
-                  p.ambito is not null
-                  and upper(p.ambito.nombre) = 'RECURRENTES'
-              )
-          )
     """)
     boolean esVisiblePara(
             @Param("productoId") Long productoId,

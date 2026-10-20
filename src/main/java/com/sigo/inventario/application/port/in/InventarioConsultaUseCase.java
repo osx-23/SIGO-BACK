@@ -56,6 +56,7 @@ public interface InventarioConsultaUseCase {
 
     record DetalleItem(
             Long productoId,
+            String codigo,
             String nombre,
             String unidad,
             String categoria,
