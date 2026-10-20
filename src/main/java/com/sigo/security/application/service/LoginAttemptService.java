@@ -23,11 +23,14 @@ public class LoginAttemptService {
         Instant ahora = Instant.now();
         synchronized (estado) {
             if (estado.bloqueadoHasta != null && ahora.isBefore(estado.bloqueadoHasta)) {
-                long segundos = Duration.between(ahora, estado.bloqueadoHasta).toSeconds();
+                long milisegundos = Duration.between(ahora, estado.bloqueadoHasta).toMillis();
+                long segundos = Math.max(1, (milisegundos + 999) / 1000);
+                long minutos = (segundos + 59) / 60;
                 throw new TooManyRequestsException(
-                        "Demasiados intentos fallidos. Intenta nuevamente en "
-                                + Math.max(1, segundos / 60)
-                                + " minuto(s)."
+                        "Tu cuenta ha sido bloqueada temporalmente por demasiados intentos fallidos. "
+                                + "Debes esperar " + minutos
+                                + (minutos == 1 ? " minuto." : " minutos."),
+                        segundos
                 );
             }
 

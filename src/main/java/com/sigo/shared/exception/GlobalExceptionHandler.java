@@ -37,7 +37,16 @@ public class GlobalExceptionHandler {
 
  @ExceptionHandler(TooManyRequestsException.class)
  ResponseEntity<Map<String, Object>> tooMany(TooManyRequestsException e) {
-  return build(HttpStatus.TOO_MANY_REQUESTS, e.getMessage());
+  Map<String, Object> body = new LinkedHashMap<>();
+  body.put("timestamp", OffsetDateTime.now());
+  body.put("status", 429);
+  body.put("error", HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase());
+  body.put("message", e.getMessage());
+  body.put("retryAfterSeconds", e.retryAfterSeconds());
+
+  return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+          .header(HttpHeaders.RETRY_AFTER, String.valueOf(e.retryAfterSeconds()))
+          .body(body);
  }
 
  @ExceptionHandler(MethodArgumentNotValidException.class)

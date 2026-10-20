@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LoginAttemptServiceTest {
 
@@ -19,7 +21,12 @@ class LoginAttemptServiceTest {
         }
 
         service.registrarFallo(codigo);
-        assertThrows(TooManyRequestsException.class, () -> service.verificar(codigo));
+        TooManyRequestsException bloqueo = assertThrows(
+                TooManyRequestsException.class, () -> service.verificar(codigo));
+        assertTrue(bloqueo.retryAfterSeconds() > 0);
+        assertTrue(bloqueo.retryAfterSeconds() <= 900);
+        assertTrue(bloqueo.getMessage().contains("Tu cuenta ha sido bloqueada"));
+        assertTrue(bloqueo.getMessage().contains("Debes esperar"));
         assertThrows(TooManyRequestsException.class, () -> service.verificar(codigo));
     }
 
