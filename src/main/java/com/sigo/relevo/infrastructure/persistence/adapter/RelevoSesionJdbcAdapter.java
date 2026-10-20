@@ -37,9 +37,20 @@ public class RelevoSesionJdbcAdapter implements RelevoSesionPort {
             );
 
     @Override
+    public int anularVencidos() {
+        return jdbc.update("""
+                UPDATE relevo_sesiones
+                SET estado = 'ANULADO', finalizado_en = CURRENT_TIMESTAMP
+                WHERE estado = 'EN_PROCESO'
+                  AND iniciado_en <= CURRENT_TIMESTAMP - INTERVAL '8 hours'
+                """);
+    }
+
+    @Override
     public Optional<RelevoSesionUseCase.Sesion> enProceso(Long operadorId) {
         return jdbc.query(SELECT + """
                 WHERE operador_id = ? AND estado = 'EN_PROCESO'
+                  AND iniciado_en > CURRENT_TIMESTAMP - INTERVAL '8 hours'
                 ORDER BY iniciado_en DESC LIMIT 1
                 """, mapper, operadorId).stream().findFirst();
     }
@@ -70,7 +81,7 @@ public class RelevoSesionJdbcAdapter implements RelevoSesionPort {
 
     @Override
     public RelevoSesionUseCase.Sesion guardarBorrador(Long id, String borrador) {
-        actualizar(id, "UPDATE relevo_sesiones SET borrador_json = ? WHERE id = ? AND estado = 'EN_PROCESO'",
+        actualizar(id, "UPDATE relevo_sesiones SET borrador_json = ? WHERE id = ? AND estado = 'EN_PROCESO' AND iniciado_en > CURRENT_TIMESTAMP - INTERVAL '8 hours'",
                 borrador);
         return requerir(id);
     }
@@ -81,6 +92,7 @@ public class RelevoSesionJdbcAdapter implements RelevoSesionPort {
                 UPDATE relevo_sesiones
                 SET estado = 'FINALIZADO', finalizado_en = CURRENT_TIMESTAMP, relevo_id = ?
                 WHERE id = ? AND estado = 'EN_PROCESO'
+                  AND iniciado_en > CURRENT_TIMESTAMP - INTERVAL '8 hours'
                 """, relevoId);
         return requerir(id);
     }

@@ -48,6 +48,12 @@ public class InventarioConsultaService
             );
         }
 
+    if (inventario.fechaInicio() != null
+                && !inventario.fechaInicio().toInstant().isAfter(
+                    java.time.Instant.now().minus(8, java.time.temporal.ChronoUnit.HOURS))) {
+            throw new ConflictException("Inventario vencido: el turno de 8 horas ha terminado");
+        }
+
         return consultaPort.productosPermitidos(
                 inventario.rolId(),
                 inventario.plazaId()

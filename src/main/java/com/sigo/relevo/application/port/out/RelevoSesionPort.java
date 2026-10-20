@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.List;
 
 public interface RelevoSesionPort {
+    int anularVencidos();
     Optional<RelevoSesionUseCase.Sesion> enProceso(Long operadorId);
     Optional<RelevoSesionUseCase.Sesion> obtener(Long id);
     List<RelevoSesionUseCase.Sesion> listarPorRelevos(List<Long> relevos);

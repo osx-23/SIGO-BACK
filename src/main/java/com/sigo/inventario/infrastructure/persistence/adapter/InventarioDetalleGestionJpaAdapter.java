@@ -28,6 +28,12 @@ public class InventarioDetalleGestionJpaAdapter
             Long inventarioId,
             List<GuardarConteoInventarioUseCase.Item> productos
     ) {
+        // Bloquea la cabecera durante el guardado; no permite escrituras
+        // si el inventario cumplio las 8 horas o ya fue cerrado.
+        if (conteoRepository.bloquearVigente(inventarioId).isEmpty()) {
+            throw new com.sigo.shared.exception.ConflictException(
+                    "No se puede guardar: inventario anulado o vencido (8 horas)");
+        }
         InventarioConteo inventario = conteoRepository
                 .findConDetalleById(inventarioId)
                 .orElseThrow(() ->

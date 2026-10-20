@@ -32,6 +32,7 @@ public class RelevoSesionService implements RelevoSesionUseCase {
         if (plazaId == null || turnoId == null || plazaId <= 0 || turnoId <= 0) {
             throw new BusinessException("Selecciona una plaza y un turno para iniciar el relevo");
         }
+        sesiones.anularVencidos();
         var enProceso = sesiones.enProceso(actual.id());
         if (enProceso.isPresent()) {
             return enProceso.get();
@@ -40,9 +41,10 @@ public class RelevoSesionService implements RelevoSesionUseCase {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public Sesion actual() {
         var usuario = usuarios.requireActual();
+        sesiones.anularVencidos();
         return sesiones.enProceso(usuario.id()).orElse(null);
     }
 
@@ -101,6 +103,11 @@ public class RelevoSesionService implements RelevoSesionUseCase {
         }
         if (!"EN_PROCESO".equals(sesion.estado())) {
             throw new BusinessException("El relevo ya fue finalizado o anulado");
+        }
+        if (sesion.iniciadoEn() == null ||
+                !sesion.iniciadoEn().toInstant().isAfter(
+                        java.time.Instant.now().minus(8, java.time.temporal.ChronoUnit.HOURS))) {
+            throw new BusinessException("Relevo vencido: la sesion se anula a las 8 horas");
         }
         return sesion;
     }
