@@ -29,7 +29,7 @@ class SigoReadOnlyQueryJdbcAdapterTest {
             String query = call.getArgument(0);
             if (query.contains("FROM asistencia_ausencia aa")) {
                 assertTrue(query.contains("COUNT(*) OVER() AS total_ausencias_detalladas"));
-                Object[] args = call.getArgument(1);
+                Object[] args = call.getArguments();
                 assertEquals(2, args[args.length - 1]);
                 return List.of(
                         Map.<String, Object>of("trabajador", "Ana", "total_ausencias_detalladas", 47L),
