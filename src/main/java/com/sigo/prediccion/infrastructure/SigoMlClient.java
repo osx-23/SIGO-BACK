@@ -5,10 +5,12 @@ import com.sigo.prediccion.domain.PrediccionAsistenciaParametros;
 import com.sigo.prediccion.domain.PrediccionAsistenciaResultado;
 import org.springframework.beans.factory.annotation.Value;
 import com.sigo.prediccion.domain.PrediccionNoDisponibleException;
+import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import java.util.Map;
 
 @Component
 public class SigoMlClient implements PrediccionAsistenciaPort {
@@ -44,7 +46,13 @@ public class SigoMlClient implements PrediccionAsistenciaPort {
             return restClient.post()
                     .uri("/internal/v1/asistencia/predecir")
                     .header("X-Internal-Token", internalToken)
-                    .body(request)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of(
+                            "plazaId", request.plazaId(),
+                            "turnoId", request.turnoId(),
+                            "fecha", request.fecha().toString(),
+                            "programados", request.programados()
+                    ))
                     .retrieve()
                     .body(PrediccionAsistenciaResultado.class);
         } catch (RestClientException e) {
