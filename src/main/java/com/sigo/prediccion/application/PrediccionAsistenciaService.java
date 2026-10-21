@@ -1,8 +1,8 @@
 package com.sigo.prediccion.application;
 
-import com.sigo.prediccion.api.dto.PrediccionAsistenciaRequest;
-import com.sigo.prediccion.api.dto.PrediccionAsistenciaResponse;
-import com.sigo.prediccion.infrastructure.SigoMlClient;
+import com.sigo.prediccion.application.port.out.PrediccionAsistenciaPort;
+import com.sigo.prediccion.domain.PrediccionAsistenciaParametros;
+import com.sigo.prediccion.domain.PrediccionAsistenciaResultado;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -11,12 +11,10 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @RequiredArgsConstructor
 public class PrediccionAsistenciaService {
-    private final SigoMlClient mlClient;
+    private final PrediccionAsistenciaPort mlPort;
 
-    public PrediccionAsistenciaResponse predecir(PrediccionAsistenciaRequest request) {
-        PrediccionAsistenciaResponse result = mlClient.predecir(request);
-        // Nunca publicar una prediccion operativa si el servicio externo devuelve
-        // una respuesta incompleta o incompatible con el numero de programados.
+    public PrediccionAsistenciaResultado predecir(PrediccionAsistenciaParametros request) {
+        PrediccionAsistenciaResultado result = mlPort.predecir(request);
         if (result == null
                 || result.ausenciasEstimadas() == null
                 || result.coberturaEstimada() == null

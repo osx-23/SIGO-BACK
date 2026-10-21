@@ -1,7 +1,8 @@
 package com.sigo.prediccion.infrastructure;
 
-import com.sigo.prediccion.api.dto.PrediccionAsistenciaRequest;
-import com.sigo.prediccion.api.dto.PrediccionAsistenciaResponse;
+import com.sigo.prediccion.application.port.out.PrediccionAsistenciaPort;
+import com.sigo.prediccion.domain.PrediccionAsistenciaParametros;
+import com.sigo.prediccion.domain.PrediccionAsistenciaResultado;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -11,7 +12,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
 
 @Component
-public class SigoMlClient {
+public class SigoMlClient implements PrediccionAsistenciaPort {
     private final RestClient restClient;
     private final boolean enabled;
     private final String internalToken;
@@ -32,7 +33,8 @@ public class SigoMlClient {
                 .build();
     }
 
-    public PrediccionAsistenciaResponse predecir(PrediccionAsistenciaRequest request) {
+    @Override
+    public PrediccionAsistenciaResultado predecir(PrediccionAsistenciaParametros request) {
         if (!enabled) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Las predicciones de SIGO-ML no estan habilitadas");
@@ -47,9 +49,8 @@ public class SigoMlClient {
                     .header("X-Internal-Token", internalToken)
                     .body(request)
                     .retrieve()
-                    .body(PrediccionAsistenciaResponse.class);
+                    .body(PrediccionAsistenciaResultado.class);
         } catch (RestClientException e) {
-            // No exponer al navegador respuestas internas ni credenciales.
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "El servicio de predicciones no esta disponible temporalmente", e);
         }
