@@ -4,12 +4,11 @@ import com.sigo.prediccion.application.port.out.PrediccionAsistenciaPort;
 import com.sigo.prediccion.domain.PrediccionAsistenciaParametros;
 import com.sigo.prediccion.domain.PrediccionAsistenciaResultado;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
+import com.sigo.prediccion.domain.PrediccionNoDisponibleException;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.server.ResponseStatusException;
 
 @Component
 public class SigoMlClient implements PrediccionAsistenciaPort {
@@ -36,12 +35,10 @@ public class SigoMlClient implements PrediccionAsistenciaPort {
     @Override
     public PrediccionAsistenciaResultado predecir(PrediccionAsistenciaParametros request) {
         if (!enabled) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Las predicciones de SIGO-ML no estan habilitadas");
+            throw new PrediccionNoDisponibleException("Las predicciones de SIGO-ML no estan habilitadas");
         }
         if (internalToken == null || internalToken.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "No se ha configurado la credencial interna de SIGO-ML");
+            throw new PrediccionNoDisponibleException("No se ha configurado la credencial interna de SIGO-ML");
         }
         try {
             return restClient.post()
@@ -51,8 +48,7 @@ public class SigoMlClient implements PrediccionAsistenciaPort {
                     .retrieve()
                     .body(PrediccionAsistenciaResultado.class);
         } catch (RestClientException e) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "El servicio de predicciones no esta disponible temporalmente", e);
+            throw new PrediccionNoDisponibleException("El servicio de predicciones no esta disponible temporalmente", e);
         }
     }
 }

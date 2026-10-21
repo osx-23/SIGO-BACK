@@ -4,9 +4,8 @@ import com.sigo.prediccion.application.port.out.PrediccionAsistenciaPort;
 import com.sigo.prediccion.domain.PrediccionAsistenciaParametros;
 import com.sigo.prediccion.domain.PrediccionAsistenciaResultado;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import com.sigo.prediccion.domain.PrediccionInvalidaException;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -26,10 +25,7 @@ public class PrediccionAsistenciaService {
                 || result.ausenciasEstimadas() < 0
                 || result.ausenciasEstimadas() > request.programados()
                 || result.coberturaEstimada() != request.programados() - result.ausenciasEstimadas()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_GATEWAY,
-                    "SIGO-ML devolvio una prediccion no valida"
-            );
+            throw new PrediccionInvalidaException("SIGO-ML devolvio una prediccion no valida");
         }
         return result;
     }

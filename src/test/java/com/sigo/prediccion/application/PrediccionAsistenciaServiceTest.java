@@ -4,8 +4,7 @@ import com.sigo.prediccion.application.port.out.PrediccionAsistenciaPort;
 import com.sigo.prediccion.domain.PrediccionAsistenciaParametros;
 import com.sigo.prediccion.domain.PrediccionAsistenciaResultado;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
+import com.sigo.prediccion.domain.PrediccionInvalidaException;
 
 import java.time.LocalDate;
 
@@ -36,17 +35,17 @@ class PrediccionAsistenciaServiceTest {
     void rechazaCifrasInconsistentesDeModeloExterno() {
         PrediccionAsistenciaPort port = mock(PrediccionAsistenciaPort.class);
         when(port.predecir(request())).thenReturn(result(3, 18));
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        PrediccionInvalidaException exception = assertThrows(
+                PrediccionInvalidaException.class,
                 () -> new PrediccionAsistenciaService(port).predecir(request()));
-        assertEquals(HttpStatus.BAD_GATEWAY, exception.getStatusCode());
+        assertEquals("SIGO-ML devolvio una prediccion no valida", exception.getMessage());
     }
 
     @Test
     void rechazaAusenciasMayoresQueProgramados() {
         PrediccionAsistenciaPort port = mock(PrediccionAsistenciaPort.class);
         when(port.predecir(request())).thenReturn(result(20, -2));
-        assertThrows(ResponseStatusException.class,
+        assertThrows(PrediccionInvalidaException.class,
                 () -> new PrediccionAsistenciaService(port).predecir(request()));
     }
 }
