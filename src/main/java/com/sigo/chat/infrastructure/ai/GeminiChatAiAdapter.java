@@ -10,13 +10,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
 public class GeminiChatAiAdapter implements ChatAiPort {
+
+    private static final ZoneId ZONA_LIMA = ZoneId.of("America/Lima");
 
     private final ObjectMapper objectMapper;
     private final RestClient restClient = RestClient.create();
@@ -172,8 +176,12 @@ public class GeminiChatAiAdapter implements ChatAiPort {
         }
     }
 
+    static LocalDate fechaEnLima(Instant instante) {
+        return instante.atZone(ZONA_LIMA).toLocalDate();
+    }
+
     private String construirPrompt(String pregunta, String contextoConversacion) {
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = fechaEnLima(Instant.now());
 
         return """
                 Eres el intérprete de consultas del sistema SIGO.
