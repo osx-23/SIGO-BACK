@@ -119,7 +119,8 @@ public class SigoReadOnlyQueryJdbcAdapter implements SigoQueryPort {
                     t.codigo AS codigo_trabajador,
                     t.nombre_completo AS trabajador,
                     ma.nombre AS motivo,
-                    aa.observacion
+                    aa.observacion,
+                    COUNT(*) OVER() AS total_ausencias_detalladas
                 FROM asistencia_ausencia aa
                 JOIN asistencia_registro ar ON ar.id = aa.asistencia_id
                 JOIN trabajadores t ON t.id = aa.trabajador_id
@@ -129,7 +130,6 @@ public class SigoReadOnlyQueryJdbcAdapter implements SigoQueryPort {
                 WHERE 1=1
                 """);
         List<Object> params = new ArrayList<>();
-
         if (req.codigo() != null) {
             sql.append(" AND t.codigo = ?");
             params.add(req.codigo());
@@ -150,12 +150,40 @@ public class SigoReadOnlyQueryJdbcAdapter implements SigoQueryPort {
             sql.append(" AND LOWER(ma.nombre) LIKE LOWER(?)");
             params.add("%" + req.motivo().trim() + "%");
         }
+        if (req.asistenciaId() != null) {
+            sql.append(" AND ar.id = ?");
+            params.add(req.asistenciaId());
+        }
 
         agregarFechas(sql, params, req, "ar.fecha");
         sql.append(" ORDER BY ar.fecha DESC, t.nombre_completo LIMIT ?");
         params.add(req.limiteSeguro());
 
-        return resultado("Ausencias", query(sql, params), periodo(req));
+        List<Map<String, Object>> consulta = query(sql, params);
+        long totalDetalle = consulta.isEmpty()
+                ? 0L
+                : ((Number) consulta.getFirst().get("total_ausencias_detalladas")).longValue();
+        // El limite afecta a los detalles, no al total real de filas coincidentes.
+        List<Map<String, Object>> detalle = consulta.stream().map(fila -> {
+            Map<String, Object> limpia = new LinkedHashMap<>(fila);
+            limpia.remove("total_ausencias_detalladas");
+            return limpia;
+        }).toList();
+
+        StringBuilder nota = new StringBuilder();
+        nota.append(periodo(req) == null
+                ? "Sin filtro de fechas: todos los periodos. "
+                : periodo(req) + ". ");
+        if (req.codigo() == null && !texto(req.trabajador()) && !texto(req.motivo())) {
+            Map<String, Object> resumen = primeraFila(resumenAsistencia(req).filas());
+            nota.append("Total de ausencias segun Dashboard (programados menos presentes): ")
+                    .append(resumen.getOrDefault("ausentes", 0)).append(". ");
+        }
+        nota.append("Total de registros detallados de ausencias para los filtros: ")
+                .append(totalDetalle).append(". Se muestran ")
+                .append(detalle.size()).append(" de ").append(totalDetalle)
+                .append(" detalles. La cantidad mostrada NO es el total.");
+        return resultado("Ausencias", detalle, nota.toString());
     }
 
     private SigoToolResult apoyo(SigoToolRequest req) {
@@ -408,21 +436,12 @@ public class SigoReadOnlyQueryJdbcAdapter implements SigoQueryPort {
             filas.add(fila);
         }
 
-        StringBuilder ausSql = new StringBuilder("""
-                SELECT COUNT(*) AS total_ausencias
-                FROM asistencia_ausencia aa
-                JOIN asistencia_registro ar ON ar.id = aa.asistencia_id
-                JOIN plazas p ON p.id = ar.plaza_id
-                JOIN turnos tu ON tu.id = ar.turno_id
-                WHERE 1=1
-                """);
-        List<Object> ausParams = new ArrayList<>();
-        agregarFiltrosAsistencia(ausSql, ausParams, req, "ar", "p", "tu");
-        Map<String, Object> aus = primeraFila(query(ausSql, ausParams));
-        if (!aus.isEmpty()) {
+        // Este indicador debe coincidir con el Dashboard, sin contar filas de detalle.
+        if (!asistencia.isEmpty()) {
             Map<String, Object> fila = new LinkedHashMap<>();
             fila.put("seccion", "AUSENCIAS");
-            fila.putAll(aus);
+            fila.put("total_ausencias", asistencia.getOrDefault("ausentes", 0));
+            fila.put("criterio", "programados menos presentes (igual al Dashboard)");
             filas.add(fila);
         }
 

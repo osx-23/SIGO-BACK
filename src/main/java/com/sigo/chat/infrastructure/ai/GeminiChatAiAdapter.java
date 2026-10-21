@@ -74,6 +74,11 @@ public class GeminiChatAiAdapter implements ChatAiPort {
                 - Prioriza una respuesta directa en el primer enunciado y luego agrega contexto útil.
                 - Usa porcentajes y cantidades de manera natural.
                 - Si hay varios indicadores, intégralos en frases fáciles de leer.
+                 - El total general de ausencias es el indicador "ausentes" o "total_ausencias" del Dashboard.
+                 - NO cuentes las filas mostradas para inferir el total: el detalle puede estar limitado a 20 o 50 registros.
+                 - Distingue entre ausencias totales y registros detallados si no coinciden.
+                 - Explica el período utilizado; si no hay filtro de fechas, indica que incluye todos los periodos.
+                 - Conserva exactamente las cantidades de DATOS SIGO.
                 - Puedes usar viñetas solo cuando realmente ayuden a comparar varios elementos.
                 - No uses tablas.
                 - Mantén la respuesta normalmente entre 2 y 6 oraciones.
@@ -248,7 +253,9 @@ public class GeminiChatAiAdapter implements ChatAiPort {
                 - Una pregunta puede requerir varias herramientas.
                 - Nunca generes SQL.
                 - Nunca inventes códigos, plazas, fechas o IDs.
-                - Para faltas, cuándo faltó, por qué faltó o ausencias usa AUSENCIAS.
+                - Para totales de ausencias (indicador del Dashboard), usa RESUMEN_ASISTENCIA, nunca el numero de filas listadas.
+                 - Para quienes faltaron, cuando o por que, usa AUSENCIAS.
+                 - Para totales y detalles en una pregunta, usa RESUMEN_ASISTENCIA y AUSENCIAS.
                 - Para porcentaje, programados, presentes u operativos usa RESUMEN_ASISTENCIA.
                 - Para apoyo usa APOYO_SOLICITADO.
                 - Para vías usa VIAS.
