@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.DayOfWeek;
 import java.time.YearMonth;
-import java.text.Normalizer;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -100,7 +99,7 @@ public class DistribucionExcelImportService {
         for (CeldaCaseta celda : lectura.celdas()) {
             String texto = normalizar(celda.valor());
             // Una celda realmente vacia NO ordena borrar una asignacion previa.
-            if (texto.isBlank()) continue;
+            if (TextoExcelUtils.esCeldaVacia(texto)) continue;
             String caseta = sinAsignacion(texto) ? null : normalizarCaseta(texto);
             registros.add(new RegistroJson(celda.codigoTrabajador(), celda.fecha(),
                     caseta, sinAsignacion(texto) ? null : celda.turnoExcel()));
@@ -202,7 +201,7 @@ public class DistribucionExcelImportService {
         int leidas = 0;
         for (CeldaCaseta celda : lectura.celdas()) {
             String valor = normalizar(celda.valor());
-            if (valor.isBlank()) continue;
+            if (TextoExcelUtils.esCeldaVacia(valor)) continue;
             leidas++;
             String llave = clave(celda.codigoTrabajador(), celda.fecha());
             String referencia = celda.hoja() + ", fila " + celda.fila() + ": ";
@@ -520,16 +519,12 @@ public class DistribucionExcelImportService {
     }
 
     private static String sinAcentos(String texto) {
-        return Normalizer.normalize(normalizar(texto), Normalizer.Form.NFD)
-                .replaceAll("\\p{M}+", "").replaceAll("\\s+", " ").trim();
+        return TextoExcelUtils.sinAcentos(texto);
     }
 
     // Algunos Excel antiguos escriben AUX1, AUX 1 o AUXILIAR 1.
     private static String normalizarCaseta(String texto) {
-        String limpio = sinAcentos(texto);
-        Matcher auxiliar = Pattern.compile("^AUX(?:ILIAR)?\\s*[- ]?\\s*(\\d+)$")
-                .matcher(limpio);
-        return auxiliar.matches() ? "AUX " + auxiliar.group(1) : limpio;
+        return TextoExcelUtils.normalizarCaseta(texto);
     }
 
     private String valor(Sheet hoja, int fila, int columna, DataFormatter formatter) {
@@ -547,7 +542,7 @@ public class DistribucionExcelImportService {
         if (errores.size() < MAX_ERRORS) errores.add(mensaje);
     }
     private static String normalizar(String texto) {
-        return texto == null ? "" : texto.trim().toUpperCase(Locale.ROOT);
+        return TextoExcelUtils.normalizar(texto);
     }
     private static String clave(int codigo, LocalDate fecha) {
         return codigo + "|" + fecha;
