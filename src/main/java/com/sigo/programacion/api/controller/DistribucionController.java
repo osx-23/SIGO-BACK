@@ -9,6 +9,12 @@ import com.sigo.programacion.api.dto.UbicacionResponse;
 import com.sigo.programacion.application.port.in.DistribucionUseCase;
 import com.sigo.programacion.application.port.in.UbicacionUseCase;
 import com.sigo.programacion.application.port.out.DistribucionReportePdfPort;
+import com.sigo.programacion.application.port.out.DistribucionReporteExcelPort;
+import com.sigo.programacion.infrastructure.report.DistribucionExcelImportService;
+import com.sigo.programacion.infrastructure.report.DistribucionExcelTurnosPreviewService;
+import com.sigo.programacion.infrastructure.report.DistribucionExcelTurnosGuardarService;
+import com.sigo.programacion.infrastructure.report.DistribucionExcelCasetasGuardarService;
+import com.sigo.programacion.domain.ProgramacionValidationException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -16,6 +22,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -29,6 +36,11 @@ public class DistribucionController {
     private final UbicacionUseCase ubicacionUseCase;
     private final DistribucionUseCase distribucionUseCase;
     private final DistribucionReportePdfPort pdfService;
+    private final DistribucionReporteExcelPort excelService;
+    private final DistribucionExcelImportService importExcelService;
+    private final DistribucionExcelTurnosPreviewService importTurnosPreviewService;
+    private final DistribucionExcelTurnosGuardarService guardarTurnosExcel;
+    private final DistribucionExcelCasetasGuardarService guardarCasetasExcel;
 
     @GetMapping("/ubicaciones")
     public List<UbicacionResponse> ubicaciones(
@@ -238,6 +250,126 @@ public class DistribucionController {
                 .body(pdf);
     }
 
+
+    /** Descarga la misma matriz semanal o mensual que el PDF de plaza. */
+    @GetMapping(
+            value = "/reporte-plaza/excel",
+            produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    public ResponseEntity<byte[]> reportePlazaExcel(
+            @RequestParam Long plazaId,
+            @RequestParam LocalDate desde,
+            @RequestParam LocalDate hasta
+    ) {
+        DistribucionUseCase.ReportePlaza reporte =
+                distribucionUseCase.reportePlaza(plazaId, desde, hasta);
+
+        byte[] excel = excelService.generarMatriz(reporte);
+        String archivo = "distribucion-" + reporte.plazaCodigo()
+                + "-" + desde + "-" + hasta + ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + archivo + "\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excel);
+    }
+
+
+    /** Lectura segura: el Excel se valida y previsualiza, pero no modifica la BD. */
+    @PostMapping(value = "/importar-excel/vista-previa", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public DistribucionExcelImportService.VistaPrevia previsualizarExcel(
+            @RequestParam Long plazaId,
+            @RequestParam(required = false) Integer anio,
+            @RequestParam(required = false) Integer mes,
+            @RequestParam("archivo") MultipartFile archivo
+    ) {
+        if (archivo.isEmpty() || archivo.getSize() > 2 * 1024 * 1024
+                || archivo.getOriginalFilename() == null
+                || !archivo.getOriginalFilename().toLowerCase(java.util.Locale.ROOT).endsWith(".xlsx")) {
+            throw new ProgramacionValidationException("Selecciona un Excel .xlsx de máximo 2 MB");
+        }
+        try {
+            return importExcelService.previsualizar(plazaId, archivo.getBytes(), anio, mes);
+        } catch (java.io.IOException ex) {
+            throw new ProgramacionValidationException("No se pudo leer el archivo Excel");
+        }
+    }
+
+    /** Vista previa mensual de turnos + casetas; NO expone acción de guardar. */
+    @PostMapping(value = "/importar-excel/turnos/vista-previa", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public DistribucionExcelTurnosPreviewService.VistaPrevia previsualizarTurnosYCasetas(
+            @RequestParam Long plazaId,
+            @RequestParam Integer anio,
+            @RequestParam Integer mes,
+            @RequestParam("archivo") MultipartFile archivo
+    ) {
+        if (archivo.isEmpty() || archivo.getSize() > 2 * 1024 * 1024
+                || archivo.getOriginalFilename() == null
+                || !archivo.getOriginalFilename().toLowerCase(java.util.Locale.ROOT).endsWith(".xlsx")) {
+            throw new ProgramacionValidationException("Selecciona un Excel .xlsx de máximo 2 MB");
+        }
+        try {
+            return importTurnosPreviewService.previsualizar(plazaId, archivo.getBytes(), anio, mes);
+        } catch (java.io.IOException ex) {
+            throw new ProgramacionValidationException("No se pudo leer el archivo Excel");
+        }
+    }
+
+    /** Apache POI convierte XLSX a JSON; no escribe en PostgreSQL. */
+    @PostMapping(value = "/importar-excel/casetas/extraer", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public DistribucionExcelImportService.ExtraccionJson extraerCasetasJson(
+            @RequestParam Long plazaId,
+            @RequestParam int anio,
+            @RequestParam int mes,
+            @RequestParam("archivo") MultipartFile archivo) {
+        validarArchivoImportacion(archivo);
+        try {
+            return importExcelService.extraerJson(plazaId, archivo.getBytes(), anio, mes);
+        } catch (java.io.IOException ex) {
+            throw new ProgramacionValidationException("No se pudo leer el Excel");
+        }
+    }
+
+    /** POST JSON para validar trabajador, fecha, turno y caseta; no escribe en BD. */
+    @PostMapping(value = "/importar-excel/casetas/vista-previa-json", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public DistribucionExcelImportService.VistaPrevia previsualizarCasetasJson(
+            @RequestBody DistribucionExcelImportService.ExtraccionJson datos) {
+        return importExcelService.previsualizarJson(datos);
+    }
+
+    /** Compatibilidad: el flujo de Excel NO modifica turnos. */
+    @PostMapping(value = "/importar-excel/turnos/confirmar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    public DistribucionExcelTurnosGuardarService.Resultado confirmarTurnosExcel(
+            @RequestParam Long plazaId,
+            @RequestParam Integer anio,
+            @RequestParam Integer mes,
+            @RequestParam("archivo") MultipartFile archivo) {
+        throw new ProgramacionValidationException(
+                "El importador de casetas no modifica turnos. Usa Programar turnos.");
+    }
+
+    /** Compatibilidad: guardar solo mediante el borrador y Guardar cambios. */
+    @PostMapping(value = "/importar-excel/casetas/confirmar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    public DistribucionExcelCasetasGuardarService.Resultado confirmarCasetasExcel(
+            @RequestParam Long plazaId,
+            @RequestParam Integer anio,
+            @RequestParam Integer mes,
+            @RequestParam("archivo") MultipartFile archivo) {
+        throw new ProgramacionValidationException(
+                "Revisa el Excel, aplica las casetas a la tabla y pulsa Guardar cambios.");
+    }
+
+    private static void validarArchivoImportacion(MultipartFile archivo) {
+        if (archivo.isEmpty() || archivo.getSize() > 2 * 1024 * 1024
+                || archivo.getOriginalFilename() == null
+                || !archivo.getOriginalFilename().toLowerCase(java.util.Locale.ROOT).endsWith(".xlsx")) {
+            throw new ProgramacionValidationException("Selecciona un Excel .xlsx de máximo 2 MB");
+        }
+    }
 
     @GetMapping("/cobertura")
     public List<CoberturaUbicacionResponse> cobertura(
