@@ -202,8 +202,15 @@ public class TurnoGestionJpaAdapter
                 paraGuardar.add(programacion);
             }
 
+            EstadoProgramacion nuevoEstado = parseEstado(item.estado());
+            // Descanso/DM/V/COM/LIC nunca pueden conservar una caseta anterior.
+            // Se limpia dentro de la MISMA transaccion que cambia el turno.
+            if (!nuevoEstado.esOperativo() && programacion.getId() != null) {
+                distribucionRepository.findByProgramacionTurnoId(programacion.getId())
+                        .ifPresent(distribucionRepository::delete);
+            }
             programacion.setPlaza(plaza);
-            programacion.setEstado(parseEstado(item.estado()));
+            programacion.setEstado(nuevoEstado);
             programacion.setActualizadoPor(supervisor);
         }
 

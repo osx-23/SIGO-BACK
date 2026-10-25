@@ -4,6 +4,7 @@ import com.sigo.inventario.application.port.in.InventarioStockUseCase;
 import com.sigo.inventario.infrastructure.persistence.entity.EstadoInventario;
 import com.sigo.inventario.infrastructure.persistence.entity.InventarioConteo;
 import com.sigo.inventario.infrastructure.persistence.entity.InventarioConteoDetalle;
+import com.sigo.inventario.infrastructure.persistence.entity.InventarioCategoria;
 import com.sigo.inventario.infrastructure.persistence.entity.InventarioProducto;
 import com.sigo.inventario.infrastructure.persistence.entity.InventarioProductoPlaza;
 import com.sigo.inventario.infrastructure.persistence.entity.InventarioRol;
@@ -124,10 +125,15 @@ class InventarioStockRepositoryIT {
                 )
         );
 
+        InventarioCategoria categoria = entityManager.persistAndFlush(
+                new InventarioCategoria(null, "Seguridad", "Equipo de seguridad", true)
+        );
+
         producto = new InventarioProducto();
         producto.setCodigo("CONO-STOCK");
         producto.setNombre("Cono Stock");
         producto.setUnidadMedida("UND");
+        producto.setCategoria(categoria);
         producto.setActivo(true);
         producto = entityManager.persistAndFlush(
                 producto
@@ -208,6 +214,7 @@ class InventarioStockRepositoryIT {
 
         assertEquals(plaza.getId(), item.plazaId());
         assertEquals(producto.getId(), item.productoId());
+        assertEquals(producto.getCategoria().getId(), item.categoriaId());
         assertEquals(
                 new BigDecimal("7.00"),
                 item.cantidadActual()

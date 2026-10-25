@@ -367,6 +367,17 @@ public class SecurityConfig {
                                 "CONTROLADOR"
                         )
 
+                        // El catálogo de categorías es de solo lectura para quien consulta stock.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/inventario/catalogos/categorias"
+                        )
+                        .hasAnyRole(
+                                "SUPERVISOR",
+                                "CONTROLADOR",
+                                "OPERADOR"
+                        )
+
                         .requestMatchers(
                                 "/api/inventario/catalogos/**"
                         )
