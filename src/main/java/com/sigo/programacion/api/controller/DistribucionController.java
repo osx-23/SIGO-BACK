@@ -335,30 +335,6 @@ public class DistribucionController {
         return importExcelService.previsualizarJson(datos);
     }
 
-    /** Compatibilidad: el flujo de Excel NO modifica turnos. */
-    @PostMapping(value = "/importar-excel/turnos/confirmar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('SUPERVISOR')")
-    public void confirmarTurnosExcel(
-            @RequestParam Long plazaId,
-            @RequestParam Integer anio,
-            @RequestParam Integer mes,
-            @RequestParam("archivo") MultipartFile archivo) {
-        throw new ProgramacionValidationException(
-                "El importador de casetas no modifica turnos. Usa Programar turnos.");
-    }
-
-    /** Compatibilidad: guardar solo mediante el borrador y Guardar cambios. */
-    @PostMapping(value = "/importar-excel/casetas/confirmar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('SUPERVISOR')")
-    public void confirmarCasetasExcel(
-            @RequestParam Long plazaId,
-            @RequestParam Integer anio,
-            @RequestParam Integer mes,
-            @RequestParam("archivo") MultipartFile archivo) {
-        throw new ProgramacionValidationException(
-                "Revisa el Excel, aplica las casetas a la tabla y pulsa Guardar cambios.");
-    }
-
     private static void validarArchivoImportacion(MultipartFile archivo) {
         if (archivo.isEmpty() || archivo.getSize() > 2 * 1024 * 1024
                 || archivo.getOriginalFilename() == null
