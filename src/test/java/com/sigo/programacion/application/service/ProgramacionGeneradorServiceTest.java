@@ -29,6 +29,56 @@ class ProgramacionGeneradorServiceTest {
             new GeneradorPlaza(4L, "P4");
 
     @Test
+    void completarPendientesRespetaGuardadosYCalculaCoberturaConEllos() {
+        GeneradorTrabajador trabajador = trabajador(10L, 1001, "Agente FT");
+        LocalDate diaGuardado = LocalDate.of(2026, 9, 1);
+        StubDataPort data = new StubDataPort(
+                List.of(trabajador),
+                List.of(new GeneradorSecuencia(
+                        trabajador, PLAZA, ProgramacionGrupo.SECUENCIA_1, 1)),
+                List.of(),
+                List.of(turno(trabajador, "2026-09-01", ProgramacionEstado.B))
+        );
+        var solicitudBase = request(2026, 9,
+                new GenerarProgramacionUseCase.CoberturaTurnosRequest(1, 1, 1),
+                List.of());
+        var solicitud = new GenerarProgramacionUseCase.GenerarProgramacionRequest(
+                solicitudBase.plazaId(), solicitudBase.anio(), solicitudBase.mes(),
+                solicitudBase.coberturaNormal(), solicitudBase.coberturaDomingo(),
+                solicitudBase.diasEspeciales(), solicitudBase.novedades(), true);
+
+        var resultado = service(data).generar(solicitud);
+
+        assertFalse(resultado.guardado());
+        assertFalse(resultado.agentes().isEmpty());
+        assertTrue(resultado.agentes().get(0).dias().stream()
+                .noneMatch(d -> d.fecha().equals(diaGuardado)));
+        assertEquals(ProgramacionEstado.B,
+                data.historial.get(0).estado());
+        var primerDia = resultado.cobertura().stream()
+                .filter(d -> d.fecha().equals(diaGuardado))
+                .findFirst().orElseThrow();
+        assertEquals(1, primerDia.asignadoB());
+    }
+
+    @Test
+    void modoMesCompletoConservaSuComportamiento() {
+        GeneradorTrabajador trabajador = trabajador(10L, 1001, "Agente FT");
+        StubDataPort data = new StubDataPort(
+                List.of(trabajador),
+                List.of(new GeneradorSecuencia(
+                        trabajador, PLAZA, ProgramacionGrupo.SECUENCIA_1, 1)),
+                List.of(),
+                List.of(turno(trabajador, "2026-09-01", ProgramacionEstado.B))
+        );
+        var resultado = service(data).generar(request(2026, 9,
+                new GenerarProgramacionUseCase.CoberturaTurnosRequest(1, 1, 1),
+                List.of()));
+        assertEquals(YearMonth.of(2026, 9).lengthOfMonth(),
+                resultado.agentes().get(0).dias().size());
+    }
+
+    @Test
     void generaCicloFullTimeSeisTrabajoDosDescanso() {
         GeneradorTrabajador trabajador =
                 trabajador(10L, 1001, "Agente FT");

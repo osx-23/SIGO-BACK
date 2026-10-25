@@ -513,6 +513,13 @@ public class ProgramacionGeneradorService implements GenerarProgramacionUseCase 
                 conflictos
         );
 
+        if (request.completarPendientes()) {
+            // Los turnos guardados son puntos fijos: ni el ciclo 6x2
+            // ni la cobertura pueden tratarlos como celdas vacías.
+            conservarTurnosExistentes(
+                    propuesta, historicoPorAgente, inicio, fin);
+        }
+
         validarProteccionSemanalSinC(
                 fullTime,
                 inicio,
@@ -594,6 +601,13 @@ public class ProgramacionGeneradorService implements GenerarProgramacionUseCase 
                         novedades
                 );
 
+        if (request.completarPendientes()) {
+            // La respuesta contiene solo celdas NO guardadas. La cobertura
+            // anterior ya cuenta tanto los turnos fijos como los nuevos.
+            respuestaAgentes = soloDiasPendientes(
+                    respuestaAgentes, historicoPorAgente, inicio, fin);
+        }
+
         return new ProgramacionPropuestaResponse(
                 plaza.getId(),
                 String.valueOf(plaza.getCodigo()),
@@ -604,6 +618,51 @@ public class ProgramacionGeneradorService implements GenerarProgramacionUseCase 
                 cobertura,
                 conflictos
         );
+    }
+
+    /**
+     * Completar pendientes no puede modificar un turno ya confirmado.
+     * El histórico incluye los días del mes actual; lo usamos de ancla
+     * después de construir el ciclo mensual completo.
+     */
+    static void conservarTurnosExistentes(
+            Map<Long, Map<LocalDate, ProgramacionEstado>> propuesta,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
+            LocalDate inicio, LocalDate fin
+    ) {
+        for (Map.Entry<Long, Map<LocalDate, ProgramacionEstado>> agente :
+                propuesta.entrySet()) {
+            for (Map.Entry<LocalDate, ProgramacionEstado> guardado :
+                    historico.getOrDefault(agente.getKey(), Map.of()).entrySet()) {
+                if (!guardado.getKey().isBefore(inicio)
+                        && !guardado.getKey().isAfter(fin)
+                        && guardado.getValue() != null) {
+                    agente.getValue().put(guardado.getKey(), guardado.getValue());
+                }
+            }
+        }
+    }
+
+    /** No se ofrecen cambios sobre los días ya programados. */
+    static List<ProgramacionAgentePropuesta> soloDiasPendientes(
+            List<ProgramacionAgentePropuesta> agentes,
+            Map<Long, Map<LocalDate, ProgramacionEstado>> historico,
+            LocalDate inicio, LocalDate fin
+    ) {
+        return agentes.stream()
+                .map(agente -> {
+                    Map<LocalDate, ProgramacionEstado> guardados =
+                            historico.getOrDefault(agente.trabajadorId(), Map.of());
+                    List<ProgramacionDiaPropuesta> dias = agente.dias().stream()
+                            .filter(dia -> !dia.fecha().isBefore(inicio)
+                                    && !dia.fecha().isAfter(fin))
+                            .filter(dia -> !guardados.containsKey(dia.fecha()))
+                            .toList();
+                    return new ProgramacionAgentePropuesta(
+                            agente.trabajadorId(), agente.codigo(), agente.nombre(),
+                            agente.grupo(), agente.orden(), agente.partTime(), dias);
+                })
+                .toList();
     }
 
     // ============================================================
