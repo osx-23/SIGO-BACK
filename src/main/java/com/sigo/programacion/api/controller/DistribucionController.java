@@ -7,13 +7,11 @@ import com.sigo.programacion.api.dto.GuardarUbicacionRequest;
 import com.sigo.programacion.api.dto.ResumenTrabajadorResponse;
 import com.sigo.programacion.api.dto.UbicacionResponse;
 import com.sigo.programacion.application.port.in.DistribucionUseCase;
+import com.sigo.programacion.application.port.in.DistribucionExcelImportUseCase;
+import com.sigo.programacion.application.port.in.DistribucionExcelTurnosPreviewUseCase;
 import com.sigo.programacion.application.port.in.UbicacionUseCase;
 import com.sigo.programacion.application.port.out.DistribucionReportePdfPort;
 import com.sigo.programacion.application.port.out.DistribucionReporteExcelPort;
-import com.sigo.programacion.infrastructure.report.DistribucionExcelImportService;
-import com.sigo.programacion.infrastructure.report.DistribucionExcelTurnosPreviewService;
-import com.sigo.programacion.infrastructure.report.DistribucionExcelTurnosGuardarService;
-import com.sigo.programacion.infrastructure.report.DistribucionExcelCasetasGuardarService;
 import com.sigo.programacion.domain.ProgramacionValidationException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -37,10 +35,8 @@ public class DistribucionController {
     private final DistribucionUseCase distribucionUseCase;
     private final DistribucionReportePdfPort pdfService;
     private final DistribucionReporteExcelPort excelService;
-    private final DistribucionExcelImportService importExcelService;
-    private final DistribucionExcelTurnosPreviewService importTurnosPreviewService;
-    private final DistribucionExcelTurnosGuardarService guardarTurnosExcel;
-    private final DistribucionExcelCasetasGuardarService guardarCasetasExcel;
+    private final DistribucionExcelImportUseCase importExcelService;
+    private final DistribucionExcelTurnosPreviewUseCase importTurnosPreviewService;
 
     @GetMapping("/ubicaciones")
     public List<UbicacionResponse> ubicaciones(
@@ -279,7 +275,7 @@ public class DistribucionController {
 
     /** Lectura segura: el Excel se valida y previsualiza, pero no modifica la BD. */
     @PostMapping(value = "/importar-excel/vista-previa", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public DistribucionExcelImportService.VistaPrevia previsualizarExcel(
+    public DistribucionExcelImportUseCase.VistaPrevia previsualizarExcel(
             @RequestParam Long plazaId,
             @RequestParam(required = false) Integer anio,
             @RequestParam(required = false) Integer mes,
@@ -299,7 +295,7 @@ public class DistribucionController {
 
     /** Vista previa mensual de turnos + casetas; NO expone acción de guardar. */
     @PostMapping(value = "/importar-excel/turnos/vista-previa", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public DistribucionExcelTurnosPreviewService.VistaPrevia previsualizarTurnosYCasetas(
+    public DistribucionExcelTurnosPreviewUseCase.VistaPrevia previsualizarTurnosYCasetas(
             @RequestParam Long plazaId,
             @RequestParam Integer anio,
             @RequestParam Integer mes,
@@ -319,7 +315,7 @@ public class DistribucionController {
 
     /** Apache POI convierte XLSX a JSON; no escribe en PostgreSQL. */
     @PostMapping(value = "/importar-excel/casetas/extraer", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public DistribucionExcelImportService.ExtraccionJson extraerCasetasJson(
+    public DistribucionExcelImportUseCase.ExtraccionJson extraerCasetasJson(
             @RequestParam Long plazaId,
             @RequestParam int anio,
             @RequestParam int mes,
@@ -334,15 +330,15 @@ public class DistribucionController {
 
     /** POST JSON para validar trabajador, fecha, turno y caseta; no escribe en BD. */
     @PostMapping(value = "/importar-excel/casetas/vista-previa-json", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public DistribucionExcelImportService.VistaPrevia previsualizarCasetasJson(
-            @RequestBody DistribucionExcelImportService.ExtraccionJson datos) {
+    public DistribucionExcelImportUseCase.VistaPrevia previsualizarCasetasJson(
+            @RequestBody DistribucionExcelImportUseCase.ExtraccionJson datos) {
         return importExcelService.previsualizarJson(datos);
     }
 
     /** Compatibilidad: el flujo de Excel NO modifica turnos. */
     @PostMapping(value = "/importar-excel/turnos/confirmar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('SUPERVISOR')")
-    public DistribucionExcelTurnosGuardarService.Resultado confirmarTurnosExcel(
+    public void confirmarTurnosExcel(
             @RequestParam Long plazaId,
             @RequestParam Integer anio,
             @RequestParam Integer mes,
@@ -354,7 +350,7 @@ public class DistribucionController {
     /** Compatibilidad: guardar solo mediante el borrador y Guardar cambios. */
     @PostMapping(value = "/importar-excel/casetas/confirmar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('SUPERVISOR')")
-    public DistribucionExcelCasetasGuardarService.Resultado confirmarCasetasExcel(
+    public void confirmarCasetasExcel(
             @RequestParam Long plazaId,
             @RequestParam Integer anio,
             @RequestParam Integer mes,

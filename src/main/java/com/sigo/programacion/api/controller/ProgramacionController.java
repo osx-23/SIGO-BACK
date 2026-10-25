@@ -22,7 +22,7 @@ import com.sigo.personal.api.dto.TrabajadorPublicResponse;
 import com.sigo.personal.application.port.in.TrabajadorUseCase;
 import com.sigo.programacion.application.port.in.AgenteProgramacionExcepcionUseCase;
 
-import com.sigo.programacion.infrastructure.report.ProgramacionExcelTextoService;
+import com.sigo.programacion.application.port.in.ProgramacionExcelTextoUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -64,7 +64,7 @@ public class ProgramacionController {
     private final TrabajadorUseCase trabajadorUseCase;
 
     // SIGO_IMPORTAR_TURNOS_TEXTO_V1
-    private final ProgramacionExcelTextoService programacionExcelTextoService;
+    private final ProgramacionExcelTextoUseCase programacionExcelTextoService;
 
     private final AgenteProgramacionExcepcionUseCase excepcionUseCase;
 
@@ -210,7 +210,7 @@ public class ProgramacionController {
     /** SIGO_IMPORTAR_TURNOS_TEXTO_V1: vista previa de A/B/C/D/V/COM/DM/LIC/-. */
     @PostMapping(value = "/turnos/importar-excel/vista-previa", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('SUPERVISOR')")
-    public ProgramacionExcelTextoService.VistaPrevia previsualizarTurnosTexto(
+    public ProgramacionExcelTextoUseCase.VistaPrevia previsualizarTurnosTexto(
             @RequestParam Long plazaId,
             @RequestParam int anio,
             @RequestParam int mes,
