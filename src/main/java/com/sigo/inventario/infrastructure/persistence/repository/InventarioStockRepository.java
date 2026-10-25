@@ -25,7 +25,8 @@ public class InventarioStockRepository implements InventarioStockQueryPort {
       FROM v_inventario_stock_actual s
       JOIN inventario_producto pr ON pr.id=s.producto_id
       LEFT JOIN inventario_producto_plaza pp ON pp.producto_id=s.producto_id AND pp.plaza_id=s.plaza_id
-      WHERE (:plazaId IS NULL OR s.plaza_id=:plazaId)
+      WHERE pr.activo = TRUE
+        AND (:plazaId IS NULL OR s.plaza_id=:plazaId)
         AND (:texto IS NULL OR LOWER(s.producto) LIKE LOWER(CONCAT('%',CAST(:texto AS TEXT),'%'))
             OR LOWER(pr.codigo) LIKE LOWER(CONCAT('%',CAST(:texto AS TEXT),'%')))
       ORDER BY s.plaza,s.producto

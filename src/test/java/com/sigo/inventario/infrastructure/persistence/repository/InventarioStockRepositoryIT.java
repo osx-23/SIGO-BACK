@@ -226,6 +226,17 @@ class InventarioStockRepositoryIT {
     }
 
     @Test
+    void noMuestraMaterialInactivoAunqueTengaStockRegistrado() {
+        producto.setActivo(false);
+        entityManager.persistAndFlush(producto);
+
+        // Los inventarios históricos se conservan, pero el stock actual
+        // no debe listar productos desactivados, con o sin filtros.
+        assertTrue(repository.buscar(plaza.getId(), null).isEmpty());
+        assertTrue(repository.buscar(null, "CONO-STOCK").isEmpty());
+    }
+
+    @Test
     void filtroPorTextoNoDevuelveProductosQueNoCoinciden() {
         assertTrue(
                 repository.buscar(
