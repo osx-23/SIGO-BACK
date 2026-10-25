@@ -10,7 +10,7 @@ import com.sigo.programacion.application.port.in.ListarSecuenciasUseCase;
 import com.sigo.programacion.application.port.in.ListarTurnosUseCase;
 import com.sigo.programacion.application.port.in.MiHorarioUseCase;
 import com.sigo.programacion.application.port.in.AgenteProgramacionExcepcionUseCase;
-import com.sigo.programacion.infrastructure.report.ProgramacionExcelTextoService;
+import com.sigo.programacion.application.port.in.ProgramacionExcelTextoUseCase;
 import com.sigo.personal.application.port.in.TrabajadorUseCase;
 import com.sigo.security.infrastructure.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
@@ -88,7 +88,7 @@ class ProgramacionApiAuthorizationIT {
 
     // Dependencia de lectura/importación Excel agregada al controlador.
     @MockBean
-    private ProgramacionExcelTextoService programacionExcelTextoService;
+    private ProgramacionExcelTextoUseCase programacionExcelTextoService;
 
     @Test
     void anonimoNoPuedeConsultarMiHorario() throws Exception {
