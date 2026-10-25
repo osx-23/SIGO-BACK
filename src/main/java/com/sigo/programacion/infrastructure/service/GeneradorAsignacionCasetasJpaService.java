@@ -384,7 +384,10 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         // Las asignaciones guardadas son definitivas para esta generación.
         // Solo calculamos propuestas para turnos operativos que todavía no
         // tienen caseta, sin reoptimizar ni reescribir los ya distribuidos.
-        turnos = turnosSinCaseta(turnos, existentesMes);
+        List<ProgramacionTurno> pendientesSinCaseta =
+                turnosSinCaseta(turnos, existentesMes);
+        turnos.clear();
+        turnos.addAll(pendientesSinCaseta);
         if (turnos.isEmpty()) {
             return new Propuesta(
                     plazaId, anio, mes, periodo, semana, desde, hasta,
