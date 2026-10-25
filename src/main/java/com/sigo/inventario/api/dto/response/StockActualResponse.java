@@ -4,4 +4,4 @@ import java.time.OffsetDateTime;
 public record StockActualResponse(
   Long plazaId,String plaza,Long productoId,String codigo,String producto,String unidadMedida,
   BigDecimal cantidadActual,Integer stockMinimo,boolean bajoMinimo,
-  Long inventarioId,OffsetDateTime actualizadoEn){}
+  Long inventarioId,OffsetDateTime actualizadoEn,Long categoriaId){}

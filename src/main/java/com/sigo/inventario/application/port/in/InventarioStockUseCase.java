@@ -25,7 +25,8 @@ public interface InventarioStockUseCase {
             Integer stockMinimo,
             boolean bajoMinimo,
             Long inventarioId,
-            OffsetDateTime actualizadoEn
+            OffsetDateTime actualizadoEn,
+            Long categoriaId
     ) {
     }
 }
