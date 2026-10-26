@@ -95,26 +95,21 @@ public class InventarioPedidosController {
             SELECT s."productoId", s."codigo", s."producto", s."unidadMedida",
                    s."stockActual", s."stockMinimo", s."stockVerificado",
                    s."stockOrigen",
-                   COALESCE(h.promedio, ref.consumo_reportado) AS "promedioMensual",
+                   h.promedio AS "promedioMensual",
                    CASE
-                     WHEN CAST(:mes AS DATE) >= DATE '2026-09-01'
-                       AND ref.cantidad_solicitada IS NOT NULL
-                       THEN ref.cantidad_solicitada
-                     WHEN h.promedio IS NOT NULL AND s."stockVerificado"
-                       THEN GREATEST(0,CEIL(h.promedio-s."stockActual"))
+                     WHEN op.id IS NOT NULL THEN COALESCE(opd.cantidad_solicitada,0)
+                     WHEN historico.id IS NOT NULL THEN COALESCE(hd.cantidad_solicitada,0)
                      ELSE NULL
                    END AS "sugerido",
-                   (h.promedio IS NOT NULL OR ref.consumo_reportado IS NOT NULL) AS "conHistorico",
+                   (h.promedio IS NOT NULL) AS "conHistorico",
                    CASE WHEN h.promedio IS NOT NULL THEN 'CONTEOS'
-                        WHEN ref.consumo_reportado IS NOT NULL THEN 'EXCEL_SEPTIEMBRE'
                         ELSE 'SIN_DATOS' END AS "fuenteConsumo",
-                   CASE WHEN CAST(:mes AS DATE)>=DATE '2026-09-01'
-                             AND ref.cantidad_solicitada IS NOT NULL
-                          THEN 'SOLICITUD_SEPTIEMBRE'
-                        WHEN h.promedio IS NOT NULL AND s."stockVerificado" THEN 'CONSUMO_CALCULADO'
+                   CASE WHEN op.id IS NOT NULL THEN 'PEDIDO_MES_ANTERIOR'
+                        WHEN historico.id IS NOT NULL THEN 'PEDIDO_HISTORICO_MES_ANTERIOR'
                         ELSE 'SIN_DATOS' END AS "fuenteSugerencia",
-                   CASE WHEN ref.producto_id IS NULL THEN NULL
-                        ELSE TO_CHAR(ref.periodo,'YYYY-MM') END AS "periodoReferencia"
+                   CASE WHEN op.id IS NOT NULL OR historico.id IS NOT NULL
+                        THEN TO_CHAR(CAST(:mes AS DATE)-INTERVAL '1 month','YYYY-MM')
+                        ELSE NULL END AS "periodoReferencia"
             FROM (
               SELECT v.producto_id AS "productoId",
                      v.producto, pr.codigo AS "codigo", v.unidad_medida AS "unidadMedida",
@@ -137,10 +132,21 @@ public class InventarioPedidosController {
                 AND periodo<CAST(:mes AS DATE)
               GROUP BY producto_id
             ) h ON h.producto_id=s."productoId"
-            LEFT JOIN inventario_referencia_mensual ref
-              ON ref.producto_id=s."productoId"
-             AND ref.plaza_id=:plaza
-             AND ref.periodo=DATE '2026-09-01'
+            -- Solo el pedido del mes inmediatamente anterior: operativo enviado
+            -- o historial importado. Los borradores/rechazados no sustituyen al historial.
+            LEFT JOIN inventario_pedido op
+              ON op.plaza_id=:plaza
+             AND op.periodo=(CAST(:mes AS DATE)-INTERVAL '1 month')::date
+             AND op.estado NOT IN ('BORRADOR','RECHAZADO')
+            LEFT JOIN inventario_pedido_detalle opd
+              ON opd.pedido_id=op.id AND opd.producto_id=s."productoId"
+            LEFT JOIN inventario_pedido_historico historico
+              ON historico.plaza_id=:plaza
+             AND historico.periodo=(CAST(:mes AS DATE)-INTERVAL '1 month')::date
+             AND op.id IS NULL
+            LEFT JOIN inventario_pedido_historico_detalle hd
+              ON hd.pedido_historico_id=historico.id
+             AND hd.producto_id=s."productoId"
             ORDER BY s."producto"
             """, parametros("plaza",plaza,"mes",mes));
     }

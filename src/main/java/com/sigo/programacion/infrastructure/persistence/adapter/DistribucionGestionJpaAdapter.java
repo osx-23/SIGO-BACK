@@ -172,12 +172,6 @@ public class DistribucionGestionJpaAdapter
                 );
             }
 
-            if (!programacion.getEstado().esOperativo()) {
-                throw bad(
-                        "Solo los estados A, B o C pueden tener caseta"
-                );
-            }
-
             if (item.ubicacionId() == null) {
                 /*
                  * Una ubicación nula representa explícitamente
@@ -185,6 +179,10 @@ public class DistribucionGestionJpaAdapter
                  * asignación histórica sin crear una nueva.
                  */
                 continue;
+            }
+
+            if (item.ubicacionId() != null && !programacion.getEstado().esOperativo()) {
+                throw bad("Solo los estados A, B o C pueden tener caseta");
             }
 
             if (!agenteIds.contains(

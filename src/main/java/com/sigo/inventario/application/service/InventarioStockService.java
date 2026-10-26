@@ -25,16 +25,21 @@ public class InventarioStockService
     ) {
         Long filtro = plazaId;
 
-        if (!"SUPERVISOR".equalsIgnoreCase(
-                usuario.rolCodigo()
-        )) {
+        // La consulta de stock es de solo lectura: supervisores y
+        // controladores pueden comparar existencias entre plazas.
+        // Las operaciones de escritura mantienen sus propias restricciones.
+        boolean supervisor = "SUPERVISOR".equalsIgnoreCase(usuario.rolCodigo());
+        boolean controlador = "CONTROLADOR".equalsIgnoreCase(usuario.rolCodigo());
+
+        if (controlador) {
+            auth.exigirPlazaAsignada(usuario);
+        }
+
+        if (!supervisor && !controlador) {
             auth.exigirPlazaAsignada(usuario);
 
             if (plazaId != null) {
-                auth.exigirPuedeConsultarPlaza(
-                        usuario,
-                        plazaId
-                );
+                auth.exigirPuedeConsultarPlaza(usuario, plazaId);
             }
 
             filtro = usuario.plazaId();

@@ -21,11 +21,12 @@ public class InventarioStockRepository implements InventarioStockQueryPort {
       SELECT s.plaza_id,s.plaza,s.producto_id,pr.codigo,s.producto,s.unidad_medida,s.cantidad_actual,
              COALESCE(pp.stock_minimo,0) stock_minimo,
              (s.cantidad_actual < COALESCE(pp.stock_minimo,0)) bajo_minimo,
-             s.inventario_id,s.actualizado_en
+             s.inventario_id,s.actualizado_en,pr.categoria_id
       FROM v_inventario_stock_actual s
       JOIN inventario_producto pr ON pr.id=s.producto_id
       LEFT JOIN inventario_producto_plaza pp ON pp.producto_id=s.producto_id AND pp.plaza_id=s.plaza_id
-      WHERE (:plazaId IS NULL OR s.plaza_id=:plazaId)
+      WHERE pr.activo = TRUE
+        AND (:plazaId IS NULL OR s.plaza_id=:plazaId)
         AND (:texto IS NULL OR LOWER(s.producto) LIKE LOWER(CONCAT('%',CAST(:texto AS TEXT),'%'))
             OR LOWER(pr.codigo) LIKE LOWER(CONCAT('%',CAST(:texto AS TEXT),'%')))
       ORDER BY s.plaza,s.producto
@@ -40,6 +41,7 @@ public class InventarioStockRepository implements InventarioStockQueryPort {
       rs.getLong("plaza_id"), rs.getString("plaza"), rs.getLong("producto_id"), rs.getString("codigo"), rs.getString("producto"),
       rs.getString("unidad_medida"), rs.getBigDecimal("cantidad_actual"), rs.getInt("stock_minimo"),
       rs.getBoolean("bajo_minimo"), rs.getLong("inventario_id"),
-      rs.getObject("actualizado_en", java.time.OffsetDateTime.class)));
+      rs.getObject("actualizado_en", java.time.OffsetDateTime.class),
+      rs.getObject("categoria_id", Long.class)));
   }
 }

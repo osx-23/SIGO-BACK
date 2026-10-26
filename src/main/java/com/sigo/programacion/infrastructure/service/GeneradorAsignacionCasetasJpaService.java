@@ -374,17 +374,27 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             );
         }
 
-        Set<Long> turnosObjetivo =
-                turnos.stream()
-                        .map(ProgramacionTurno::getId)
-                        .collect(Collectors.toSet());
-
         List<DistribucionPersonal> existentesMes =
                 distribucionRepository.findMes(
                         plazaId,
                         ym.atDay(1),
                         ym.atEndOfMonth()
                 );
+
+        // Las asignaciones guardadas son definitivas para esta generación.
+        // Solo calculamos propuestas para turnos operativos que todavía no
+        // tienen caseta, sin reoptimizar ni reescribir los ya distribuidos.
+        List<ProgramacionTurno> pendientesSinCaseta =
+                turnosSinCaseta(turnos, existentesMes);
+        turnos.clear();
+        turnos.addAll(pendientesSinCaseta);
+        if (turnos.isEmpty()) {
+            return new Propuesta(
+                    plazaId, anio, mes, periodo, semana, desde, hasta,
+                    List.of(), List.of(),
+                    new Calidad(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+            );
+        }
 
         Map<String, Integer> conteoMes = new HashMap<>();
         Map<String, Integer> conteoSemana = new HashMap<>();
@@ -394,10 +404,6 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
 
         for (DistribucionPersonal existente : existentesMes) {
             ProgramacionTurno turno = existente.getProgramacionTurno();
-
-            if (turnosObjetivo.contains(turno.getId())) {
-                continue;
-            }
 
             Long trabajadorId = turno.getTrabajador().getId();
             Long ubicacionId = existente.getUbicacion().getId();
@@ -3141,12 +3147,15 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                         )
                         .count();
 
-        int maxOverflowTurno =
-                Math.max(
-                        0,
-                        grupoTurno.size()
-                                - casetasHabilitadasTurno
-                );
+        Set<Long> reservadas = casetasOcupadasEnGrupo(
+                grupoTurno, estado.asignacionPorDiaTurnoAgente);
+        long habilitadasReservadas = ubicaciones.stream()
+                .filter(item -> reservadas.contains(item.getId())
+                        && permiteTurno(item, grupoTurno.get(0).getEstado()))
+                .count();
+        int maxOverflowTurno = Math.max(0,
+                grupoTurno.size() -
+                        Math.max(0, casetasHabilitadasTurno - (int) habilitadasReservadas));
 
         List<ResultadoGrupoBacktracking> variantes =
                 generarVariantesGrupo(
@@ -3648,7 +3657,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         backtrackingGrupo(
                 pendientes,
                 new HashMap<>(),
-                new HashSet<>(),
+                casetasOcupadasEnGrupo(grupoTurno, asignacionPorDiaTurnoAgente),
                 0,
                 trabajadoresPrioritarios,
                 ubicaciones,
@@ -3697,7 +3706,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 new HashMap<>();
 
         Set<Long> ocupadas =
-                new HashSet<>();
+                casetasOcupadasEnGrupo(grupoTurno, asignacionPorDiaTurnoAgente);
 
         int puntaje =
                 0;
@@ -5490,6 +5499,38 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 + fecha
                 + "|"
                 + turno.name();
+    }
+
+    /** Solo los turnos sin caseta son candidatos a una nueva propuesta. */
+    static List<ProgramacionTurno> turnosSinCaseta(
+            List<ProgramacionTurno> turnos,
+            List<DistribucionPersonal> existentes
+    ) {
+        Set<Long> yaAsignados = existentes.stream()
+                .map(item -> item.getProgramacionTurno().getId())
+                .collect(Collectors.toSet());
+        return turnos.stream()
+                .filter(item -> !yaAsignados.contains(item.getId()))
+                .toList();
+    }
+
+    /**
+     * Casetas de otros agentes que ya están ocupadas en el mismo día/turno.
+     * El generador no debe proponerlas para nuevas asignaciones.
+     */
+    static Set<Long> casetasOcupadasEnGrupo(
+            List<ProgramacionTurno> grupoTurno,
+            Map<String, Long> asignacionesExistentes
+    ) {
+        if (grupoTurno.isEmpty()) {
+            return new HashSet<>();
+        }
+        ProgramacionTurno primero = grupoTurno.get(0);
+        String sufijo = "|" + primero.getFecha() + "|" + primero.getEstado().name();
+        return asignacionesExistentes.entrySet().stream()
+                .filter(item -> item.getKey().endsWith(sufijo))
+                .map(Map.Entry::getValue)
+                .collect(Collectors.toCollection(HashSet::new));
     }
 
     private record Candidate(

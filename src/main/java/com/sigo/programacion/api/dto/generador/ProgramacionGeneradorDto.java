@@ -64,7 +64,8 @@ public final class ProgramacionGeneradorDto {
 
             List<@Valid DiaEspecialRequest> diasEspeciales,
 
-            List<@Valid NovedadProgramacionRequest> novedades
+            List<@Valid NovedadProgramacionRequest> novedades,
+            boolean completarPendientes
     ) {
     }
 

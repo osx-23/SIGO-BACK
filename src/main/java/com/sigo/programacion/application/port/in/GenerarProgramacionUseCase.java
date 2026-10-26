@@ -43,8 +43,20 @@ public interface GenerarProgramacionUseCase {
             CoberturaTurnosRequest coberturaNormal,
             CoberturaTurnosRequest coberturaDomingo,
             List<DiaEspecialRequest> diasEspeciales,
-            List<NovedadProgramacionRequest> novedades
+            List<NovedadProgramacionRequest> novedades,
+            boolean completarPendientes
     ) {
+        /** Mantiene el contrato previo para clientes y pruebas existentes. */
+        public GenerarProgramacionRequest(
+                Long plazaId, int anio, int mes,
+                CoberturaTurnosRequest coberturaNormal,
+                CoberturaTurnosRequest coberturaDomingo,
+                List<DiaEspecialRequest> diasEspeciales,
+                List<NovedadProgramacionRequest> novedades
+        ) {
+            this(plazaId, anio, mes, coberturaNormal, coberturaDomingo,
+                    diasEspeciales, novedades, false);
+        }
     }
 
     record ProgramacionDiaPropuesta(

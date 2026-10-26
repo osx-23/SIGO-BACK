@@ -62,7 +62,8 @@ public class ProgramacionGeneradorController {
                                                 novedad.hasta()
                                         )
                                 )
-                                .toList()
+                                .toList(),
+                request.completarPendientes()
         );
     }
 

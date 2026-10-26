@@ -22,9 +22,12 @@ import com.sigo.personal.api.dto.TrabajadorPublicResponse;
 import com.sigo.personal.application.port.in.TrabajadorUseCase;
 import com.sigo.programacion.application.port.in.AgenteProgramacionExcepcionUseCase;
 
+import com.sigo.programacion.application.port.in.ProgramacionExcelTextoUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -59,6 +62,9 @@ public class ProgramacionController {
     private final MiHorarioUseCase miHorarioUseCase;
 
     private final TrabajadorUseCase trabajadorUseCase;
+
+    // SIGO_IMPORTAR_TURNOS_TEXTO_V1
+    private final ProgramacionExcelTextoUseCase programacionExcelTextoService;
 
     private final AgenteProgramacionExcepcionUseCase excepcionUseCase;
 
@@ -200,6 +206,27 @@ public class ProgramacionController {
      * MI HORARIO
      * ============================================================
      */
+
+    /** SIGO_IMPORTAR_TURNOS_TEXTO_V1: vista previa de A/B/C/D/V/COM/DM/LIC/-. */
+    @PostMapping(value = "/turnos/importar-excel/vista-previa", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    public ProgramacionExcelTextoUseCase.VistaPrevia previsualizarTurnosTexto(
+            @RequestParam Long plazaId,
+            @RequestParam int anio,
+            @RequestParam int mes,
+            @RequestParam("archivo") MultipartFile archivo) {
+        if (archivo.isEmpty() || archivo.getSize() > 2 * 1024 * 1024
+                || archivo.getOriginalFilename() == null
+                || !archivo.getOriginalFilename().toLowerCase(java.util.Locale.ROOT).endsWith(".xlsx")) {
+            throw new com.sigo.programacion.domain.ProgramacionValidationException(
+                    "Selecciona un Excel .xlsx de maximo 2 MB");
+        }
+        try {
+            return programacionExcelTextoService.previsualizar(plazaId, anio, mes, archivo.getBytes());
+        } catch (java.io.IOException ex) {
+            throw new com.sigo.programacion.domain.ProgramacionValidationException("No se pudo leer el Excel");
+        }
+    }
 
     @GetMapping("/mi-horario")
     public MiHorarioResponse miHorario(

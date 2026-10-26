@@ -45,7 +45,8 @@ public class InventarioStockController {
                                 stock.stockMinimo(),
                                 stock.bajoMinimo(),
                                 stock.inventarioId(),
-                                stock.actualizadoEn()
+                                stock.actualizadoEn(),
+                                stock.categoriaId()
                         )
                 )
                 .toList();
