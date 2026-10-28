@@ -161,7 +161,7 @@ public class ControlOperativoController {
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate inicio,
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate fin
     ) {
-        var usuario = actual();
+        actual();
         LocalDate hasta = fin == null ? LocalDate.now(ZoneId.of("America/Lima")) : fin;
         LocalDate desde = inicio == null ? hasta.minusDays(29) : inicio;
         if (desde.isAfter(hasta)) {
@@ -256,7 +256,7 @@ public class ControlOperativoController {
         @RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate fecha,
         @RequestParam(required=false) Long plazaId
     ) {
-        var usuario = actual();
+        actual();
         // Ambos roles autorizados pueden consultar cualquier plaza o todas.
         Long plaza = plazaId;
 
@@ -289,7 +289,7 @@ public class ControlOperativoController {
         @RequestParam(required=false) String tipo,
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate inicio,
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate fin) {
-        var u=actual();
+        actual();
         // Los controladores también pueden consultar el historial de todas las plazas.
         Long plaza = plazaId;
         var sql=new StringBuilder(BASE+" where r.fecha>=? and r.fecha<=?");
