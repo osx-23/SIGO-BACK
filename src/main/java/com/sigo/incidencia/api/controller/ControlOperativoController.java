@@ -259,55 +259,5 @@ public class ControlOperativoController {
         storage.eliminar(items.get(0));
     }
 
-    /**
-     * Gestión de vías existente de SIGO; sin duplicar catálogos TRAZA.
-     * Activar/desactivar vías puede afectar las listas de otros módulos.
-     */
-    public record RangoVias(@NotNull @Min(1) Integer desde,
-                             @NotNull @Min(1) Integer hasta) {}
-
-    @GetMapping("/plazas/{plazaId}/vias")
-    @Transactional(readOnly=true)
-    public List<Map<String,Object>> viasDePlaza(@PathVariable Long plazaId) {
-        comprobarPlaza(actual(),plazaId);
-        if (!existe("select count(*) from public.plazas where id=?",plazaId))
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Plaza no encontrada");
-        return jdbc.queryForList("""
-            select id,numero,nombre,activa from public.vias
-            where plaza_id=? order by numero
-            """,plazaId);
-    }
-
-    @PostMapping("/plazas/{plazaId}/vias")
-    @PreAuthorize("hasRole('SUPERVISOR')")
-    @Transactional
-    public List<Map<String,Object>> asignarVias(@PathVariable Long plazaId,
-                                                 @Valid @RequestBody RangoVias rango) {
-        comprobarPlaza(actual(),plazaId);
-        if (!existe("select count(*) from public.plazas where id=? and activo=true",plazaId))
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Plaza no encontrada");
-        if (rango.hasta()<rango.desde() || rango.hasta()-rango.desde()>99 ||
-                rango.hasta()>999999)
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Rango inválido (máximo 100 vías)");
-        jdbc.update("""
-            insert into public.vias (plaza_id,numero,nombre,activa,orden)
-            select ?,n,'Vía ' || n,true,n from generate_series(?,?) as n
-            on conflict (plaza_id,numero) do update set activa=true
-            """,plazaId,rango.desde(),rango.hasta());
-        return viasDePlaza(plazaId);
-    }
-
-    @DeleteMapping("/plazas/{plazaId}/vias/{numero}")
-    @PreAuthorize("hasRole('SUPERVISOR')")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Transactional
-    public void desactivarVia(@PathVariable Long plazaId,@PathVariable Integer numero) {
-        comprobarPlaza(actual(),plazaId);
-        int n=jdbc.update("""
-            update public.vias set activa=false where plaza_id=? and numero=? and activa=true
-            """,plazaId,numero);
-        if(n==0)throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Vía no encontrada o inactiva");
-    }
-
     private static String txt(String value) { return value==null?"":value.trim(); }
 }
