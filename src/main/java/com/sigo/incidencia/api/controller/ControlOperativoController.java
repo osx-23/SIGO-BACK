@@ -169,8 +169,8 @@ public class ControlOperativoController {
                 "La fecha inicial no puede ser posterior a la final");
         }
 
-        Long plaza = "SUPERVISOR".equals(usuario.rol()) ? plazaId : usuario.plazaId();
-        if (!"SUPERVISOR".equals(usuario.rol())) comprobarPlaza(usuario,plaza);
+        // Ambos roles autorizados pueden consultar cualquier plaza o todas.
+        Long plaza = plazaId;
         var sql = new StringBuilder("""
             select r.fecha, count(*) filter (where r.tipo='REPORTE') as incidencias,
                    count(r.cola_metros) as mediciones,
@@ -247,8 +247,8 @@ public class ControlOperativoController {
     }
 
     /**
-     * Detalle con todas las evidencias del día solicitado. Restringido a la
-     * plaza de la sesión para controladores; supervisores pueden filtrar.
+     * Detalle de todas las evidencias del día solicitado. Supervisores y
+     * controladores pueden filtrar por plaza o consultar todas.
      */
     @GetMapping("/dashboard/dia")
     @Transactional(readOnly=true)
@@ -257,8 +257,8 @@ public class ControlOperativoController {
         @RequestParam(required=false) Long plazaId
     ) {
         var usuario = actual();
-        Long plaza = "SUPERVISOR".equals(usuario.rol()) ? plazaId : usuario.plazaId();
-        if (!"SUPERVISOR".equals(usuario.rol())) comprobarPlaza(usuario,plaza);
+        // Ambos roles autorizados pueden consultar cualquier plaza o todas.
+        Long plaza = plazaId;
 
         var sql = new StringBuilder(BASE+" where r.fecha=?");
         var params = new ArrayList<Object>();
@@ -290,8 +290,8 @@ public class ControlOperativoController {
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate inicio,
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate fin) {
         var u=actual();
-        Long plaza= "SUPERVISOR".equals(u.rol()) ? plazaId : u.plazaId();
-        if (!"SUPERVISOR".equals(u.rol())) comprobarPlaza(u,plaza);
+        // Los controladores también pueden consultar el historial de todas las plazas.
+        Long plaza = plazaId;
         var sql=new StringBuilder(BASE+" where r.fecha>=? and r.fecha<=?");
         var args=new ArrayList<Object>();
         var hasta=fin==null?LocalDate.now():fin;
@@ -312,8 +312,10 @@ public class ControlOperativoController {
     @GetMapping("/{id}")
     @Transactional(readOnly=true)
     public Map<String,Object> obtener(@PathVariable Long id) {
-        comprobarPlaza(actual(),plazaGuardada(id));
+        actual(); // Las consultas de detalle permiten todas las plazas a ambos roles.
         var items=jdbc.queryForList(BASE+" where r.id=?",id);
+        if(items.isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Reporte no encontrado");
         return items.get(0);
     }
 
@@ -359,7 +361,8 @@ public class ControlOperativoController {
     @GetMapping("/{id}/evidencias")
     @Transactional(readOnly=true)
     public List<Map<String,Object>> evidencias(@PathVariable Long id) {
-        comprobarPlaza(actual(),plazaGuardada(id));
+        actual(); // Las evidencias de lectura permiten todas las plazas a ambos roles.
+        plazaGuardada(id); // Mantener 404 para reportes inexistentes.
         return jdbc.queryForList("""
             select id,reporte_id as "reporteId",categoria,
                    url_archivo as "urlArchivo",creado_en as "creadoEn"
