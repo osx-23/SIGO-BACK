@@ -40,7 +40,7 @@ public class ControlOperativoController {
         @NotNull LocalDate fecha, @NotNull LocalTime hora,
         @Size(max=60) String situacion, @Size(max=60) String ingreso,
         @Size(max=120) String incidente, @Size(max=10000) String descripcion,
-        @Min(0) @Max(50000) Integer colaMetros, String estado
+        @Min(0) @Max(50000) Integer colaMetros
     ) {}
 
     private static final String BASE = """
@@ -108,8 +108,6 @@ public class ControlOperativoController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Tipo inválido");
         if (r.colaMetros()==null && "MEDICION".equals(r.tipo()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Indica el tamaño de cola");
-        if (r.estado()!=null && !List.of("REGISTRADO","EN_OBSERVACION","ATENDIDO").contains(r.estado()))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Estado inválido");
         if (!existe("select count(*) from public.plazas where id=? and activo=true",r.plazaId()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Plaza inexistente o inactiva");
         // El turno se sugiere por hora en Angular, pero el controlador puede corregirlo.
@@ -175,11 +173,11 @@ public class ControlOperativoController {
         Long id=jdbc.queryForObject("""
             insert into public.control_operativo_reportes
             (plaza_id,turno_id,via_id,registrado_por_id,responsable_id,tipo,fecha,hora,situacion,ingreso,
-             incidente,cola_metros,descripcion,estado)
-            values (?,?,?,?,?,?,?,?,?,?,?,?,?,?) returning id
+             incidente,cola_metros,descripcion)
+            values (?,?,?,?,?,?,?,?,?,?,?,?,?) returning id
             """,Long.class,r.plazaId(),r.turnoId(),r.viaId(),u.id(),responsable,r.tipo(),r.fecha(),r.hora(),
             txt(r.situacion()),txt(r.ingreso()),txt(r.incidente()),r.colaMetros(),
-            txt(r.descripcion()),r.estado()==null?"REGISTRADO":r.estado());
+            txt(r.descripcion()));
         return obtener(id);
     }
 
@@ -195,12 +193,12 @@ public class ControlOperativoController {
         jdbc.update("""
             update public.control_operativo_reportes
             set plaza_id=?,turno_id=?,via_id=?,tipo=?,fecha=?,hora=?,situacion=?,ingreso=?,
-                incidente=?,cola_metros=?,descripcion=?,estado=?,
+                incidente=?,cola_metros=?,descripcion=?,
                 responsable_id=coalesce(?,responsable_id),actualizado_en=now()
             where id=?
             """,r.plazaId(),r.turnoId(),r.viaId(),r.tipo(),r.fecha(),r.hora(),
             txt(r.situacion()),txt(r.ingreso()),txt(r.incidente()),r.colaMetros(),
-            txt(r.descripcion()),r.estado()==null?"REGISTRADO":r.estado(),responsable,id);
+            txt(r.descripcion()),responsable,id);
         return obtener(id);
     }
 
