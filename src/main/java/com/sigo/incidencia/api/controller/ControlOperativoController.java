@@ -191,6 +191,7 @@ public class ControlOperativoController {
         if (!List.of("PLAZA","INGRESO","INCIDENTE","COLA").contains(categoria))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Categoría inválida");
         if (file.isEmpty() || file.getSize()>10*1024*1024 ||
+            file.getContentType()==null ||
             !List.of("image/jpeg","image/png","image/webp").contains(file.getContentType()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Solo imágenes JPG, PNG o WEBP hasta 10 MB");
         Integer cantidad=jdbc.queryForObject("""
