@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -126,6 +127,69 @@ public class ControlOperativoController {
             "select plaza_id from public.control_operativo_reportes where id=?",Long.class,id);
         if (ids.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Reporte no encontrado");
         return ids.get(0);
+    }
+
+    /**
+     * Estadísticas para el dashboard: se agregan en PostgreSQL sin el límite
+     * de 500 registros del historial. Un día con mediciones pero sin reportes
+     * sigue aportando a la serie de cola máxima.
+     */
+    public record DiaDashboard(
+        String fecha, Integer colaMaxima, long incidencias, long mediciones
+    ) {}
+
+    public record DashboardResumen(
+        long incidenciasRegistradas, int colaMaxima,
+        double promedioMaximos, List<DiaDashboard> dias
+    ) {}
+
+    @GetMapping("/dashboard")
+    @Transactional(readOnly=true)
+    public DashboardResumen dashboard(
+        @RequestParam(required=false) Long plazaId,
+        @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate inicio,
+        @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate fin
+    ) {
+        var usuario = actual();
+        LocalDate hasta = fin == null ? LocalDate.now(ZoneId.of("America/Lima")) : fin;
+        LocalDate desde = inicio == null ? hasta.minusDays(29) : inicio;
+        if (desde.isAfter(hasta)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "La fecha inicial no puede ser posterior a la final");
+        }
+
+        Long plaza = "SUPERVISOR".equals(usuario.rol()) ? plazaId : usuario.plazaId();
+        if (!"SUPERVISOR".equals(usuario.rol())) comprobarPlaza(usuario,plaza);
+        var sql = new StringBuilder("""
+            select r.fecha, count(*) filter (where r.tipo='REPORTE') as incidencias,
+                   count(r.cola_metros) as mediciones,
+                   max(r.cola_metros) as cola_maxima
+            from public.control_operativo_reportes r
+            where r.fecha >= ? and r.fecha <= ?
+            """);
+        var args = new ArrayList<Object>();
+        args.add(desde);
+        args.add(hasta);
+        if (plaza != null) {
+            sql.append(" and r.plaza_id = ?");
+            args.add(plaza);
+        }
+        sql.append(" group by r.fecha order by r.fecha");
+
+        List<DiaDashboard> dias = jdbc.query(sql.toString(), (rs, row) ->
+            new DiaDashboard(
+                rs.getDate("fecha").toLocalDate().toString(),
+                (Integer) rs.getObject("cola_maxima"),
+                rs.getLong("incidencias"),
+                rs.getLong("mediciones")
+            ), args.toArray());
+
+        long incidencias = dias.stream().mapToLong(DiaDashboard::incidencias).sum();
+        int maxima = dias.stream().filter(d -> d.colaMaxima() != null)
+            .mapToInt(DiaDashboard::colaMaxima).max().orElse(0);
+        double promedio = dias.stream().filter(d -> d.colaMaxima() != null)
+            .mapToInt(DiaDashboard::colaMaxima).average().orElse(0);
+        return new DashboardResumen(incidencias, maxima, promedio, dias);
     }
 
     @GetMapping
