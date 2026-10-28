@@ -36,7 +36,7 @@ public class ControlOperativoController {
 
     public record ReporteInput(
         @NotNull Long plazaId, @NotNull Long turnoId,
-        @NotBlank String tipo, Long viaId,
+        @NotBlank String tipo, Long viaId, Long responsableId,
         @NotNull LocalDate fecha, @NotNull LocalTime hora,
         @Size(max=60) String situacion, @Size(max=60) String ingreso,
         @Size(max=120) String incidente, @Size(max=10000) String descripcion,
@@ -47,7 +47,9 @@ public class ControlOperativoController {
         select r.id, r.plaza_id as "plazaId", p.codigo as "plazaCodigo",
         r.turno_id as "turnoId", trim(t.codigo) as "turnoCodigo",
         r.via_id as "viaId", v.numero as "viaNumero", r.registrado_por_id as "registradoPorId",
-        tr.nombre_completo as "registradoPor", r.tipo,
+        tr.nombre_completo as "registradoPor",
+        coalesce(r.responsable_id,r.registrado_por_id) as "responsableId",
+        coalesce(resp.nombre_completo,tr.nombre_completo) as "responsableNombre", r.tipo,
         r.fecha::text as fecha, to_char(r.hora,'HH24:MI') as hora,
         r.situacion, r.ingreso, r.incidente, r.cola_metros as "colaMetros",
         r.descripcion, r.estado, r.creado_en as "creadoEn",
@@ -56,6 +58,7 @@ public class ControlOperativoController {
         join public.plazas p on p.id=r.plaza_id
         join public.turnos t on t.id=r.turno_id
         join public.trabajadores tr on tr.id=r.registrado_por_id
+        left join public.trabajadores resp on resp.id=r.responsable_id
         left join public.vias v on v.id=r.via_id
         """;
 
@@ -75,6 +78,38 @@ public class ControlOperativoController {
         return jdbc.queryForObject(sql, Integer.class, params) > 0;
     }
 
+    @GetMapping("/responsables")
+    @Transactional(readOnly = true)
+    public List<Map<String,Object>> responsables() {
+        actual(); // Exige sesión SIGO; la anotación restringe a supervisor/controlador.
+        return jdbc.queryForList("""
+            select t.id, t.codigo, t.nombre_completo as "nombreCompleto",
+                   t.rol_sistema as "rol", p.codigo as "plazaCodigo"
+            from public.trabajadores t
+            left join public.plazas p on p.id=t.plaza_id
+            where t.activo=true and t.rol_sistema in ('SUPERVISOR','CONTROLADOR')
+            order by t.nombre_completo, t.codigo
+            """);
+    }
+
+    private Long validarResponsable(Long id, UsuarioActualUseCase.UsuarioActual u) {
+        Long elegido = id == null ? u.id() : id;
+        if (!existe("""
+            select count(*) from public.trabajadores
+            where id=? and activo=true and rol_sistema in ('SUPERVISOR','CONTROLADOR')
+            """, elegido)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Selecciona un responsable activo con rol controlador o supervisor");
+        }
+        return elegido;
+    }
+
+    private static String turnoDeHora(LocalTime hora) {
+        int minuto = hora.getHour() * 60 + hora.getMinute();
+        return minuto >= 360 && minuto < 840 ? "A"
+            : minuto >= 840 && minuto < 1320 ? "B" : "C";
+    }
+
     private void validar(ReporteInput r, UsuarioActualUseCase.UsuarioActual u) {
         comprobarPlaza(u, r.plazaId());
         if (!List.of("REPORTE","MEDICION").contains(r.tipo()))
@@ -85,8 +120,10 @@ public class ControlOperativoController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Estado inválido");
         if (!existe("select count(*) from public.plazas where id=? and activo=true",r.plazaId()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Plaza inexistente o inactiva");
-        if (!existe("select count(*) from public.turnos where id=?",r.turnoId()))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Turno inválido");
+        if (!existe("select count(*) from public.turnos where id=? and trim(codigo)=?",
+                r.turnoId(), turnoDeHora(r.hora())))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "El turno no corresponde a la hora indicada (A 06-14, B 14-22, C 22-06)");
         if (r.viaId()!=null && !existe(
                 "select count(*) from public.vias where id=? and plaza_id=? and activa=true",
                 r.viaId(),r.plazaId()))
@@ -141,12 +178,13 @@ public class ControlOperativoController {
     public Map<String,Object> crear(@Valid @RequestBody ReporteInput r) {
         var u=actual();
         validar(r,u);
+        Long responsable = validarResponsable(r.responsableId(), u);
         Long id=jdbc.queryForObject("""
             insert into public.control_operativo_reportes
-            (plaza_id,turno_id,via_id,registrado_por_id,tipo,fecha,hora,situacion,ingreso,
+            (plaza_id,turno_id,via_id,registrado_por_id,responsable_id,tipo,fecha,hora,situacion,ingreso,
              incidente,cola_metros,descripcion,estado)
-            values (?,?,?,?,?,?,?,?,?,?,?,?,?) returning id
-            """,Long.class,r.plazaId(),r.turnoId(),r.viaId(),u.id(),r.tipo(),r.fecha(),r.hora(),
+            values (?,?,?,?,?,?,?,?,?,?,?,?,?,?) returning id
+            """,Long.class,r.plazaId(),r.turnoId(),r.viaId(),u.id(),responsable,r.tipo(),r.fecha(),r.hora(),
             txt(r.situacion()),txt(r.ingreso()),txt(r.incidente()),r.colaMetros(),
             txt(r.descripcion()),r.estado()==null?"REGISTRADO":r.estado());
         return obtener(id);
@@ -159,14 +197,17 @@ public class ControlOperativoController {
         var u=actual();
         comprobarPlaza(u,plazaGuardada(id));
         validar(r,u);
+        Long responsable = r.responsableId() == null ? null
+            : validarResponsable(r.responsableId(),u);
         jdbc.update("""
             update public.control_operativo_reportes
             set plaza_id=?,turno_id=?,via_id=?,tipo=?,fecha=?,hora=?,situacion=?,ingreso=?,
-                incidente=?,cola_metros=?,descripcion=?,estado=?,actualizado_en=now()
+                incidente=?,cola_metros=?,descripcion=?,estado=?,
+                responsable_id=coalesce(?,responsable_id),actualizado_en=now()
             where id=?
             """,r.plazaId(),r.turnoId(),r.viaId(),r.tipo(),r.fecha(),r.hora(),
             txt(r.situacion()),txt(r.ingreso()),txt(r.incidente()),r.colaMetros(),
-            txt(r.descripcion()),r.estado()==null?"REGISTRADO":r.estado(),id);
+            txt(r.descripcion()),r.estado()==null?"REGISTRADO":r.estado(),responsable,id);
         return obtener(id);
     }
 
