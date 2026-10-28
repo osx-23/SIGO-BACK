@@ -83,12 +83,10 @@ public class ControlOperativoController {
     public List<Map<String,Object>> responsables() {
         actual(); // Exige sesión SIGO; la anotación restringe a supervisor/controlador.
         return jdbc.queryForList("""
-            select t.id, t.codigo, t.nombre_completo as "nombreCompleto",
-                   t.rol_sistema as "rol", p.codigo as "plazaCodigo"
+            select t.id, t.nombre_completo as "nombreCompleto"
             from public.trabajadores t
-            left join public.plazas p on p.id=t.plaza_id
             where t.activo=true and t.rol_sistema in ('SUPERVISOR','CONTROLADOR')
-            order by t.nombre_completo, t.codigo
+            order by t.nombre_completo, t.id
             """);
     }
 
@@ -104,12 +102,6 @@ public class ControlOperativoController {
         return elegido;
     }
 
-    private static String turnoDeHora(LocalTime hora) {
-        int minuto = hora.getHour() * 60 + hora.getMinute();
-        return minuto >= 360 && minuto < 840 ? "A"
-            : minuto >= 840 && minuto < 1320 ? "B" : "C";
-    }
-
     private void validar(ReporteInput r, UsuarioActualUseCase.UsuarioActual u) {
         comprobarPlaza(u, r.plazaId());
         if (!List.of("REPORTE","MEDICION").contains(r.tipo()))
@@ -120,10 +112,11 @@ public class ControlOperativoController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Estado inválido");
         if (!existe("select count(*) from public.plazas where id=? and activo=true",r.plazaId()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Plaza inexistente o inactiva");
-        if (!existe("select count(*) from public.turnos where id=? and trim(codigo)=?",
-                r.turnoId(), turnoDeHora(r.hora())))
+        // El turno se sugiere por hora en Angular, pero el controlador puede corregirlo.
+        if (!existe("select count(*) from public.turnos where id=? and trim(codigo) in ('A','B','C')",
+                r.turnoId()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "El turno no corresponde a la hora indicada (A 06-14, B 14-22, C 22-06)");
+                "Selecciona un turno válido (A, B o C)");
         if (r.viaId()!=null && !existe(
                 "select count(*) from public.vias where id=? and plaza_id=? and activa=true",
                 r.viaId(),r.plazaId()))
