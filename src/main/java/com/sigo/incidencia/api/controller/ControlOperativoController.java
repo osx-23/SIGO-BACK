@@ -67,14 +67,6 @@ public class ControlOperativoController {
         return usuarioActual.requireActual();
     }
 
-    private void comprobarPlaza(UsuarioActualUseCase.UsuarioActual u, Long plazaId) {
-        if (plazaId == null || (!"SUPERVISOR".equals(u.rol()) &&
-            !plazaId.equals(u.plazaId()))) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                "Sin permiso para acceder a esta plaza");
-        }
-    }
-
     private boolean existe(String sql, Object... params) {
         return jdbc.queryForObject(sql, Integer.class, params) > 0;
     }
@@ -103,8 +95,8 @@ public class ControlOperativoController {
         return elegido;
     }
 
-    private void validar(ReporteInput r, UsuarioActualUseCase.UsuarioActual u) {
-        comprobarPlaza(u, r.plazaId());
+    private void validar(ReporteInput r) {
+        // El rol se valida en @PreAuthorize y la plaza debe existir y estar activa.
         if (!List.of("REPORTE","MEDICION").contains(r.tipo()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Tipo inválido");
         if (r.colaMetros()==null && "MEDICION".equals(r.tipo()))
@@ -161,7 +153,7 @@ public class ControlOperativoController {
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate inicio,
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate fin
     ) {
-        var usuario = actual();
+        actual();
         LocalDate hasta = fin == null ? LocalDate.now(ZoneId.of("America/Lima")) : fin;
         LocalDate desde = inicio == null ? hasta.minusDays(29) : inicio;
         if (desde.isAfter(hasta)) {
@@ -169,8 +161,8 @@ public class ControlOperativoController {
                 "La fecha inicial no puede ser posterior a la final");
         }
 
-        Long plaza = "SUPERVISOR".equals(usuario.rol()) ? plazaId : usuario.plazaId();
-        if (!"SUPERVISOR".equals(usuario.rol())) comprobarPlaza(usuario,plaza);
+        // Ambos roles autorizados pueden consultar cualquier plaza o todas.
+        Long plaza = plazaId;
         var sql = new StringBuilder("""
             select r.fecha, count(*) filter (where r.tipo='REPORTE') as incidencias,
                    count(r.cola_metros) as mediciones,
@@ -247,8 +239,8 @@ public class ControlOperativoController {
     }
 
     /**
-     * Detalle con todas las evidencias del día solicitado. Restringido a la
-     * plaza de la sesión para controladores; supervisores pueden filtrar.
+     * Detalle de todas las evidencias del día solicitado. Supervisores y
+     * controladores pueden filtrar por plaza o consultar todas.
      */
     @GetMapping("/dashboard/dia")
     @Transactional(readOnly=true)
@@ -256,9 +248,9 @@ public class ControlOperativoController {
         @RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate fecha,
         @RequestParam(required=false) Long plazaId
     ) {
-        var usuario = actual();
-        Long plaza = "SUPERVISOR".equals(usuario.rol()) ? plazaId : usuario.plazaId();
-        if (!"SUPERVISOR".equals(usuario.rol())) comprobarPlaza(usuario,plaza);
+        actual();
+        // Ambos roles autorizados pueden consultar cualquier plaza o todas.
+        Long plaza = plazaId;
 
         var sql = new StringBuilder(BASE+" where r.fecha=?");
         var params = new ArrayList<Object>();
@@ -289,9 +281,9 @@ public class ControlOperativoController {
         @RequestParam(required=false) String tipo,
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate inicio,
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate fin) {
-        var u=actual();
-        Long plaza= "SUPERVISOR".equals(u.rol()) ? plazaId : u.plazaId();
-        if (!"SUPERVISOR".equals(u.rol())) comprobarPlaza(u,plaza);
+        actual();
+        // Los controladores también pueden consultar el historial de todas las plazas.
+        Long plaza = plazaId;
         var sql=new StringBuilder(BASE+" where r.fecha>=? and r.fecha<=?");
         var args=new ArrayList<Object>();
         var hasta=fin==null?LocalDate.now():fin;
@@ -312,8 +304,10 @@ public class ControlOperativoController {
     @GetMapping("/{id}")
     @Transactional(readOnly=true)
     public Map<String,Object> obtener(@PathVariable Long id) {
-        comprobarPlaza(actual(),plazaGuardada(id));
+        actual(); // Las consultas de detalle permiten todas las plazas a ambos roles.
         var items=jdbc.queryForList(BASE+" where r.id=?",id);
+        if(items.isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Reporte no encontrado");
         return items.get(0);
     }
 
@@ -322,7 +316,7 @@ public class ControlOperativoController {
     @Transactional
     public Map<String,Object> crear(@Valid @RequestBody ReporteInput r) {
         var u=actual();
-        validar(r,u);
+        validar(r);
         Long responsable = validarResponsable(r.responsableId(), u);
         Long id=jdbc.queryForObject("""
             insert into public.control_operativo_reportes
@@ -340,8 +334,8 @@ public class ControlOperativoController {
     public Map<String,Object> actualizar(@PathVariable Long id,
                                             @Valid @RequestBody ReporteInput r) {
         var u=actual();
-        comprobarPlaza(u,plazaGuardada(id));
-        validar(r,u);
+        plazaGuardada(id); // Comprobar existencia; se permite editar otras plazas.
+        validar(r);
         Long responsable = r.responsableId() == null ? null
             : validarResponsable(r.responsableId(),u);
         jdbc.update("""
@@ -359,7 +353,8 @@ public class ControlOperativoController {
     @GetMapping("/{id}/evidencias")
     @Transactional(readOnly=true)
     public List<Map<String,Object>> evidencias(@PathVariable Long id) {
-        comprobarPlaza(actual(),plazaGuardada(id));
+        actual(); // Las evidencias de lectura permiten todas las plazas a ambos roles.
+        plazaGuardada(id); // Mantener 404 para reportes inexistentes.
         return jdbc.queryForList("""
             select id,reporte_id as "reporteId",categoria,
                    url_archivo as "urlArchivo",creado_en as "creadoEn"
@@ -373,7 +368,8 @@ public class ControlOperativoController {
     public Map<String,Object> subir(@PathVariable Long id,
         @RequestParam(defaultValue="PLAZA") String categoria,
         @RequestParam("file") MultipartFile file) throws IOException {
-        comprobarPlaza(actual(),plazaGuardada(id));
+        actual(); // Supervisores y controladores pueden gestionar evidencias de cualquier plaza.
+        plazaGuardada(id); // Mantener 404 para reportes inexistentes.
         if (!List.of("PLAZA","INGRESO","INCIDENTE","COLA").contains(categoria))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Categoría inválida");
         if (file.isEmpty() || file.getSize()>10*1024*1024 ||
@@ -402,7 +398,8 @@ public class ControlOperativoController {
     @DeleteMapping("/{id}/evidencias/{evidenciaId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void eliminarEvidencia(@PathVariable Long id,@PathVariable Long evidenciaId) {
-        comprobarPlaza(actual(),plazaGuardada(id));
+        actual(); // Supervisores y controladores pueden gestionar evidencias de cualquier plaza.
+        plazaGuardada(id); // Mantener 404 para reportes inexistentes.
         var items=jdbc.queryForList("""
             select public_id from public.control_operativo_evidencias where id=? and reporte_id=?
             """,String.class,evidenciaId,id);
