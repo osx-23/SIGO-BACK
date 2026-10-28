@@ -138,9 +138,20 @@ public class ControlOperativoController {
         String fecha, Integer colaMaxima, long incidencias, long mediciones
     ) {}
 
+    public record DiaTurnoDashboard(
+        String fecha, String turno, Integer colaMaxima, long registros, long mediciones,
+        Long reporteId, String hora, String plazaCodigo, String responsableNombre,
+        String situacion, String ingreso, String incidente
+    ) {}
+
     public record DashboardResumen(
         long incidenciasRegistradas, int colaMaxima,
-        double promedioMaximos, List<DiaDashboard> dias
+        double promedioMaximos, List<DiaDashboard> dias,
+        List<DiaTurnoDashboard> turnos
+    ) {}
+
+    public record DetalleDashboardDia(
+        String fecha, List<Map<String,Object>> reportes, List<Map<String,Object>> evidencias
     ) {}
 
     @GetMapping("/dashboard")
@@ -189,7 +200,86 @@ public class ControlOperativoController {
             .mapToInt(DiaDashboard::colaMaxima).max().orElse(0);
         double promedio = dias.stream().filter(d -> d.colaMaxima() != null)
             .mapToInt(DiaDashboard::colaMaxima).average().orElse(0);
-        return new DashboardResumen(incidencias, maxima, promedio, dias);
+        // Serie separada por turno: un máximo diario por A, B y C.
+        var serieSql = new StringBuilder("""
+            select g.fecha, g.turno, g.registros, g.mediciones, g.cola_maxima,
+                   ref.id as referencia_id, to_char(ref.hora, 'HH24:MI') as hora,
+                   p.codigo as plaza_codigo,
+                   coalesce(resp.nombre_completo,registrador.nombre_completo) as responsable_nombre,
+                   ref.situacion, ref.ingreso, ref.incidente
+            from (
+                select r.fecha, trim(t.codigo) as turno, count(*) as registros,
+                       count(r.cola_metros) as mediciones, max(r.cola_metros) as cola_maxima,
+                       (array_agg(r.id order by r.cola_metros desc nulls last,
+                                               r.hora desc,r.id desc))[1] as referencia_id
+                from public.control_operativo_reportes r
+                join public.turnos t on t.id=r.turno_id
+                where r.fecha >= ? and r.fecha <= ?
+                """);
+        var serieArgs = new ArrayList<Object>();
+        serieArgs.add(desde);
+        serieArgs.add(hasta);
+        if (plaza != null) {
+            serieSql.append(" and r.plaza_id=?");
+            serieArgs.add(plaza);
+        }
+        serieSql.append("""
+                group by r.fecha,trim(t.codigo)
+            ) g
+            join public.control_operativo_reportes ref on ref.id=g.referencia_id
+            join public.plazas p on p.id=ref.plaza_id
+            join public.trabajadores registrador on registrador.id=ref.registrado_por_id
+            left join public.trabajadores resp on resp.id=ref.responsable_id
+            where g.turno in ('A','B','C')
+            order by g.fecha,g.turno
+            """);
+        List<DiaTurnoDashboard> turnos = jdbc.query(
+            serieSql.toString(), (rs, row) -> new DiaTurnoDashboard(
+                rs.getDate("fecha").toLocalDate().toString(), rs.getString("turno"),
+                (Integer) rs.getObject("cola_maxima"), rs.getLong("registros"),
+                rs.getLong("mediciones"), rs.getLong("referencia_id"),
+                rs.getString("hora"), rs.getString("plaza_codigo"),
+                rs.getString("responsable_nombre"), rs.getString("situacion"),
+                rs.getString("ingreso"), rs.getString("incidente")
+            ), serieArgs.toArray());
+
+        return new DashboardResumen(incidencias, maxima, promedio, dias, turnos);
+    }
+
+    /**
+     * Detalle con todas las evidencias del día solicitado. Restringido a la
+     * plaza de la sesión para controladores; supervisores pueden filtrar.
+     */
+    @GetMapping("/dashboard/dia")
+    @Transactional(readOnly=true)
+    public DetalleDashboardDia dashboardDia(
+        @RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate fecha,
+        @RequestParam(required=false) Long plazaId
+    ) {
+        var usuario = actual();
+        Long plaza = "SUPERVISOR".equals(usuario.rol()) ? plazaId : usuario.plazaId();
+        if (!"SUPERVISOR".equals(usuario.rol())) comprobarPlaza(usuario,plaza);
+
+        var sql = new StringBuilder(BASE+" where r.fecha=?");
+        var params = new ArrayList<Object>();
+        params.add(fecha);
+        if (plaza != null) {sql.append(" and r.plaza_id=?");params.add(plaza);}
+        sql.append(" order by r.hora,r.id");
+        List<Map<String,Object>> reportes = jdbc.queryForList(sql.toString(),params.toArray());
+
+        var evidSql = new StringBuilder("""
+            select e.id,e.reporte_id as "reporteId",e.categoria,
+                   e.url_archivo as "urlArchivo",e.creado_en as "creadoEn"
+            from public.control_operativo_evidencias e
+            join public.control_operativo_reportes r on r.id=e.reporte_id
+            where r.fecha=?
+            """);
+        var evidParams = new ArrayList<Object>();
+        evidParams.add(fecha);
+        if (plaza != null) {evidSql.append(" and r.plaza_id=?");evidParams.add(plaza);}
+        evidSql.append(" order by e.reporte_id,e.id");
+        List<Map<String,Object>> evidencias=jdbc.queryForList(evidSql.toString(),evidParams.toArray());
+        return new DetalleDashboardDia(fecha.toString(),reportes,evidencias);
     }
 
     @GetMapping
