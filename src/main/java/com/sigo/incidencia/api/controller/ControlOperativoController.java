@@ -67,14 +67,6 @@ public class ControlOperativoController {
         return usuarioActual.requireActual();
     }
 
-    private void comprobarPlaza(UsuarioActualUseCase.UsuarioActual u, Long plazaId) {
-        if (plazaId == null || (!"SUPERVISOR".equals(u.rol()) &&
-            !plazaId.equals(u.plazaId()))) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                "Sin permiso para acceder a esta plaza");
-        }
-    }
-
     private boolean existe(String sql, Object... params) {
         return jdbc.queryForObject(sql, Integer.class, params) > 0;
     }
@@ -103,8 +95,8 @@ public class ControlOperativoController {
         return elegido;
     }
 
-    private void validar(ReporteInput r, UsuarioActualUseCase.UsuarioActual u) {
-        comprobarPlaza(u, r.plazaId());
+    private void validar(ReporteInput r) {
+        // El rol se valida en @PreAuthorize y la plaza debe existir y estar activa.
         if (!List.of("REPORTE","MEDICION").contains(r.tipo()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Tipo inválido");
         if (r.colaMetros()==null && "MEDICION".equals(r.tipo()))
@@ -324,7 +316,7 @@ public class ControlOperativoController {
     @Transactional
     public Map<String,Object> crear(@Valid @RequestBody ReporteInput r) {
         var u=actual();
-        validar(r,u);
+        validar(r);
         Long responsable = validarResponsable(r.responsableId(), u);
         Long id=jdbc.queryForObject("""
             insert into public.control_operativo_reportes
@@ -342,8 +334,8 @@ public class ControlOperativoController {
     public Map<String,Object> actualizar(@PathVariable Long id,
                                             @Valid @RequestBody ReporteInput r) {
         var u=actual();
-        comprobarPlaza(u,plazaGuardada(id));
-        validar(r,u);
+        plazaGuardada(id); // Comprobar existencia; se permite editar otras plazas.
+        validar(r);
         Long responsable = r.responsableId() == null ? null
             : validarResponsable(r.responsableId(),u);
         jdbc.update("""
@@ -376,7 +368,8 @@ public class ControlOperativoController {
     public Map<String,Object> subir(@PathVariable Long id,
         @RequestParam(defaultValue="PLAZA") String categoria,
         @RequestParam("file") MultipartFile file) throws IOException {
-        comprobarPlaza(actual(),plazaGuardada(id));
+        actual(); // Supervisores y controladores pueden gestionar evidencias de cualquier plaza.
+        plazaGuardada(id); // Mantener 404 para reportes inexistentes.
         if (!List.of("PLAZA","INGRESO","INCIDENTE","COLA").contains(categoria))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Categoría inválida");
         if (file.isEmpty() || file.getSize()>10*1024*1024 ||
@@ -405,7 +398,8 @@ public class ControlOperativoController {
     @DeleteMapping("/{id}/evidencias/{evidenciaId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void eliminarEvidencia(@PathVariable Long id,@PathVariable Long evidenciaId) {
-        comprobarPlaza(actual(),plazaGuardada(id));
+        actual(); // Supervisores y controladores pueden gestionar evidencias de cualquier plaza.
+        plazaGuardada(id); // Mantener 404 para reportes inexistentes.
         var items=jdbc.queryForList("""
             select public_id from public.control_operativo_evidencias where id=? and reporte_id=?
             """,String.class,evidenciaId,id);
