@@ -52,8 +52,9 @@ class ProyeccionFinMesServiceTest {
     @Test
     void calculaSoloFechasConProgramacionReal() {
         var fecha = LocalDate.of(2026, 10, 29);
+        var filas = List.of(turno(fecha, 100L), turno(fecha, 101L), turno(fecha, 100L));
         when(programacion.findMesResumen(4L, fecha, LocalDate.of(2026, 10, 31)))
-                .thenReturn(List.of(turno(fecha, 100L), turno(fecha, 101L), turno(fecha, 100L)));
+                .thenReturn(filas);
         when(ml.predecir(any(PrediccionAsistenciaParametros.class)))
                 .thenReturn(new PrediccionAsistenciaResultado(4L, 2L, fecha,
                         2, 1, 1, "random_forest", "0.1.0", "real", null));
@@ -85,8 +86,9 @@ class ProyeccionFinMesServiceTest {
     @Test
     void noPrediceTurnosConAsistenciaYaRegistrada() {
         var fecha = LocalDate.of(2026, 10, 29);
+        var filas = List.of(turno(fecha, 100L));
         when(programacion.findMesResumen(4L, fecha, LocalDate.of(2026, 10, 31)))
-                .thenReturn(List.of(turno(fecha, 100L)));
+                .thenReturn(filas);
         var registro = new AsistenciaRegistro();
         registro.setFecha(fecha);
         Turno b = new Turno();
