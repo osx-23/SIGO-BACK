@@ -1,4 +1,4 @@
-package com.sigo.prediccion.application;
+package com.sigo.prediccion.infrastructure;
 
 import com.sigo.asistencia.infrastructure.persistence.entity.AsistenciaRegistro;
 import com.sigo.asistencia.infrastructure.persistence.repository.AsistenciaRegistroRepository;

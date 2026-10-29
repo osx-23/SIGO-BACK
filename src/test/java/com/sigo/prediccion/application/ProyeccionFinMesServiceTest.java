@@ -5,6 +5,7 @@ import com.sigo.asistencia.infrastructure.persistence.repository.AsistenciaRegis
 import com.sigo.personal.infrastructure.persistence.entity.Turno;
 import com.sigo.personal.infrastructure.persistence.repository.TurnoRepository;
 import com.sigo.prediccion.api.dto.ProyeccionFinMesResponse;
+import com.sigo.prediccion.infrastructure.ProyeccionFinMesService;
 import com.sigo.prediccion.domain.PrediccionAsistenciaParametros;
 import com.sigo.prediccion.domain.PrediccionAsistenciaResultado;
 import com.sigo.programacion.infrastructure.persistence.entity.EstadoProgramacion;

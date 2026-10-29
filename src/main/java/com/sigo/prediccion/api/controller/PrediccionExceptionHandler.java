@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Map;
 
-@RestControllerAdvice(assignableTypes = PrediccionAsistenciaController.class)
+@RestControllerAdvice(assignableTypes = {PrediccionAsistenciaController.class, ProyeccionFinMesController.class})
 public class PrediccionExceptionHandler {
     @ExceptionHandler(PrediccionInvalidaException.class)
     public ResponseEntity<Map<String, String>> invalida(PrediccionInvalidaException e) {
