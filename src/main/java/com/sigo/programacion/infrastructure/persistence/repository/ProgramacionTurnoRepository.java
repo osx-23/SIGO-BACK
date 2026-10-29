@@ -185,6 +185,19 @@ public interface ProgramacionTurnoRepository
         select p from ProgramacionTurno p
         join fetch p.trabajador t
         join fetch p.plaza pl
+        where t.id in :trabajadorIds
+          and p.fecha between :desde and :hasta
+    """)
+    List<ProgramacionTurno> findParaGuardadoMasivoTodos(
+            @Param("trabajadorIds") Set<Long> trabajadorIds,
+            @Param("desde") LocalDate desde,
+            @Param("hasta") LocalDate hasta
+    );
+
+    @Query("""
+        select p from ProgramacionTurno p
+        join fetch p.trabajador t
+        join fetch p.plaza pl
         where pl.id = :plazaId
           and t.id in :trabajadorIds
           and p.fecha between :desde and :hasta

@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.Map;
 
 @RestControllerAdvice(
-        basePackageClasses = ProgramacionController.class
+        basePackageClasses = {ProgramacionController.class, TrasladoPlazaController.class}
 )
 public class ProgramacionExceptionHandler {
 

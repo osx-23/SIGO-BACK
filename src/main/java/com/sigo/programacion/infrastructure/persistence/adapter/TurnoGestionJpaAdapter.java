@@ -11,6 +11,9 @@ import com.sigo.programacion.infrastructure.persistence.entity.EstadoProgramacio
 import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionTurno;
 import com.sigo.programacion.infrastructure.persistence.repository.DistribucionPersonalRepository;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionTurnoRepository;
+import com.sigo.programacion.infrastructure.persistence.repository.TrasladoPlazaRepository;
+import com.sigo.programacion.infrastructure.persistence.entity.EstadoTrasladoPlaza;
+import java.util.Objects;
 import com.sigo.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -33,6 +36,7 @@ public class TurnoGestionJpaAdapter
     private final DistribucionPersonalRepository distribucionRepository;
     private final TrabajadorRepository trabajadorRepository;
     private final PlazaRepository plazaRepository;
+    private final TrasladoPlazaRepository trasladoRepository;
 
     @Override
     public List<ListarTurnosUseCase.Turno> listar(
@@ -71,74 +75,47 @@ public class TurnoGestionJpaAdapter
                 );
 
         /*
-         * La programación mensual puede incluir tanto agentes como
-         * controladores. La autorización del endpoint garantiza que
-         * únicamente un SUPERVISOR pueda modificar estos turnos.
+         * La plaza funcional se calcula POR FECHA: un traslado no cambia
+         * inmediatamente la plaza administrativa del trabajador.
          */
-        Map<Long, Trabajador> trabajadoresProgramablesPorId =
-                new HashMap<>();
-
-        trabajadorRepository
-                .findAgentesByPlaza(plazaId)
-                .forEach(trabajador ->
-                        trabajadoresProgramablesPorId.put(
-                                trabajador.getId(),
-                                trabajador
-                        )
-                );
-
-        trabajadorRepository
-                .findControladoresByPlaza(plazaId)
-                .forEach(trabajador ->
-                        trabajadoresProgramablesPorId.put(
-                                trabajador.getId(),
-                                trabajador
-                        )
-                );
-
         Set<Long> trabajadorIds = new HashSet<>();
         LocalDate fechaMin = null;
         LocalDate fechaMax = null;
-
         for (GuardarTurnosUseCase.Item item : programaciones) {
-            if (item == null
-                    || item.trabajadorId() == null
-                    || item.fecha() == null) {
+            if (item == null || item.trabajadorId() == null || item.fecha() == null) {
                 throw bad("La programación contiene datos incompletos");
             }
-
-            if (!trabajadoresProgramablesPorId.containsKey(
-                    item.trabajadorId()
-            )) {
-                throw bad(
-                        "El trabajador "
-                                + item.trabajadorId()
-                                + " no es un agente o controlador activo de la plaza"
-                );
-            }
-
-            if (item.estado() != null
-                    && !item.estado().isBlank()) {
+            if (item.estado() != null && !item.estado().isBlank()) {
                 parseEstado(item.estado());
             }
-
             trabajadorIds.add(item.trabajadorId());
+            if (fechaMin == null || item.fecha().isBefore(fechaMin)) fechaMin = item.fecha();
+            if (fechaMax == null || item.fecha().isAfter(fechaMax)) fechaMax = item.fecha();
+        }
 
-            if (fechaMin == null || item.fecha().isBefore(fechaMin)) {
-                fechaMin = item.fecha();
+        Map<Long, Trabajador> trabajadoresProgramablesPorId = new HashMap<>();
+        trabajadorRepository.findAllById(trabajadorIds).forEach(trabajador ->
+                trabajadoresProgramablesPorId.put(trabajador.getId(), trabajador));
+
+        var traslados = trasladoRepository.activosDeTrabajadores(
+                trabajadorIds, EstadoTrasladoPlaza.PROGRAMADO);
+
+        for (GuardarTurnosUseCase.Item item : programaciones) {
+            Trabajador trabajador = trabajadoresProgramablesPorId.get(item.trabajadorId());
+            if (!TrasladoPlazaJpaAdapter.programable(trabajador)) {
+                throw bad("Solo pueden programarse agentes o controladores activos");
             }
-            if (fechaMax == null || item.fecha().isAfter(fechaMax)) {
-                fechaMax = item.fecha();
+            Long plazaEfectiva = TrasladoPlazaJpaAdapter.plazaEfectiva(
+                    trabajador, item.fecha(), traslados);
+            if (!Objects.equals(plazaEfectiva, plazaId)) {
+                throw bad("El trabajador " + trabajador.getCodigo()
+                        + " pertenece a otra plaza en la fecha " + item.fecha());
             }
         }
 
         List<ProgramacionTurno> existentes =
-                programacionRepository.findParaGuardadoMasivo(
-                        plazaId,
-                        trabajadorIds,
-                        fechaMin,
-                        fechaMax
-                );
+                programacionRepository.findParaGuardadoMasivoTodos(
+                        trabajadorIds, fechaMin, fechaMax);
 
         Map<Long, Map<LocalDate, ProgramacionTurno>> existentesPorTrabajador =
                 new HashMap<>();
@@ -202,6 +179,12 @@ public class TurnoGestionJpaAdapter
                 paraGuardar.add(programacion);
             }
 
+            // Al corregir un turno importado en otra plaza, liberar su caseta anterior.
+            if (programacion.getId() != null
+                    && !Objects.equals(programacion.getPlaza().getId(), plazaId)) {
+                distribucionRepository.findByProgramacionTurnoId(programacion.getId())
+                        .ifPresent(distribucionRepository::delete);
+            }
             EstadoProgramacion nuevoEstado = parseEstado(item.estado());
             // Descanso/DM/V/COM/LIC nunca pueden conservar una caseta anterior.
             // Se limpia dentro de la MISMA transaccion que cambia el turno.
