@@ -1,7 +1,8 @@
 package com.sigo.prediccion.api.controller;
 
 import com.sigo.prediccion.api.dto.ProyeccionFinMesResponse;
-import com.sigo.prediccion.infrastructure.ProyeccionFinMesService;
+import com.sigo.prediccion.application.ProyeccionFinMesService;
+import com.sigo.prediccion.domain.ProyeccionFinMesResultado;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +26,16 @@ public class ProyeccionFinMesController {
             @RequestParam Long plazaId,
             @RequestParam(required = false) Long turnoId
     ) {
-        return service.proyectar(plazaId, turnoId, LocalDate.now(LIMA));
+        ProyeccionFinMesResultado r = service.proyectar(plazaId, turnoId, LocalDate.now(LIMA));
+        return new ProyeccionFinMesResponse(
+                r.plazaId(), r.fechaConsulta(), r.desde(), r.hasta(),
+                r.turnosProyectados(), r.turnosSinProgramacion(), r.turnosYaRegistrados(),
+                r.totalProgramados(), r.totalAusenciasEstimadas(), r.totalCoberturaEstimada(),
+                r.detalle().stream()
+                        .map(d -> new ProyeccionFinMesResponse.Detalle(
+                                d.fecha(), d.turnoId(), d.turnoCodigo(), d.estado(),
+                                d.programados(), d.ausenciasEstimadas(), d.coberturaEstimada()))
+                        .toList()
+        );
     }
 }
