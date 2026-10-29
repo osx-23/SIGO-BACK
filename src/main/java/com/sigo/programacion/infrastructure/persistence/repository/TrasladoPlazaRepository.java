@@ -15,7 +15,7 @@ public interface TrasladoPlazaRepository extends JpaRepository<TrasladoPlazaEnti
       join fetch x.trabajador t join fetch t.puesto
       join fetch x.origen join fetch x.destino
       where (:plazaId is null or x.origen.id = :plazaId or x.destino.id = :plazaId)
-        and (:desde is null or coalesce(x.fechaFin, :hasta) >= :desde)
+        and (:desde is null or x.fechaFin is null or x.fechaFin >= :desde)
         and (:hasta is null or x.fechaInicio <= :hasta)
       order by x.fechaInicio desc, t.nombreCompleto
       """)
