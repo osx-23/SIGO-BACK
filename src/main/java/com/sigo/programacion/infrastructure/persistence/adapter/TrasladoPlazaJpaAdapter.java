@@ -60,7 +60,17 @@ public class TrasladoPlazaJpaAdapter implements TrasladoPlazaPort {
 
     @Override
     public List<TrasladoPlaza> listar(Long plazaId, LocalDate desde, LocalDate hasta) {
-        return traslados.consultar(plazaId, desde, hasta).stream().map(this::toData).toList();
+        // No enviar fechas opcionales nulas a consultas JPQL con ":fecha is null".
+        // PostgreSQL no puede inferir su tipo y devuelve SQLState 42P18.
+        List<TrasladoPlazaEntity> registros;
+        if (plazaId == null) {
+            registros = traslados.consultarTodos();
+        } else if (desde == null || hasta == null) {
+            registros = traslados.consultarPlaza(plazaId);
+        } else {
+            registros = traslados.consultarPlazaPeriodo(plazaId, desde, hasta);
+        }
+        return registros.stream().map(this::toData).toList();
     }
 
     @Override
