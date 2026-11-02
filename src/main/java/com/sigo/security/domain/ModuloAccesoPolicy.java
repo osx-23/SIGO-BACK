@@ -23,6 +23,7 @@ public class ModuloAccesoPolicy {
             case CONTROLADOR -> List.of(
                     "DASHBOARD",
                     "RELEVOS",
+                    "INCIDENCIAS",
                     "ASISTENCIA",
                     "INVENTARIO",
                     "ADMIN_PRODUCTOS",
