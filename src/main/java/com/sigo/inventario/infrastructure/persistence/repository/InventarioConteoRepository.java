@@ -39,6 +39,13 @@ public interface InventarioConteoRepository
 
   @Query(value = """
       SELECT id FROM inventario_conteo
+      WHERE id = :id AND estado = 'FINALIZADO'
+      FOR UPDATE
+      """, nativeQuery = true)
+  java.util.List<Long> bloquearFinalizado(@Param("id") Long id);
+
+  @Query(value = """
+      SELECT id FROM inventario_conteo
       WHERE id = :id
         AND estado = 'EN_PROCESO'
         AND fecha_inicio > CURRENT_TIMESTAMP - INTERVAL '8 hours'
