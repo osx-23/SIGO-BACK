@@ -2,11 +2,13 @@ package com.sigo.inventario.api.controller;
 
 import com.sigo.inventario.api.dto.request.AnularInventarioRequest;
 import com.sigo.inventario.api.dto.request.GuardarConteoRequest;
+import com.sigo.inventario.api.dto.request.CorregirInventarioRequest;
 import com.sigo.inventario.api.dto.response.InventarioDetalleItemResponse;
 import com.sigo.inventario.api.dto.response.InventarioDetalleResponse;
 import com.sigo.inventario.api.dto.response.InventarioResumenResponse;
 import com.sigo.inventario.api.dto.response.ProductoInventarioResponse;
 import com.sigo.inventario.application.port.in.CerrarInventarioUseCase;
+import com.sigo.inventario.application.port.in.CorregirInventarioUseCase;
 import com.sigo.inventario.application.port.in.GuardarConteoInventarioUseCase;
 import com.sigo.inventario.application.port.in.IniciarInventarioUseCase;
 import com.sigo.inventario.application.port.in.InventarioConsultaUseCase;
@@ -36,6 +38,7 @@ import java.util.List;
 public class InventarioController {
 
     private final CerrarInventarioUseCase cerrarUseCase;
+    private final CorregirInventarioUseCase corregirUseCase;
     private final GuardarConteoInventarioUseCase guardarConteoUseCase;
     private final IniciarInventarioUseCase iniciarUseCase;
     private final InventarioConsultaUseCase consultaUseCase;
@@ -113,6 +116,30 @@ public class InventarioController {
                         .toList()
         );
 
+        return toDetalleResponse(detalle);
+    }
+
+    /**
+     * Corrección excepcional de cantidades de un inventario FINALIZADO.
+     * Conserva la fecha original y registra el motivo en auditoría.
+     */
+    @PutMapping("/{id}/correccion")
+    public InventarioDetalleResponse corregir(
+            @PathVariable Long id,
+            @Valid @RequestBody CorregirInventarioRequest request
+    ) {
+        InventarioUsuarioActual actual = usuarios.obtenerActual();
+        var detalle = corregirUseCase.corregir(
+                new CorregirInventarioUseCase.Usuario(
+                        actual.trabajadorId(), actual.plazaId(),
+                        actual.rolSistema(), actual.rolCodigo()),
+                id,
+                request.productos().stream()
+                        .map(item -> new CorregirInventarioUseCase.Item(
+                                item.productoId(), item.cantidad()))
+                        .toList(),
+                request.motivo()
+        );
         return toDetalleResponse(detalle);
     }
 
