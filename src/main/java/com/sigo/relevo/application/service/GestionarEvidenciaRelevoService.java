@@ -18,6 +18,12 @@ public class GestionarEvidenciaRelevoService
 
     private final RelevoEvidenciaPort evidenciaPort;
     private final RelevoStoragePort storagePort;
+    private final com.sigo.relevo.application.port.in.RelevoHistorialUseCase historial;
+    private final com.sigo.relevo.application.port.in.RelevoAccesoUseCase acceso;
+
+    private void autorizar(Long relevoId) {
+        historial.obtenerPara(acceso.usuarioActual(), relevoId);
+    }
 
     @Override
     @Transactional
@@ -25,6 +31,7 @@ public class GestionarEvidenciaRelevoService
             Long checklistId,
             ArchivoEntrada archivo
     ) throws IOException {
+        autorizar(evidenciaPort.relevoDeChecklist(checklistId));
         if (!evidenciaPort.existeChecklist(checklistId)) {
             throw new ResourceNotFoundException(
                     "Elemento de checklist no encontrado"
@@ -54,6 +61,7 @@ public class GestionarEvidenciaRelevoService
             Long checklistId,
             Long evidenciaId
     ) throws IOException {
+        autorizar(evidenciaPort.relevoDeChecklist(checklistId));
         RelevoEvidenciaPort.EvidenciaAlmacenada evidencia =
                 evidenciaPort.requireChecklist(
                         checklistId,
@@ -70,6 +78,7 @@ public class GestionarEvidenciaRelevoService
             Long relevoViaId,
             ArchivoEntrada archivo
     ) throws IOException {
+        autorizar(evidenciaPort.relevoDeVia(relevoViaId));
         if (!evidenciaPort.existeRelevoVia(relevoViaId)) {
             throw new ResourceNotFoundException(
                     "Reporte de vía no encontrado"
@@ -99,6 +108,7 @@ public class GestionarEvidenciaRelevoService
             Long relevoViaId,
             Long evidenciaId
     ) throws IOException {
+        autorizar(evidenciaPort.relevoDeVia(relevoViaId));
         RelevoEvidenciaPort.EvidenciaAlmacenada evidencia =
                 evidenciaPort.requireVia(
                         relevoViaId,

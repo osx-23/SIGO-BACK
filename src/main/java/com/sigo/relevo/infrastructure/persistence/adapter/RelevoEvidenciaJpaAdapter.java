@@ -26,6 +26,20 @@ public class RelevoEvidenciaJpaAdapter
     private final RelevoViaEvidenciaRepository viaEvidenciaRepository;
 
     @Override
+    public Long relevoDeChecklist(Long id) {
+        return checklistRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Checklist no encontrado"))
+                .getRelevo().getId();
+    }
+
+    @Override
+    public Long relevoDeVia(Long id) {
+        return relevoViaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Vía no encontrada"))
+                .getRelevo().getId();
+    }
+
+    @Override
     public boolean existeChecklist(Long checklistId) {
         return checklistRepository.existsById(checklistId);
     }

@@ -4,6 +4,10 @@ import com.sigo.relevo.application.port.in.GestionarEvidenciaRelevoUseCase;
 
 public interface RelevoEvidenciaPort {
 
+    Long relevoDeChecklist(Long checklistId);
+
+    Long relevoDeVia(Long relevoViaId);
+
     boolean existeChecklist(Long checklistId);
 
     boolean existeRelevoVia(Long relevoViaId);
