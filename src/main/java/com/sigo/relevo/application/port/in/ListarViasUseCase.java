@@ -6,8 +6,6 @@ public interface ListarViasUseCase {
 
     List<Via> listarPorPlaza(Long plazaId);
 
-    List<Via> listarVisiblesAvi(Long plazaId);
-
     record Via(
             Long id,
             Long plazaId,
