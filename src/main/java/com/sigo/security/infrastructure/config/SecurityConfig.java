@@ -29,7 +29,8 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            JwtDecoder jwtDecoder
+            JwtDecoder jwtDecoder,
+            com.sigo.security.application.port.out.UsuarioSeguridadPort usuarios
     ) throws Exception {
 
         return http
@@ -458,6 +459,9 @@ public class SecurityConfig {
                  * ============================================================
                  */
 
+                .addFilterAfter(
+                        new com.sigo.security.infrastructure.jwt.CambioPasswordFilter(usuarios),
+                        org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .oauth2ResourceServer(
                         oauth ->
                                 oauth.jwt(
@@ -577,7 +581,8 @@ public class SecurityConfig {
     @Bean
     JwtDecoder jwtDecoder(
             SecretKey key,
-
+            com.sigo.security.application.port.out.UsuarioSeguridadPort usuarios,
+            com.sigo.security.infrastructure.jwt.EstadoSesion estadoSesion,
             @Value("${app.jwt.issuer:sigo-api}")
             String issuer
     ) {
@@ -593,12 +598,28 @@ public class SecurityConfig {
                         .build();
 
 
-        decoder.setJwtValidator(
-                JwtValidators
-                        .createDefaultWithIssuer(
-                                issuer
-                        )
-        );
+        var predeterminado = JwtValidators.createDefaultWithIssuer(issuer);
+        org.springframework.security.oauth2.core.OAuth2TokenValidator<Jwt> estado = jwt -> {
+            try {
+                var usuario = usuarios.buscarPorCodigo(Integer.valueOf(jwt.getSubject()))
+                        .filter(com.sigo.security.domain.UsuarioSeguridad::estaActivo)
+                        .orElse(null);
+                String huella = jwt.getClaimAsString("estadoSesion");
+                if (usuario == null || huella == null ||
+                        !java.security.MessageDigest.isEqual(
+                                huella.getBytes(StandardCharsets.UTF_8),
+                                estadoSesion.huella(usuario).getBytes(StandardCharsets.UTF_8))) {
+                    return org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.failure(
+                            new org.springframework.security.oauth2.core.OAuth2Error("invalid_token"));
+                }
+                return org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.success();
+            } catch (IllegalArgumentException ex) {
+                return org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.failure(
+                        new org.springframework.security.oauth2.core.OAuth2Error("invalid_token"));
+            }
+        };
+        decoder.setJwtValidator(new org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator<>(
+                predeterminado, estado));
 
 
         return decoder;

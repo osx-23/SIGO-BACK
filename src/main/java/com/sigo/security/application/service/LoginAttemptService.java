@@ -15,13 +15,14 @@ public class LoginAttemptService {
     private static final Duration VENTANA = Duration.ofMinutes(10);
     private static final Duration BLOQUEO = Duration.ofMinutes(15);
 
-    private final Cache<Integer, EstadoIntentos> intentos = Caffeine.newBuilder()
+    private final Cache<String, EstadoIntentos> intentos = Caffeine.newBuilder()
             .maximumSize(100_000)
             .expireAfterAccess(Duration.ofMinutes(30))
             .build();
 
-    public void verificar(Integer codigo) {
-        EstadoIntentos estado = intentos.getIfPresent(codigo);
+    public void verificar(Integer codigo, String ip) {
+        String clave = clave(codigo, ip);
+        EstadoIntentos estado = intentos.getIfPresent(clave);
         if (estado == null) return;
 
         Instant ahora = Instant.now();
@@ -39,14 +40,15 @@ public class LoginAttemptService {
             }
 
             if (estado.primero != null && Duration.between(estado.primero, ahora).compareTo(VENTANA) > 0) {
-                intentos.asMap().remove(codigo, estado);
+                intentos.asMap().remove(clave, estado);
             }
         }
     }
 
-    public void registrarFallo(Integer codigo) {
+    public void registrarFallo(Integer codigo, String ip) {
+        String clave = clave(codigo, ip);
         Instant ahora = Instant.now();
-        EstadoIntentos estado = intentos.get(codigo, k -> new EstadoIntentos());
+        EstadoIntentos estado = intentos.get(clave, k -> new EstadoIntentos());
 
         synchronized (estado) {
             if (estado.primero == null || Duration.between(estado.primero, ahora).compareTo(VENTANA) > 0) {
@@ -62,8 +64,12 @@ public class LoginAttemptService {
         }
     }
 
-    public void limpiar(Integer codigo) {
-        intentos.invalidate(codigo);
+    public void limpiar(Integer codigo, String ip) {
+        intentos.invalidate(clave(codigo, ip));
+    }
+
+    private String clave(Integer codigo, String ip) {
+        return codigo + "|" + (ip == null ? "unknown" : ip);
     }
 
     private static final class EstadoIntentos {

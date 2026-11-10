@@ -21,9 +21,31 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         SecurityAuthorizationIT.ProbeController.class
 })
 class SecurityAuthorizationIT {
+    @org.springframework.boot.test.mock.mockito.MockBean
+    com.sigo.security.application.port.out.UsuarioSeguridadPort securityUsers;
+    @org.springframework.boot.test.mock.mockito.MockBean
+    com.sigo.security.infrastructure.jwt.EstadoSesion estadoSesion;
+    @org.junit.jupiter.api.BeforeEach
+    void setupSecurityUsers() {
+        org.mockito.Mockito.when(securityUsers.buscarPorCodigo(org.mockito.ArgumentMatchers.anyInt()))
+            .thenReturn(java.util.Optional.of(new com.sigo.security.domain.UsuarioSeguridad(
+                1L, 999, "Usuario", com.sigo.security.domain.RolSeguridad.OPERADOR,
+                1L, "P", "hash", false, true)));
+    }
+
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Test
+    void usuarioConCambioPendienteSoloPuedeConsultarSesionOCambiarClave() throws Exception {
+        org.mockito.Mockito.when(securityUsers.buscarPorCodigo(999))
+            .thenReturn(java.util.Optional.of(new com.sigo.security.domain.UsuarioSeguridad(
+                1L, 999, "Usuario", com.sigo.security.domain.RolSeguridad.OPERADOR,
+                1L, "P", "hash", true, true)));
+        mockMvc.perform(get("/api/relevos/probe").with(jwtRol("OPERADOR")))
+                .andExpect(status().isForbidden());
+    }
 
     @Test
     void anonimoNoPuedeAccederARutasProtegidas() throws Exception {

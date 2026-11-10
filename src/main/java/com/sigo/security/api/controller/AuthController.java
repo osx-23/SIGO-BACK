@@ -22,8 +22,10 @@ public class AuthController {
     private final LoginAttemptService loginAttemptService;
 
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        loginAttemptService.verificar(request.codigo());
+    public LoginResponse login(@Valid @RequestBody LoginRequest request,
+                               jakarta.servlet.http.HttpServletRequest httpRequest) {
+        String ip = httpRequest.getRemoteAddr();
+        loginAttemptService.verificar(request.codigo(), ip);
 
         try {
             AutenticacionUseCase.LoginResult result =
@@ -34,15 +36,15 @@ public class AuthController {
                             )
                     );
 
-            loginAttemptService.limpiar(request.codigo());
+            loginAttemptService.limpiar(request.codigo(), ip);
 
             return toLoginResponse(result);
 
         } catch (AutenticacionException exception) {
             if (exception.tipo()
                     == AutenticacionException.Tipo.UNAUTHORIZED) {
-                loginAttemptService.registrarFallo(request.codigo());
-                loginAttemptService.verificar(request.codigo());
+                loginAttemptService.registrarFallo(request.codigo(), ip);
+                loginAttemptService.verificar(request.codigo(), ip);
             }
 
             throw exception;

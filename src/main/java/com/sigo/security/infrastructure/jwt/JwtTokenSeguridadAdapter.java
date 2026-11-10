@@ -21,6 +21,7 @@ public class JwtTokenSeguridadAdapter
         implements TokenSeguridadPort {
 
     private final JwtEncoder jwtEncoder;
+    private final EstadoSesion estadoSesion;
 
     private final ModuloAccesoPolicy moduloPolicy =
             new ModuloAccesoPolicy();
@@ -31,9 +32,6 @@ public class JwtTokenSeguridadAdapter
     @Value("${app.jwt.expiration-seconds:28800}")
     private long expirationSeconds;
 
-    @Value("${app.jwt.avi-expiration-seconds:28800}")
-    private long aviExpirationSeconds;
-
     @Override
     public String generar(UsuarioSeguridad usuario) {
         return generarToken(
@@ -43,16 +41,6 @@ public class JwtTokenSeguridadAdapter
                         usuario.rol()
                 ),
                 expirationSeconds
-        );
-    }
-
-    @Override
-    public String generarAvi(UsuarioSeguridad usuario) {
-        return generarToken(
-                usuario,
-                "AVI",
-                List.of("AVI"),
-                aviExpirationSeconds
         );
     }
 
@@ -76,6 +64,7 @@ public class JwtTokenSeguridadAdapter
                         .subject(
                                 usuario.codigo().toString()
                         )
+                        .claim("estadoSesion", estadoSesion.huella(usuario))
                         .claim(
                                 "trabajadorId",
                                 usuario.id()
@@ -124,8 +113,4 @@ public class JwtTokenSeguridadAdapter
         return expirationSeconds;
     }
 
-    @Override
-    public long aviExpirationSeconds() {
-        return aviExpirationSeconds;
-    }
 }

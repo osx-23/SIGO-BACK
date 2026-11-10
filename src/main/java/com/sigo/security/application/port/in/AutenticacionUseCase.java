@@ -6,8 +6,6 @@ public interface AutenticacionUseCase {
 
     LoginResult login(LoginCommand command);
 
-    LoginResult loginAvi(Integer codigo);
-
     Sesion me();
 
     void cambiarPassword(ChangePasswordCommand command);

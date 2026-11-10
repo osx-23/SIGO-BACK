@@ -16,18 +16,18 @@ class LoginAttemptServiceTest {
         Integer codigo = 287;
 
         for (int i = 0; i < 9; i++) {
-            service.registrarFallo(codigo);
-            assertDoesNotThrow(() -> service.verificar(codigo));
+            service.registrarFallo(codigo, "127.0.0.1");
+            assertDoesNotThrow(() -> service.verificar(codigo, "127.0.0.1"));
         }
 
-        service.registrarFallo(codigo);
+        service.registrarFallo(codigo, "127.0.0.1");
         TooManyRequestsException bloqueo = assertThrows(
-                TooManyRequestsException.class, () -> service.verificar(codigo));
+                TooManyRequestsException.class, () -> service.verificar(codigo, "127.0.0.1"));
         assertTrue(bloqueo.retryAfterSeconds() > 0);
         assertTrue(bloqueo.retryAfterSeconds() <= 900);
         assertTrue(bloqueo.getMessage().contains("Tu cuenta ha sido bloqueada"));
         assertTrue(bloqueo.getMessage().contains("Debes esperar"));
-        assertThrows(TooManyRequestsException.class, () -> service.verificar(codigo));
+        assertThrows(TooManyRequestsException.class, () -> service.verificar(codigo, "127.0.0.1"));
     }
 
     @Test
@@ -35,11 +35,11 @@ class LoginAttemptServiceTest {
         LoginAttemptService service = new LoginAttemptService();
 
         for (int i = 0; i < 10; i++) {
-            service.registrarFallo(287);
+            service.registrarFallo(287, "127.0.0.1");
         }
 
-        assertThrows(TooManyRequestsException.class, () -> service.verificar(287));
-        assertDoesNotThrow(() -> service.verificar(550));
+        assertThrows(TooManyRequestsException.class, () -> service.verificar(287, "127.0.0.1"));
+        assertDoesNotThrow(() -> service.verificar(550, "127.0.0.1"));
     }
 
     @Test
@@ -47,11 +47,18 @@ class LoginAttemptServiceTest {
         LoginAttemptService service = new LoginAttemptService();
 
         for (int i = 0; i < 9; i++) {
-            service.registrarFallo(287);
+            service.registrarFallo(287, "127.0.0.1");
         }
 
-        service.limpiar(287);
-        service.registrarFallo(287);
-        assertDoesNotThrow(() -> service.verificar(287));
+        service.limpiar(287, "127.0.0.1");
+        service.registrarFallo(287, "127.0.0.1");
+        assertDoesNotThrow(() -> service.verificar(287, "127.0.0.1"));
+    }
+    @Test
+    void noBloqueaElMismoCodigoDesdeOtraDireccion() {
+        LoginAttemptService service = new LoginAttemptService();
+        for (int i = 0; i < 10; i++) service.registrarFallo(287, "192.0.2.1");
+        assertThrows(TooManyRequestsException.class, () -> service.verificar(287, "192.0.2.1"));
+        assertDoesNotThrow(() -> service.verificar(287, "192.0.2.2"));
     }
 }
