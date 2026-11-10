@@ -491,7 +491,9 @@ class RelevoFlujoJpaIT {
         GestionarEvidenciaRelevoService evidenciaService =
                 new GestionarEvidenciaRelevoService(
                         evidenciaAdapter,
-                        storage
+                        storage,
+                        org.mockito.Mockito.mock(com.sigo.relevo.application.port.in.RelevoHistorialUseCase.class),
+                        org.mockito.Mockito.mock(com.sigo.relevo.application.port.in.RelevoAccesoUseCase.class)
                 );
 
         var checklistEvidencia =
