@@ -50,7 +50,6 @@ public class SecurityConfig {
 
                         .requestMatchers(
                                 "/api/auth/login",
-                                "/api/avi/auth/login",
                                 "/error"
                         )
                         .permitAll()
@@ -62,15 +61,7 @@ public class SecurityConfig {
                          * =====================================================
                          */
 
-                        .requestMatchers(
-                                "/api/avi/**"
-                        )
-                        .hasAnyRole(
-                                "AVI",
-                                "SUPERVISOR",
-                                "CONTROLADOR",
-                                "OPERADOR"
-                        )
+                        .requestMatchers("/api/avi/**").denyAll()
 
 
                         /*
