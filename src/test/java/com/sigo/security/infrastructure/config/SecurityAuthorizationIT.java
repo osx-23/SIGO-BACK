@@ -142,12 +142,12 @@ class SecurityAuthorizationIT {
     }
 
     @Test
-    void tokenAviSoloPuedeAccederARutasAvi() throws Exception {
+    void tokenAviNoPuedeAccederARutasRetiradas() throws Exception {
         mockMvc.perform(
                         get("/api/avi/probe")
                                 .with(jwtRol("AVI"))
                 )
-                .andExpect(status().isOk());
+                .andExpect(status().isForbidden());
 
         mockMvc.perform(
                         get("/api/relevos/probe")

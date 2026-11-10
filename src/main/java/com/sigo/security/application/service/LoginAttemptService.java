@@ -5,7 +5,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.ConcurrentHashMap;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 @Service
 public class LoginAttemptService {
@@ -14,10 +15,13 @@ public class LoginAttemptService {
     private static final Duration VENTANA = Duration.ofMinutes(10);
     private static final Duration BLOQUEO = Duration.ofMinutes(15);
 
-    private final ConcurrentHashMap<Integer, EstadoIntentos> intentos = new ConcurrentHashMap<>();
+    private final Cache<Integer, EstadoIntentos> intentos = Caffeine.newBuilder()
+            .maximumSize(100_000)
+            .expireAfterAccess(Duration.ofMinutes(30))
+            .build();
 
     public void verificar(Integer codigo) {
-        EstadoIntentos estado = intentos.get(codigo);
+        EstadoIntentos estado = intentos.getIfPresent(codigo);
         if (estado == null) return;
 
         Instant ahora = Instant.now();
@@ -35,14 +39,14 @@ public class LoginAttemptService {
             }
 
             if (estado.primero != null && Duration.between(estado.primero, ahora).compareTo(VENTANA) > 0) {
-                intentos.remove(codigo, estado);
+                intentos.asMap().remove(codigo, estado);
             }
         }
     }
 
     public void registrarFallo(Integer codigo) {
         Instant ahora = Instant.now();
-        EstadoIntentos estado = intentos.computeIfAbsent(codigo, k -> new EstadoIntentos());
+        EstadoIntentos estado = intentos.get(codigo, k -> new EstadoIntentos());
 
         synchronized (estado) {
             if (estado.primero == null || Duration.between(estado.primero, ahora).compareTo(VENTANA) > 0) {
@@ -59,7 +63,7 @@ public class LoginAttemptService {
     }
 
     public void limpiar(Integer codigo) {
-        intentos.remove(codigo);
+        intentos.invalidate(codigo);
     }
 
     private static final class EstadoIntentos {
