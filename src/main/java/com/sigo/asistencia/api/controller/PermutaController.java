@@ -1,6 +1,10 @@
 package com.sigo.asistencia.api.controller;
 
 import com.sigo.asistencia.application.port.in.PermutaUseCase;
+import com.sigo.asistencia.application.port.in.ExportarPermutasExcelUseCase;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,6 +20,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PermutaController {
     private final PermutaUseCase service;
+    private final ExportarPermutasExcelUseCase exportador;
 
     @GetMapping("/agentes/{codigo}")
     public PermutaUseCase.AgenteIdentificado agente(@PathVariable int codigo) {
@@ -37,6 +42,27 @@ public class PermutaController {
             @RequestParam(required = false) Integer codigo,
             @RequestParam(required = false) Long turnoId) {
         return service.listar(inicio, fin, plazaId, codigo, turnoId);
+    }
+
+    @GetMapping(value = "/exportar", produces =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> exportar(
+            @RequestParam(required = false) Integer anio,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin,
+            @RequestParam(required = false) Long plazaId,
+            @RequestParam(required = false) Integer codigo,
+            @RequestParam(required = false) Long turnoId) {
+        int anioReporte = anio == null ? (inicio == null ? LocalDate.now().getYear() : inicio.getYear()) : anio;
+        byte[] excel = exportador.exportar(anioReporte, inicio, fin, plazaId, turnoId, codigo);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"SIGO_Permutas_" + anioReporte + ".xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excel);
     }
 
     @GetMapping("/dashboard")
