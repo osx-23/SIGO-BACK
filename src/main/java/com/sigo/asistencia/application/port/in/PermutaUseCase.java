@@ -8,13 +8,12 @@ import java.util.List;
 public interface PermutaUseCase {
     record PermutaCommand(
             Integer codigoSolicitante, LocalDate fechaSolicitante, Long turnoSolicitanteId,
-            Integer codigoAceptante, LocalDate fechaAceptante, Long turnoAceptanteId
+            Long plazaSolicitanteId, Integer codigoAceptante, LocalDate fechaAceptante,
+            Long turnoAceptanteId, Long plazaAceptanteId
     ) {}
 
-    record AgenteProgramado(
-            int codigo, String nombre, Long plazaId, String plaza,
-            Long turnoId, String turno, LocalDate fecha
-    ) {}
+    record AgenteIdentificado(int codigo, String nombre) {}
+
     record PermutaDetalle(
             Long id, Long plazaSolicitanteId, String plazaSolicitante,
             int codigoSolicitante, String nombreSolicitante,
@@ -28,8 +27,7 @@ public interface PermutaUseCase {
     record DashboardPermutas(long total, List<TotalPlaza> porPlaza, List<TopAgente> topAgentes) {}
 
 
-    AgenteProgramado agente(int codigo, LocalDate fecha);
-    List<AgenteProgramado> candidatos(Long plazaId, Long turnoId, LocalDate fecha);
+    AgenteIdentificado agente(int codigo);
     void registrarDesdeAsistencia(Long asistenciaId, Long plazaId, Long turnoId,
                                   LocalDate fecha, List<PermutaCommand> solicitudes);
     List<PermutaDetalle> listar(LocalDate inicio, LocalDate fin,

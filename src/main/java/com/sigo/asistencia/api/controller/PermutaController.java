@@ -18,16 +18,8 @@ public class PermutaController {
     private final PermutaUseCase service;
 
     @GetMapping("/agentes/{codigo}")
-    public PermutaUseCase.AgenteProgramado agente(@PathVariable int codigo,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
-        return service.agente(codigo, fecha);
-    }
-
-    @GetMapping("/candidatos")
-    public List<PermutaUseCase.AgenteProgramado> candidatos(
-            @RequestParam Long plazaId, @RequestParam Long turnoId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
-        return service.candidatos(plazaId, turnoId, fecha);
+    public PermutaUseCase.AgenteIdentificado agente(@PathVariable int codigo) {
+        return service.agente(codigo);
     }
 
     @GetMapping("/turno")

@@ -7,8 +7,7 @@ import com.sigo.asistencia.application.port.in.PermutaUseCase.*;
 import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
 import com.sigo.personal.infrastructure.persistence.repository.TrabajadorRepository;
 import com.sigo.personal.infrastructure.persistence.repository.TurnoRepository;
-import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionTurno;
-import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionTurnoRepository;
+import com.sigo.personal.infrastructure.persistence.repository.PlazaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -24,73 +23,47 @@ import java.util.*;
 public class PermutaJpaAdapter implements PermutaUseCase {
     private final JdbcTemplate jdbc;
     private final TrabajadorRepository trabajadores;
-    private final ProgramacionTurnoRepository programaciones;
     private final TurnoRepository turnos;
-
-    public AgenteProgramado agente(int codigo, LocalDate fecha) {
-        Trabajador t = trabajadores.findByCodigo(codigo)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No existe un trabajador con código " + codigo));
-        String puesto = t.getPuesto() == null ? "" : t.getPuesto().getNombre();
-        if (!Boolean.TRUE.equals(t.getActivo()) ||
-                !puesto.toLowerCase(Locale.ROOT).contains("recaud")) {
-            throw new IllegalArgumentException(
-                    "El código " + codigo + " no corresponde a un agente de recaudación activo");
-        }
-        ProgramacionTurno p = programaciones.findByTrabajadorIdAndFecha(t.getId(), fecha)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No hay programación para el agente " + codigo + " el " + fecha));
-        if (p.getEstado() == null || !p.getEstado().esOperativo()) {
-            throw new IllegalArgumentException(
-                    "El agente " + codigo + " no tiene turno A, B o C el " + fecha);
-        }
-        var turno = turnos.findAll().stream()
-                .filter(x -> x.getCodigo().trim().equalsIgnoreCase(p.getEstado().name()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No existe el turno " + p.getEstado().name() + " en el catálogo"));
-        return new AgenteProgramado(
-                t.getCodigo(), t.getNombreCompleto(), p.getPlaza().getId(),
-                p.getPlaza().getCodigo(), turno.getId(), turno.getCodigo().trim(), fecha
-        );
-    }
-
+    private final PlazaRepository plazas;
 
     /**
-     * Devuelve únicamente agentes de recaudación activos, realmente programados
-     * en el turno indicado y que aún no participan en una permuta ese día.
-     * Un turno con varios candidatos NUNCA autoriza a elegir uno arbitrariamente.
+     * Solo verifica el código y puesto del agente. La programación
+     * mensual no interviene: plazas, fechas y turnos se ingresan manualmente.
      */
+    private Trabajador obtenerAgente(int codigo) {
+        Trabajador trabajador = trabajadores.findByCodigo(codigo)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No existe un trabajador con código " + codigo));
+        String puesto = trabajador.getPuesto() == null ? "" :
+                trabajador.getPuesto().getNombre();
+        if (!Boolean.TRUE.equals(trabajador.getActivo()) ||
+                !puesto.toLowerCase(Locale.ROOT).contains("recaud")) {
+            throw new IllegalArgumentException(
+                    "El código " + codigo + " no pertenece a un agente de recaudación activo");
+        }
+        return trabajador;
+    }
+
     @Transactional(readOnly = true)
-    public List<AgenteProgramado> candidatos(Long plazaId, Long turnoId, LocalDate fecha) {
-        var turno = turnos.findById(turnoId).orElseThrow(() ->
-                new ResourceNotFoundException("Turno no encontrado: " + turnoId));
-        String codigoTurno = turno.getCodigo().trim();
-        List<Integer> ocupados = jdbc.queryForList("""
-            SELECT codigo_solicitante AS codigo
-              FROM asistencia_permuta WHERE fecha_solicitante = ?
-            UNION
-            SELECT codigo_aceptante AS codigo
-              FROM asistencia_permuta WHERE fecha_aceptante = ?
-            """, Integer.class, Date.valueOf(fecha), Date.valueOf(fecha));
-        Set<Integer> reservados = new HashSet<>(ocupados);
-        return programaciones.findMes(plazaId, fecha, fecha).stream()
-                .filter(p -> p.getEstado() != null
-                        && p.getEstado().esOperativo()
-                        && p.getEstado().name().equalsIgnoreCase(codigoTurno))
-                .filter(p -> p.getTrabajador() != null
-                        && Boolean.TRUE.equals(p.getTrabajador().getActivo())
-                        && p.getTrabajador().getPuesto() != null
-                        && p.getTrabajador().getPuesto().getNombre()
-                              .toLowerCase(Locale.ROOT).contains("recaud"))
-                .filter(p -> !reservados.contains(p.getTrabajador().getCodigo()))
-                .map(p -> new AgenteProgramado(
-                        p.getTrabajador().getCodigo(),
-                        p.getTrabajador().getNombreCompleto(),
-                        p.getPlaza().getId(), p.getPlaza().getCodigo(),
-                        turno.getId(), codigoTurno, fecha))
-                .sorted(Comparator.comparing(AgenteProgramado::nombre))
-                .toList();
+    public AgenteIdentificado agente(int codigo) {
+        Trabajador t = obtenerAgente(codigo);
+        return new AgenteIdentificado(t.getCodigo(), t.getNombreCompleto());
+    }
+
+    private void validarTurno(Long turnoId) {
+        var turno = turnos.findById(turnoId)
+                .orElseThrow(() -> new IllegalArgumentException("Turno no encontrado"));
+        if (!turno.getCodigo().trim().matches("[ABC]")) {
+            throw new IllegalArgumentException("Solo se aceptan turnos A, B o C");
+        }
+    }
+
+    private void validarPlaza(Long plazaId) {
+        var plaza = plazas.findById(plazaId)
+                .orElseThrow(() -> new IllegalArgumentException("Plaza no encontrada"));
+        if (!Boolean.TRUE.equals(plaza.getActivo())) {
+            throw new IllegalArgumentException("La plaza seleccionada está inactiva");
+        }
     }
 
     @Transactional
@@ -114,48 +87,64 @@ public class PermutaJpaAdapter implements PermutaUseCase {
         }
         Set<String> participantes = new HashSet<>();
         for (PermutaCommand s : solicitudes) {
-            AgenteProgramado sol = agente(s.codigoSolicitante(), s.fechaSolicitante());
-            AgenteProgramado ace = agente(s.codigoAceptante(), s.fechaAceptante());
-            if (sol.codigo() == ace.codigo()) {
-                throw new IllegalArgumentException(
-                        "El solicitante y el aceptante deben ser personas distintas");
+            if (s.codigoSolicitante() == null || s.codigoAceptante() == null ||
+                    s.fechaSolicitante() == null || s.fechaAceptante() == null ||
+                    s.plazaSolicitanteId() == null || s.plazaAceptanteId() == null ||
+                    s.turnoSolicitanteId() == null || s.turnoAceptanteId() == null) {
+                throw new IllegalArgumentException("Completa todos los campos de la permuta");
             }
-            if (!Objects.equals(sol.turnoId(), s.turnoSolicitanteId()) ||
-                    !Objects.equals(ace.turnoId(), s.turnoAceptanteId())) {
+            Trabajador sol = obtenerAgente(s.codigoSolicitante());
+            Trabajador ace = obtenerAgente(s.codigoAceptante());
+            if (sol.getId().equals(ace.getId())) {
                 throw new IllegalArgumentException(
-                        "La programación de uno de los agentes cambió; vuelve a consultar su turno");
+                        "Solicitante y aceptante deben ser personas distintas");
             }
-            if (Objects.equals(sol.plazaId(), ace.plazaId()) &&
-                    Objects.equals(sol.turnoId(), ace.turnoId()) &&
-                    Objects.equals(sol.fecha(), ace.fecha())) {
+
+            validarTurno(s.turnoSolicitanteId());
+            validarTurno(s.turnoAceptanteId());
+            validarPlaza(s.plazaSolicitanteId());
+            validarPlaza(s.plazaAceptanteId());
+
+            if (Objects.equals(s.plazaSolicitanteId(), s.plazaAceptanteId()) &&
+                    Objects.equals(s.turnoSolicitanteId(), s.turnoAceptanteId()) &&
+                    s.fechaSolicitante().equals(s.fechaAceptante())) {
                 throw new IllegalArgumentException(
-                        "Ambos agentes ya tienen el mismo turno; no existe cambio efectivo");
+                        "Las dos jornadas son idénticas; no hay un intercambio real");
             }
-            boolean correspondeTurno = (Objects.equals(sol.plazaId(), plazaId) &&
-                    Objects.equals(sol.turnoId(), turnoId) && sol.fecha().equals(fecha))
-                    || (Objects.equals(ace.plazaId(), plazaId) &&
-                    Objects.equals(ace.turnoId(), turnoId) && ace.fecha().equals(fecha));
+
+            boolean correspondeTurno =
+                    (Objects.equals(s.plazaSolicitanteId(), plazaId) &&
+                            Objects.equals(s.turnoSolicitanteId(), turnoId) &&
+                            s.fechaSolicitante().equals(fecha)) ||
+                    (Objects.equals(s.plazaAceptanteId(), plazaId) &&
+                            Objects.equals(s.turnoAceptanteId(), turnoId) &&
+                            s.fechaAceptante().equals(fecha));
             if (!correspondeTurno) {
                 throw new IllegalArgumentException(
-                        "Al menos uno de los turnos de la permuta debe coincidir con la asistencia registrada");
+                        "Al menos uno de los turnos originales debe coincidir con esta asistencia");
             }
-            for (AgenteProgramado a : List.of(sol, ace)) {
-                String clave = a.codigo() + ":" + a.fecha();
+
+            for (var lado : List.of(
+                    new AbstractMap.SimpleEntry<>(sol.getCodigo(), s.fechaSolicitante()),
+                    new AbstractMap.SimpleEntry<>(ace.getCodigo(), s.fechaAceptante()))) {
+                String clave = lado.getKey() + ":" + lado.getValue();
                 if (!participantes.add(clave)) {
                     throw new ConflictException(
-                            "Un agente no puede aparecer en más de una permuta para la misma fecha");
+                            "El mismo agente aparece en más de una permuta para esa fecha");
                 }
                 Integer existentes = jdbc.queryForObject("""
                     SELECT count(*) FROM asistencia_permuta
                     WHERE (codigo_solicitante = ? AND fecha_solicitante = ?)
                        OR (codigo_aceptante = ? AND fecha_aceptante = ?)
-                    """, Integer.class, a.codigo(), Date.valueOf(a.fecha()),
-                        a.codigo(), Date.valueOf(a.fecha()));
+                    """, Integer.class, lado.getKey(), Date.valueOf(lado.getValue()),
+                        lado.getKey(), Date.valueOf(lado.getValue()));
                 if (existentes != null && existentes > 0) {
                     throw new ConflictException(
-                            "Ya existe una permuta del agente " + a.codigo() + " el " + a.fecha());
+                            "Ya existe una permuta del agente " + lado.getKey() +
+                                    " el " + lado.getValue());
                 }
             }
+
             jdbc.update("""
                 INSERT INTO asistencia_permuta
                     (asistencia_id, solicitante_id, codigo_solicitante, plaza_solicitante_id,
@@ -163,11 +152,11 @@ public class PermutaJpaAdapter implements PermutaUseCase {
                      plaza_aceptante_id, turno_aceptante_id, fecha_aceptante)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                asistenciaId,
-                trabajadores.findByCodigo(sol.codigo()).orElseThrow().getId(),
-                sol.codigo(), sol.plazaId(), sol.turnoId(), Date.valueOf(sol.fecha()),
-                trabajadores.findByCodigo(ace.codigo()).orElseThrow().getId(),
-                ace.codigo(), ace.plazaId(), ace.turnoId(), Date.valueOf(ace.fecha()));
+                    asistenciaId, sol.getId(), sol.getCodigo(),
+                    s.plazaSolicitanteId(), s.turnoSolicitanteId(),
+                    Date.valueOf(s.fechaSolicitante()),
+                    ace.getId(), ace.getCodigo(), s.plazaAceptanteId(),
+                    s.turnoAceptanteId(), Date.valueOf(s.fechaAceptante()));
         }
     }
 

@@ -58,7 +58,8 @@ public class AsistenciaController {
                         : request.permutas().stream().map(p ->
                             new PermutaUseCase.PermutaCommand(
                                 p.codigoSolicitante(), p.fechaSolicitante(), p.turnoSolicitanteId(),
-                                p.codigoAceptante(), p.fechaAceptante(), p.turnoAceptanteId()
+                                p.plazaSolicitanteId(), p.codigoAceptante(), p.fechaAceptante(),
+                                p.turnoAceptanteId(), p.plazaAceptanteId()
                             )).toList()
         );
         return ResponseEntity.ok(toResponse(creada));

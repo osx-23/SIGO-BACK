@@ -8,7 +8,9 @@ public record PermutaRequest(
         @NotNull @Positive Integer codigoSolicitante,
         @NotNull LocalDate fechaSolicitante,
         @NotNull @Positive Long turnoSolicitanteId,
+        @NotNull @Positive Long plazaSolicitanteId,
         @NotNull @Positive Integer codigoAceptante,
         @NotNull LocalDate fechaAceptante,
-        @NotNull @Positive Long turnoAceptanteId
+        @NotNull @Positive Long turnoAceptanteId,
+        @NotNull @Positive Long plazaAceptanteId
 ) {}
