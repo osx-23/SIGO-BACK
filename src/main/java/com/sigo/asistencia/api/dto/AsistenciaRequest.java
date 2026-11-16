@@ -58,7 +58,9 @@ public record AsistenciaRequest(
         @Valid
         List<AusenciaRequest> ausencias,
 
-        List<@NotBlank String> evidencias
+        List<@NotBlank String> evidencias,
+
+        @Valid List<PermutaRequest> permutas
 
 ) {
 }

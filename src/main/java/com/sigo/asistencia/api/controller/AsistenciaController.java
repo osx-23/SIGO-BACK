@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import com.sigo.asistencia.application.service.PermutaService;
+import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequestMapping("/api/asistencias")
@@ -34,33 +36,27 @@ public class AsistenciaController {
     private final RegistrarAsistenciaExcepcionUseCase asistenciaExcepcionUseCase;
     private final ObtenerProgramadosAsistenciaUseCase programacionService;
     private final AsistenciaAccesoUseCase accesoUseCase;
+    private final PermutaService permutaService;
 
     @PostMapping
+    @Transactional
     public ResponseEntity<AsistenciaResponse> registrar(
             @Valid @RequestBody AsistenciaRequest request,
             @RequestParam(defaultValue = "false") boolean excepcionControlador
     ) {
         accesoUseCase.exigirGestion();
 
-        if (excepcionControlador) {
-            return ResponseEntity.ok(
-                    toResponse(
-                            asistenciaExcepcionUseCase.registrar(
-                                    toCommand(request)
-                            )
-                    )
-            );
+        if (!excepcionControlador) {
+            asegurarIdentidad(request);
         }
-
-        asegurarIdentidad(request);
-
-        return ResponseEntity.ok(
-                toResponse(
-                        gestionarUseCase.registrar(
-                                toCommand(request)
-                        )
-                )
+        var creada = excepcionControlador
+                ? asistenciaExcepcionUseCase.registrar(toCommand(request))
+                : gestionarUseCase.registrar(toCommand(request));
+        permutaService.registrarDesdeAsistencia(
+                creada.id(), request.plazaId(), request.turnoId(),
+                request.fecha(), request.permutas()
         );
+        return ResponseEntity.ok(toResponse(creada));
     }
 
     @PutMapping("/{id}")
