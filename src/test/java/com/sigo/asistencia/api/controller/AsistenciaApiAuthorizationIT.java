@@ -72,7 +72,7 @@ class AsistenciaApiAuthorizationIT {
     private AsistenciaAccesoUseCase accesoUseCase;
 
     @MockBean
-    private com.sigo.asistencia.application.service.PermutaService permutaService;
+    private com.sigo.asistencia.application.port.in.PermutaUseCase permutaService;
 
     @Test
     void anonimoNoPuedeConsultarAsistencias() throws Exception {

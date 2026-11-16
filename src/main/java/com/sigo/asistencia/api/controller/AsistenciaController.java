@@ -22,7 +22,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import com.sigo.asistencia.application.service.PermutaService;
+import com.sigo.asistencia.application.port.in.PermutaUseCase;
 import org.springframework.transaction.annotation.Transactional;
 
 @RestController
@@ -36,7 +36,7 @@ public class AsistenciaController {
     private final RegistrarAsistenciaExcepcionUseCase asistenciaExcepcionUseCase;
     private final ObtenerProgramadosAsistenciaUseCase programacionService;
     private final AsistenciaAccesoUseCase accesoUseCase;
-    private final PermutaService permutaService;
+    private final PermutaUseCase permutaService;
 
     @PostMapping
     @Transactional
@@ -54,7 +54,12 @@ public class AsistenciaController {
                 : gestionarUseCase.registrar(toCommand(request));
         permutaService.registrarDesdeAsistencia(
                 creada.id(), request.plazaId(), request.turnoId(),
-                request.fecha(), request.permutas()
+                request.fecha(), request.permutas() == null ? List.of()
+                        : request.permutas().stream().map(p ->
+                            new PermutaUseCase.PermutaCommand(
+                                p.codigoSolicitante(), p.fechaSolicitante(), p.turnoSolicitanteId(),
+                                p.codigoAceptante(), p.fechaAceptante(), p.turnoAceptanteId()
+                            )).toList()
         );
         return ResponseEntity.ok(toResponse(creada));
     }

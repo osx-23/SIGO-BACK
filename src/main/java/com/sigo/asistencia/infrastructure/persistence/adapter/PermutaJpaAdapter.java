@@ -1,69 +1,53 @@
-package com.sigo.asistencia.application.service;
+package com.sigo.asistencia.infrastructure.persistence.adapter;
 
-import com.sigo.asistencia.api.dto.PermutaRequest;
+import com.sigo.asistencia.application.port.in.PermutaUseCase;
+import com.sigo.shared.exception.ResourceNotFoundException;
+import com.sigo.shared.exception.ConflictException;
+import com.sigo.asistencia.application.port.in.PermutaUseCase.*;
 import com.sigo.personal.infrastructure.persistence.entity.Trabajador;
 import com.sigo.personal.infrastructure.persistence.repository.TrabajadorRepository;
 import com.sigo.personal.infrastructure.persistence.repository.TurnoRepository;
 import com.sigo.programacion.infrastructure.persistence.entity.ProgramacionTurno;
 import com.sigo.programacion.infrastructure.persistence.repository.ProgramacionTurnoRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.sql.Date;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class PermutaService {
+public class PermutaJpaAdapter implements PermutaUseCase {
     private final JdbcTemplate jdbc;
     private final TrabajadorRepository trabajadores;
     private final ProgramacionTurnoRepository programaciones;
     private final TurnoRepository turnos;
 
-    public record AgenteProgramado(
-            int codigo, String nombre, Long plazaId, String plaza,
-            Long turnoId, String turno, LocalDate fecha
-    ) {}
-    public record PermutaDetalle(
-            Long id, Long plazaSolicitanteId, String plazaSolicitante,
-            int codigoSolicitante, String nombreSolicitante,
-            Long turnoSolicitanteId, String turnoSolicitante, LocalDate fechaSolicitante,
-            Long plazaAceptanteId, String plazaAceptante,
-            int codigoAceptante, String nombreAceptante,
-            Long turnoAceptanteId, String turnoAceptante, LocalDate fechaAceptante
-    ) {}
-    public record TotalPlaza(String plaza, long total) {}
-    public record TopAgente(int codigo, String nombre, long total) {}
-    public record DashboardPermutas(long total, List<TotalPlaza> porPlaza, List<TopAgente> topAgentes) {}
-
     public AgenteProgramado agente(int codigo, LocalDate fecha) {
         Trabajador t = trabajadores.findByCodigo(codigo)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "No existe un trabajador con código " + codigo));
         String puesto = t.getPuesto() == null ? "" : t.getPuesto().getNombre();
         if (!Boolean.TRUE.equals(t.getActivo()) ||
                 !puesto.toLowerCase(Locale.ROOT).contains("recaud")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new IllegalArgumentException(
                     "El código " + codigo + " no corresponde a un agente de recaudación activo");
         }
         ProgramacionTurno p = programaciones.findByTrabajadorIdAndFecha(t.getId(), fecha)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                .orElseThrow(() -> new IllegalArgumentException(
                         "No hay programación para el agente " + codigo + " el " + fecha));
         if (p.getEstado() == null || !p.getEstado().esOperativo()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new IllegalArgumentException(
                     "El agente " + codigo + " no tiene turno A, B o C el " + fecha);
         }
         var turno = turnos.findAll().stream()
                 .filter(x -> x.getCodigo().trim().equalsIgnoreCase(p.getEstado().name()))
                 .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                .orElseThrow(() -> new IllegalArgumentException(
                         "No existe el turno " + p.getEstado().name() + " en el catálogo"));
         return new AgenteProgramado(
                 t.getCodigo(), t.getNombreCompleto(), p.getPlaza().getId(),
@@ -73,25 +57,25 @@ public class PermutaService {
 
     @Transactional
     public void registrarDesdeAsistencia(Long asistenciaId, Long plazaId, Long turnoId,
-                                         LocalDate fecha, List<PermutaRequest> solicitudes) {
+                                         LocalDate fecha, List<PermutaCommand> solicitudes) {
         if (solicitudes == null || solicitudes.isEmpty()) return;
         Set<String> participantes = new HashSet<>();
-        for (PermutaRequest s : solicitudes) {
+        for (PermutaCommand s : solicitudes) {
             AgenteProgramado sol = agente(s.codigoSolicitante(), s.fechaSolicitante());
             AgenteProgramado ace = agente(s.codigoAceptante(), s.fechaAceptante());
             if (sol.codigo() == ace.codigo()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                throw new IllegalArgumentException(
                         "El solicitante y el aceptante deben ser personas distintas");
             }
             if (!Objects.equals(sol.turnoId(), s.turnoSolicitanteId()) ||
                     !Objects.equals(ace.turnoId(), s.turnoAceptanteId())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                throw new IllegalArgumentException(
                         "La programación de uno de los agentes cambió; vuelve a consultar su turno");
             }
             if (Objects.equals(sol.plazaId(), ace.plazaId()) &&
                     Objects.equals(sol.turnoId(), ace.turnoId()) &&
                     Objects.equals(sol.fecha(), ace.fecha())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                throw new IllegalArgumentException(
                         "Ambos agentes ya tienen el mismo turno; no existe cambio efectivo");
             }
             boolean correspondeTurno = (Objects.equals(sol.plazaId(), plazaId) &&
@@ -99,13 +83,13 @@ public class PermutaService {
                     || (Objects.equals(ace.plazaId(), plazaId) &&
                     Objects.equals(ace.turnoId(), turnoId) && ace.fecha().equals(fecha));
             if (!correspondeTurno) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                throw new IllegalArgumentException(
                         "Al menos uno de los turnos de la permuta debe coincidir con la asistencia registrada");
             }
             for (AgenteProgramado a : List.of(sol, ace)) {
                 String clave = a.codigo() + ":" + a.fecha();
                 if (!participantes.add(clave)) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    throw new ConflictException(
                             "Un agente no puede aparecer en más de una permuta para la misma fecha");
                 }
                 Integer existentes = jdbc.queryForObject("""
@@ -115,7 +99,7 @@ public class PermutaService {
                     """, Integer.class, a.codigo(), Date.valueOf(a.fecha()),
                         a.codigo(), Date.valueOf(a.fecha()));
                 if (existentes != null && existentes > 0) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    throw new ConflictException(
                             "Ya existe una permuta del agente " + a.codigo() + " el " + a.fecha());
                 }
             }
@@ -138,7 +122,7 @@ public class PermutaService {
         LocalDate desde = inicio == null ? LocalDate.of(2000, 1, 1) : inicio;
         LocalDate hasta = fin == null ? LocalDate.of(2100, 12, 31) : fin;
         if (desde.isAfter(hasta)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La fecha inicial supera la final");
+            throw new IllegalArgumentException( "La fecha inicial supera la final");
         }
         return jdbc.query("""
             SELECT a.id, ps.id AS ps_id, ps.codigo AS ps, a.codigo_solicitante,
