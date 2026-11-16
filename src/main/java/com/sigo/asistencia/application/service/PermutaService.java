@@ -199,7 +199,9 @@ public class PermutaService {
     @Transactional(readOnly = true)
     public DashboardPermutas dashboard(YearMonth mes) {
         var registros = consultar(mes.atDay(1), mes.atEndOfMonth());
-        Map<String, Long> plazas = new TreeMap<>();
+        Map<String, Long> plazas = new LinkedHashMap<>();
+        jdbc.queryForList("SELECT codigo FROM plazas WHERE activo = true ORDER BY id", String.class)
+                .forEach(codigo -> plazas.put(codigo, 0L));
         Map<Integer, String> nombres = new HashMap<>();
         Map<Integer, Long> agentes = new HashMap<>();
         for (PermutaDetalle p : registros) {
