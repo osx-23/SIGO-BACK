@@ -55,10 +55,63 @@ public class PermutaJpaAdapter implements PermutaUseCase {
         );
     }
 
+
+    /**
+     * Devuelve únicamente agentes de recaudación activos, realmente programados
+     * en el turno indicado y que aún no participan en una permuta ese día.
+     * Un turno con varios candidatos NUNCA autoriza a elegir uno arbitrariamente.
+     */
+    @Transactional(readOnly = true)
+    public List<AgenteProgramado> candidatos(Long plazaId, Long turnoId, LocalDate fecha) {
+        var turno = turnos.findById(turnoId).orElseThrow(() ->
+                new ResourceNotFoundException("Turno no encontrado: " + turnoId));
+        String codigoTurno = turno.getCodigo().trim();
+        List<Integer> ocupados = jdbc.queryForList("""
+            SELECT codigo_solicitante AS codigo
+              FROM asistencia_permuta WHERE fecha_solicitante = ?
+            UNION
+            SELECT codigo_aceptante AS codigo
+              FROM asistencia_permuta WHERE fecha_aceptante = ?
+            """, Integer.class, Date.valueOf(fecha), Date.valueOf(fecha));
+        Set<Integer> reservados = new HashSet<>(ocupados);
+        return programaciones.findMes(plazaId, fecha, fecha).stream()
+                .filter(p -> p.getEstado() != null
+                        && p.getEstado().esOperativo()
+                        && p.getEstado().name().equalsIgnoreCase(codigoTurno))
+                .filter(p -> p.getTrabajador() != null
+                        && Boolean.TRUE.equals(p.getTrabajador().getActivo())
+                        && p.getTrabajador().getPuesto() != null
+                        && p.getTrabajador().getPuesto().getNombre()
+                              .toLowerCase(Locale.ROOT).contains("recaud"))
+                .filter(p -> !reservados.contains(p.getTrabajador().getCodigo()))
+                .map(p -> new AgenteProgramado(
+                        p.getTrabajador().getCodigo(),
+                        p.getTrabajador().getNombreCompleto(),
+                        p.getPlaza().getId(), p.getPlaza().getCodigo(),
+                        turno.getId(), codigoTurno, fecha))
+                .sorted(Comparator.comparing(AgenteProgramado::nombre))
+                .toList();
+    }
+
     @Transactional
     public void registrarDesdeAsistencia(Long asistenciaId, Long plazaId, Long turnoId,
                                          LocalDate fecha, List<PermutaCommand> solicitudes) {
         if (solicitudes == null || solicitudes.isEmpty()) return;
+        /*
+         * Protege el chequeo de duplicados frente a dos controladores registrando
+         * simultáneamente. El bloqueo es por agente/fecha y dura la transacción.
+         * Orden fijo para evitar interbloqueos al guardar varias permutas.
+         */
+        SortedSet<String> claves = new TreeSet<>();
+        for (PermutaCommand s : solicitudes) {
+            claves.add("SIGO:PERMUTA:" + s.codigoSolicitante() + ":" + s.fechaSolicitante());
+            claves.add("SIGO:PERMUTA:" + s.codigoAceptante() + ":" + s.fechaAceptante());
+        }
+        for (String clave : claves) {
+            jdbc.query(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(CAST(? AS text), 0))",
+                    (java.sql.ResultSet rs) -> { rs.next(); return null; }, clave);
+        }
         Set<String> participantes = new HashSet<>();
         for (PermutaCommand s : solicitudes) {
             AgenteProgramado sol = agente(s.codigoSolicitante(), s.fechaSolicitante());

@@ -29,6 +29,7 @@ public interface PermutaUseCase {
 
 
     AgenteProgramado agente(int codigo, LocalDate fecha);
+    List<AgenteProgramado> candidatos(Long plazaId, Long turnoId, LocalDate fecha);
     void registrarDesdeAsistencia(Long asistenciaId, Long plazaId, Long turnoId,
                                   LocalDate fecha, List<PermutaCommand> solicitudes);
     List<PermutaDetalle> listar(LocalDate inicio, LocalDate fin,
