@@ -79,6 +79,9 @@ class InventarioApiAuthorizationIT {
     @MockBean
     private InventarioExcelService excelService;
 
+    @MockBean
+    private com.sigo.inventario.application.port.in.CorregirInventarioUseCase corregirUseCase;
+
     private InventarioUsuarioActual operador;
     private InventarioUsuarioActual controlador;
     private InventarioUsuarioActual supervisor;
