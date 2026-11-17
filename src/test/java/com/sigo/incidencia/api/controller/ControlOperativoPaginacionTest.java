@@ -41,8 +41,7 @@ class ControlOperativoPaginacionTest {
         assertEquals(50, resultado.pagina());
         assertEquals(1, resultado.registros().size());
         verify(jdbc).queryForList(contains("limit ? offset ?"),
-                argThat((Object[] args) -> args.length == 4 &&
-                        args[2].equals(10) && args[3].equals(500L)));
+                eq(desde), eq(hasta), eq(10), eq(500L));
     }
 
     @Test
