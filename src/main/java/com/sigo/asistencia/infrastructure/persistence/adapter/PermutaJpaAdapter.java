@@ -168,13 +168,16 @@ public class PermutaJpaAdapter implements PermutaUseCase {
         }
         return jdbc.query("""
             SELECT a.id, ps.id AS ps_id, ps.codigo AS ps, a.codigo_solicitante,
-                   s.nombre_completo AS ns, ts.id AS ts_id, ts.codigo AS ts,
+                   COALESCE(a.nombre_solicitante_historico, s.nombre_completo) AS ns,
+                   ts.id AS ts_id, ts.codigo AS ts,
                    a.fecha_solicitante, pa.id AS pa_id, pa.codigo AS pa,
-                   a.codigo_aceptante, ac.nombre_completo AS na, ta.id AS ta_id,
+                   a.codigo_aceptante,
+                   COALESCE(a.nombre_aceptante_historico, ac.nombre_completo) AS na,
+                   ta.id AS ta_id,
                    ta.codigo AS ta, a.fecha_aceptante
             FROM asistencia_permuta a
-            JOIN trabajadores s ON s.id = a.solicitante_id
-            JOIN trabajadores ac ON ac.id = a.aceptante_id
+            LEFT JOIN trabajadores s ON s.id = a.solicitante_id
+            LEFT JOIN trabajadores ac ON ac.id = a.aceptante_id
             JOIN plazas ps ON ps.id = a.plaza_solicitante_id
             JOIN plazas pa ON pa.id = a.plaza_aceptante_id
             JOIN turnos ts ON ts.id = a.turno_solicitante_id
