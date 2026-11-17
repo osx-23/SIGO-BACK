@@ -44,6 +44,18 @@ public class PermutaController {
         return service.listar(inicio, fin, plazaId, codigo, turnoId);
     }
 
+    @GetMapping("/pagina")
+    public PermutaUseCase.PaginaPermutas pagina(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin,
+            @RequestParam(required = false) Long plazaId,
+            @RequestParam(required = false) Integer codigo,
+            @RequestParam(required = false) Long turnoId,
+            @RequestParam(defaultValue = "0") int pagina,
+            @RequestParam(defaultValue = "10") int tamano) {
+        return service.listarPaginado(inicio, fin, plazaId, codigo, turnoId, pagina, tamano);
+    }
+
     @GetMapping(value = "/exportar", produces =
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     public ResponseEntity<byte[]> exportar(

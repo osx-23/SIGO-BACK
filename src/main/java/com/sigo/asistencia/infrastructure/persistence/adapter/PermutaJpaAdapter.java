@@ -213,6 +213,87 @@ public class PermutaJpaAdapter implements PermutaUseCase {
                 .toList();
     }
 
+    /**
+     * Paginación en PostgreSQL: filtros aplicados ANTES de LIMIT/OFFSET.
+     * Evita cargar el histórico completo de 2026 en cada cambio de página.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public PaginaPermutas listarPaginado(LocalDate inicio, LocalDate fin,
+                                         Long plazaId, Integer codigo, Long turnoId,
+                                         int pagina, int tamano) {
+        if (pagina < 0 || tamano < 1 || tamano > 100 || (long) pagina * tamano > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Paginación inválida: usa páginas desde 0 y tamaño de 1 a 100");
+        }
+        LocalDate desde = inicio == null ? LocalDate.of(2000, 1, 1) : inicio;
+        LocalDate hasta = fin == null ? LocalDate.of(2100, 12, 31) : fin;
+        if (desde.isAfter(hasta)) {
+            throw new IllegalArgumentException("La fecha inicial supera la final");
+        }
+        var condiciones = new StringBuilder("""
+            WHERE ((a.fecha_solicitante BETWEEN ? AND ?)
+                OR (a.fecha_aceptante BETWEEN ? AND ?))
+            """);
+        var args = new ArrayList<Object>();
+        args.add(Date.valueOf(desde));
+        args.add(Date.valueOf(hasta));
+        args.add(Date.valueOf(desde));
+        args.add(Date.valueOf(hasta));
+        if (plazaId != null) {
+            condiciones.append(" AND (a.plaza_solicitante_id = ? OR a.plaza_aceptante_id = ?)");
+            args.add(plazaId);
+            args.add(plazaId);
+        }
+        if (codigo != null) {
+            condiciones.append(" AND (a.codigo_solicitante = ? OR a.codigo_aceptante = ?)");
+            args.add(codigo);
+            args.add(codigo);
+        }
+        if (turnoId != null) {
+            condiciones.append(" AND (a.turno_solicitante_id = ? OR a.turno_aceptante_id = ?)");
+            args.add(turnoId);
+            args.add(turnoId);
+        }
+
+        Long cuenta = jdbc.queryForObject("SELECT count(*) FROM asistencia_permuta a " +
+                condiciones, Long.class, args.toArray());
+        long total = cuenta == null ? 0L : cuenta;
+        long paginas = (total + tamano - 1) / tamano;
+        if ((long) pagina * tamano >= total) {
+            return new PaginaPermutas(List.of(), total, pagina, tamano, paginas);
+        }
+
+        String sql = """
+            SELECT a.id, ps.id AS ps_id, ps.codigo AS ps, a.codigo_solicitante,
+                   COALESCE(a.nombre_solicitante_historico, s.nombre_completo) AS ns,
+                   ts.id AS ts_id, ts.codigo AS ts,
+                   a.fecha_solicitante, pa.id AS pa_id, pa.codigo AS pa,
+                   a.codigo_aceptante,
+                   COALESCE(a.nombre_aceptante_historico, ac.nombre_completo) AS na,
+                   ta.id AS ta_id, ta.codigo AS ta, a.fecha_aceptante
+            FROM asistencia_permuta a
+            LEFT JOIN trabajadores s ON s.id = a.solicitante_id
+            LEFT JOIN trabajadores ac ON ac.id = a.aceptante_id
+            JOIN plazas ps ON ps.id = a.plaza_solicitante_id
+            JOIN plazas pa ON pa.id = a.plaza_aceptante_id
+            JOIN turnos ts ON ts.id = a.turno_solicitante_id
+            JOIN turnos ta ON ta.id = a.turno_aceptante_id
+            """ + condiciones +
+            " ORDER BY a.fecha_solicitante DESC, a.id DESC LIMIT ? OFFSET ?";
+        args.add(tamano);
+        args.add((long) pagina * tamano);
+        List<PermutaDetalle> registros = jdbc.query(sql, (rs, row) -> new PermutaDetalle(
+                rs.getLong("id"), rs.getLong("ps_id"), rs.getString("ps"),
+                rs.getInt("codigo_solicitante"), rs.getString("ns"),
+                rs.getLong("ts_id"), rs.getString("ts").trim(),
+                rs.getDate("fecha_solicitante").toLocalDate(),
+                rs.getLong("pa_id"), rs.getString("pa"),
+                rs.getInt("codigo_aceptante"), rs.getString("na"),
+                rs.getLong("ta_id"), rs.getString("ta").trim(),
+                rs.getDate("fecha_aceptante").toLocalDate()), args.toArray());
+        return new PaginaPermutas(registros, total, pagina, tamano, paginas);
+    }
+
     @Transactional(readOnly = true)
     public List<PermutaDetalle> delTurno(Long plazaId, Long turnoId, LocalDate fecha) {
         return consultar(fecha, fecha).stream()

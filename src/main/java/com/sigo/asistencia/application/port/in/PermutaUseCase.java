@@ -25,6 +25,8 @@ public interface PermutaUseCase {
     record TotalPlaza(String plaza, long total) {}
     record TopAgente(int codigo, String nombre, long total) {}
     record DashboardPermutas(long total, List<TotalPlaza> porPlaza, List<TopAgente> topAgentes) {}
+    record PaginaPermutas(List<PermutaDetalle> registros, long total,
+                          int pagina, int tamano, long totalPaginas) {}
 
 
     AgenteIdentificado agente(int codigo);
@@ -32,6 +34,9 @@ public interface PermutaUseCase {
                                   LocalDate fecha, List<PermutaCommand> solicitudes);
     List<PermutaDetalle> listar(LocalDate inicio, LocalDate fin,
                                Long plazaId, Integer codigo, Long turnoId);
+    PaginaPermutas listarPaginado(LocalDate inicio, LocalDate fin,
+                                 Long plazaId, Integer codigo, Long turnoId,
+                                 int pagina, int tamano);
     List<PermutaDetalle> delTurno(Long plazaId, Long turnoId, LocalDate fecha);
     DashboardPermutas dashboard(YearMonth mes);
 }

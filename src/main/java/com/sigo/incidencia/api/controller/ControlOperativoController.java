@@ -301,6 +301,63 @@ public class ControlOperativoController {
         return jdbc.queryForList(sql.toString(),args.toArray());
     }
 
+    /**
+     * Historial completo paginado: no hereda el límite de 500 de la API
+     * antigua. Los filtros se aplican al total y a los registros mostrados.
+     */
+    public record PaginaControlOperativo(
+        List<Map<String,Object>> registros, long total, int pagina,
+        int tamano, long totalPaginas
+    ) {}
+
+    @GetMapping("/pagina")
+    @Transactional(readOnly=true)
+    public PaginaControlOperativo listarPaginado(
+        @RequestParam(required=false) Long plazaId,
+        @RequestParam(required=false) String tipo,
+        @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate inicio,
+        @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate fin,
+        @RequestParam(defaultValue="0") int pagina,
+        @RequestParam(defaultValue="10") int tamano
+    ) {
+        actual();
+        if (pagina < 0 || tamano < 1 || tamano > 100 || (long) pagina * tamano > Integer.MAX_VALUE)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Paginación inválida: página desde 0 y tamaño entre 1 y 100");
+        LocalDate hasta = fin == null ? LocalDate.now(ZoneId.of("America/Lima")) : fin;
+        LocalDate desde = inicio == null ? hasta.minusDays(30) : inicio;
+        if (desde.isAfter(hasta))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rango de fechas inválido");
+        var condiciones = new StringBuilder(" where r.fecha>=? and r.fecha<=?");
+        var args = new ArrayList<Object>();
+        args.add(desde);
+        args.add(hasta);
+        if (plazaId != null) {
+            condiciones.append(" and r.plaza_id=?");
+            args.add(plazaId);
+        }
+        if (tipo != null && !tipo.isBlank()) {
+            if (!List.of("REPORTE", "MEDICION").contains(tipo))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tipo inválido");
+            condiciones.append(" and r.tipo=?");
+            args.add(tipo);
+        }
+        Long cuenta = jdbc.queryForObject(
+                "select count(*) from public.control_operativo_reportes r" + condiciones,
+                Long.class, args.toArray());
+        long total = cuenta == null ? 0 : cuenta;
+        long paginas = (total + tamano - 1) / tamano;
+        if ((long) pagina * tamano >= total) {
+            return new PaginaControlOperativo(List.of(), total, pagina, tamano, paginas);
+        }
+        var sql = BASE + condiciones +
+                " order by r.fecha desc,r.hora desc,r.id desc limit ? offset ?";
+        args.add(tamano);
+        args.add((long) pagina * tamano);
+        return new PaginaControlOperativo(
+                jdbc.queryForList(sql, args.toArray()), total, pagina, tamano, paginas);
+    }
+
     @GetMapping("/{id}")
     @Transactional(readOnly=true)
     public Map<String,Object> obtener(@PathVariable Long id) {
