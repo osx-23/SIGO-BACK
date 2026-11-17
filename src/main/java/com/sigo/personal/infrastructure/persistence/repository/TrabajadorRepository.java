@@ -109,7 +109,7 @@ public interface TrabajadorRepository
         FROM Trabajador t
         JOIN FETCH t.puesto p
         LEFT JOIN FETCH t.plaza
-        WHERE (:plazaId IS NULL OR t.plaza.id = :plazaId)
+        WHERE t.plaza.id = :plazaId
           AND t.activo = true
           AND p.nombre IN (
               'Agente de Recaudación',
@@ -121,6 +121,22 @@ public interface TrabajadorRepository
     List<Trabajador> findAgentesByPlaza(
             @Param("plazaId") Long plazaId
     );
+
+    /** Catálogo de agentes activos para registrar ausencias excepcionales. */
+    @Query("""
+        SELECT t
+        FROM Trabajador t
+        JOIN FETCH t.puesto p
+        LEFT JOIN FETCH t.plaza
+        WHERE t.activo = true
+          AND p.nombre IN (
+              'Agente de Recaudación',
+              'Agente de Recaudacion - Part Time',
+              'Agente de Recaudación Suplencia'
+          )
+        ORDER BY t.nombreCompleto ASC
+    """)
+    List<Trabajador> findAgentesActivos();
 
     /*
      * ============================================================
