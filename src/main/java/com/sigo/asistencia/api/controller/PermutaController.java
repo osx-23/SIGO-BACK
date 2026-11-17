@@ -77,6 +77,12 @@ public class PermutaController {
                 .body(excel);
     }
 
+    @GetMapping("/dashboard/anual")
+    public PermutaUseCase.ResumenAnualPermutas resumenAnual(
+            @RequestParam int anio) {
+        return service.resumenAnual(anio);
+    }
+
     @GetMapping("/dashboard")
     public PermutaUseCase.DashboardPermutas dashboard(@RequestParam String mes) {
         return service.dashboard(YearMonth.parse(mes));

@@ -339,4 +339,57 @@ public class PermutaJpaAdapter implements PermutaUseCase {
                 .limit(10).toList();
         return new DashboardPermutas(registros.size(), porPlaza, top);
     }
+    /**
+     * Resumen de enero a diciembre por plaza y año.
+     * Cada intercambio se atribuye una vez, a la plaza y mes originales
+     * del solicitante, tal como una tabla dinámica del registro histórico.
+     * Evita duplicar permutas que afectan a dos plazas distintas.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ResumenAnualPermutas resumenAnual(int anio) {
+        if (anio < 2000 || anio > 2100) {
+            throw new IllegalArgumentException("El año debe estar entre 2000 y 2100");
+        }
+        List<PermutaDetalle> registros = consultar(
+                LocalDate.of(anio, 1, 1), LocalDate.of(anio, 12, 31));
+        Map<String, long[]> conteos = new LinkedHashMap<>();
+        jdbc.queryForList("SELECT codigo FROM plazas ORDER BY id", String.class)
+                .forEach(codigo -> conteos.put(codigo, new long[12]));
+        long[] totalesMensuales = new long[12];
+        Map<Integer, Long> participaciones = new HashMap<>();
+        Map<Integer, String> nombres = new HashMap<>();
+        for (PermutaDetalle p : registros) {
+            // La fecha original del solicitante determina el mes del intercambio.
+            if (p.fechaSolicitante().getYear() != anio) continue;
+            int mes = p.fechaSolicitante().getMonthValue() - 1;
+            conteos.computeIfAbsent(p.plazaSolicitante(), k -> new long[12])[mes]++;
+            totalesMensuales[mes]++;
+            participaciones.merge(p.codigoSolicitante(), 1L, Long::sum);
+            participaciones.merge(p.codigoAceptante(), 1L, Long::sum);
+            nombres.put(p.codigoSolicitante(), p.nombreSolicitante());
+            nombres.put(p.codigoAceptante(), p.nombreAceptante());
+        }
+
+        List<ResumenMensual> meses = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            final int mesIndex = i;
+            List<TotalPlaza> porPlaza = conteos.entrySet().stream()
+                    .map(e -> new TotalPlaza(e.getKey(), e.getValue()[mesIndex]))
+                    .toList();
+            meses.add(new ResumenMensual(i + 1, totalesMensuales[i], porPlaza));
+        }
+        List<TotalPlaza> porPlaza = conteos.entrySet().stream()
+                .map(e -> new TotalPlaza(e.getKey(), Arrays.stream(e.getValue()).sum()))
+                .toList();
+        List<TopAgente> top = participaciones.entrySet().stream()
+                .map(e -> new TopAgente(e.getKey(), nombres.get(e.getKey()), e.getValue()))
+                .sorted(Comparator.comparingLong(TopAgente::total).reversed()
+                        .thenComparing(TopAgente::codigo))
+                .limit(10).toList();
+        return new ResumenAnualPermutas(
+                anio, Arrays.stream(totalesMensuales).sum(),
+                new ArrayList<>(conteos.keySet()), meses, porPlaza, top);
+    }
+
 }
