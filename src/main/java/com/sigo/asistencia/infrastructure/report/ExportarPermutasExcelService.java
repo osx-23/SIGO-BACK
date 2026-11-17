@@ -89,26 +89,17 @@ public class ExportarPermutasExcelService implements ExportarPermutasExcelUseCas
         int[] totales = new int[12];
         Map<Integer, Integer> participantes = new HashMap<>();
         Map<Integer, String> nombres = new HashMap<>();
+        // Misma regla que el dashboard anual: cada intercambio se cuenta
+        // una sola vez según fecha y plaza originales del solicitante.
         for (PermutaDetalle p : datos) {
-            boolean sol = p.fechaSolicitante().getYear() == anio;
-            boolean ace = p.fechaAceptante().getYear() == anio;
-            int mesSol = p.fechaSolicitante().getMonthValue() - 1;
-            int mesAce = p.fechaAceptante().getMonthValue() - 1;
-            if (sol) {
-                totales[mesSol]++;
-                porPlaza.computeIfAbsent(p.plazaSolicitante(), k -> new int[12])[mesSol]++;
-                participantes.merge(p.codigoSolicitante(), 1, Integer::sum);
-                nombres.put(p.codigoSolicitante(), p.nombreSolicitante());
-            }
-            if (ace) {
-                if (!sol || mesSol != mesAce) totales[mesAce]++;
-                if (!sol || mesSol != mesAce ||
-                        !p.plazaSolicitante().equalsIgnoreCase(p.plazaAceptante())) {
-                    porPlaza.computeIfAbsent(p.plazaAceptante(), k -> new int[12])[mesAce]++;
-                }
-                participantes.merge(p.codigoAceptante(), 1, Integer::sum);
-                nombres.put(p.codigoAceptante(), p.nombreAceptante());
-            }
+            if (p.fechaSolicitante().getYear() != anio) continue;
+            int mes = p.fechaSolicitante().getMonthValue() - 1;
+            totales[mes]++;
+            porPlaza.computeIfAbsent(p.plazaSolicitante(), k -> new int[12])[mes]++;
+            participantes.merge(p.codigoSolicitante(), 1, Integer::sum);
+            participantes.merge(p.codigoAceptante(), 1, Integer::sum);
+            nombres.put(p.codigoSolicitante(), p.nombreSolicitante());
+            nombres.put(p.codigoAceptante(), p.nombreAceptante());
         }
 
         for (int m = 0; m < 12; m++) {
