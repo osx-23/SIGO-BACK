@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import com.sigo.asistencia.application.port.in.PermutaUseCase;
+import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequestMapping("/api/asistencias")
@@ -34,33 +36,33 @@ public class AsistenciaController {
     private final RegistrarAsistenciaExcepcionUseCase asistenciaExcepcionUseCase;
     private final ObtenerProgramadosAsistenciaUseCase programacionService;
     private final AsistenciaAccesoUseCase accesoUseCase;
+    private final PermutaUseCase permutaService;
 
     @PostMapping
+    @Transactional
     public ResponseEntity<AsistenciaResponse> registrar(
             @Valid @RequestBody AsistenciaRequest request,
             @RequestParam(defaultValue = "false") boolean excepcionControlador
     ) {
         accesoUseCase.exigirGestion();
 
-        if (excepcionControlador) {
-            return ResponseEntity.ok(
-                    toResponse(
-                            asistenciaExcepcionUseCase.registrar(
-                                    toCommand(request)
-                            )
-                    )
-            );
+        if (!excepcionControlador) {
+            asegurarIdentidad(request);
         }
-
-        asegurarIdentidad(request);
-
-        return ResponseEntity.ok(
-                toResponse(
-                        gestionarUseCase.registrar(
-                                toCommand(request)
-                        )
-                )
+        var creada = excepcionControlador
+                ? asistenciaExcepcionUseCase.registrar(toCommand(request))
+                : gestionarUseCase.registrar(toCommand(request));
+        permutaService.registrarDesdeAsistencia(
+                creada.id(), request.plazaId(), request.turnoId(),
+                request.fecha(), request.permutas() == null ? List.of()
+                        : request.permutas().stream().map(p ->
+                            new PermutaUseCase.PermutaCommand(
+                                p.codigoSolicitante(), p.fechaSolicitante(), p.turnoSolicitanteId(),
+                                p.plazaSolicitanteId(), p.codigoAceptante(), p.fechaAceptante(),
+                                p.turnoAceptanteId(), p.plazaAceptanteId()
+                            )).toList()
         );
+        return ResponseEntity.ok(toResponse(creada));
     }
 
     @PutMapping("/{id}")
@@ -184,7 +186,8 @@ public class AsistenciaController {
                                         new GestionarAsistenciaUseCase.AusenciaCommand(
                                                 ausencia.trabajadorId(),
                                                 ausencia.motivoId(),
-                                                ausencia.observacion()
+                                                ausencia.observacion(),
+                                                ausencia.excepcionPlaza()
                                         )
                                 )
                                 .toList(),
@@ -213,7 +216,8 @@ public class AsistenciaController {
                                         new GestionarAsistenciaUseCase.AusenciaCommand(
                                                 ausencia.trabajadorId(),
                                                 ausencia.motivoId(),
-                                                ausencia.observacion()
+                                                ausencia.observacion(),
+                                                ausencia.excepcionPlaza()
                                         )
                                 )
                                 .toList(),
@@ -250,7 +254,8 @@ public class AsistenciaController {
                                         ausencia.nombreTrabajador(),
                                         ausencia.motivoId(),
                                         ausencia.motivo(),
-                                        ausencia.observacion()
+                                        ausencia.observacion(),
+                                        ausencia.excepcionPlaza()
                                 )
                         )
                         .toList(),

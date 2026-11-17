@@ -36,4 +36,8 @@ public class AsistenciaAusencia {
 
     @Column(length = 255)
     private String observacion;
+
+    /** Caso excepcional: la persona ausente pertenece a otra plaza. */
+    @Column(name = "excepcion_plaza", nullable = false)
+    private Boolean excepcionPlaza = false;
 }

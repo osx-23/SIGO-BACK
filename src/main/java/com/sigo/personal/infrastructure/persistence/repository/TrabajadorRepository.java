@@ -122,6 +122,22 @@ public interface TrabajadorRepository
             @Param("plazaId") Long plazaId
     );
 
+    /** Catálogo de agentes activos para registrar ausencias excepcionales. */
+    @Query("""
+        SELECT t
+        FROM Trabajador t
+        JOIN FETCH t.puesto p
+        LEFT JOIN FETCH t.plaza
+        WHERE t.activo = true
+          AND p.nombre IN (
+              'Agente de Recaudación',
+              'Agente de Recaudacion - Part Time',
+              'Agente de Recaudación Suplencia'
+          )
+        ORDER BY t.nombreCompleto ASC
+    """)
+    List<Trabajador> findAgentesActivos();
+
     /*
      * ============================================================
      * CONTROLADORES POR PLAZA

@@ -263,10 +263,11 @@ public class AsistenciaGestionJpaAdapter
                 );
             }
 
-            if (trabajador.getPlaza() == null
-                    || !plazaId.equals(
-                            trabajador.getPlaza().getId()
-                    )) {
+            validarExcepcionAusencia(trabajador, ausencia.excepcionPlaza());
+
+            if (!Boolean.TRUE.equals(ausencia.excepcionPlaza())
+                    && (trabajador.getPlaza() == null
+                    || !plazaId.equals(trabajador.getPlaza().getId()))) {
                 throw new BusinessException(
                         "El trabajador "
                                 + trabajador.getNombreCompleto()
@@ -305,6 +306,7 @@ public class AsistenciaGestionJpaAdapter
             ausencia.setTrabajador(trabajador);
             ausencia.setMotivo(motivo);
             ausencia.setObservacion(item.observacion());
+            ausencia.setExcepcionPlaza(Boolean.TRUE.equals(item.excepcionPlaza()));
 
             ausenciaRepository.save(ausencia);
         }
@@ -329,4 +331,21 @@ public class AsistenciaGestionJpaAdapter
             evidenciaRepository.save(evidencia);
         }
     }
+    /**
+     * La excepción solo libera la restricción de plaza.
+     * No permite registrar personas inactivas ni puestos ajenos a recaudación.
+     */
+    private void validarExcepcionAusencia(Trabajador trabajador, Boolean excepcion) {
+        if (!Boolean.TRUE.equals(excepcion)) return;
+        String puesto = trabajador.getPuesto() == null
+                ? ""
+                : trabajador.getPuesto().getNombre();
+        if (puesto == null || !puesto.toLowerCase(java.util.Locale.ROOT)
+                .contains("recaud")) {
+            throw new BusinessException(
+                    "La excepción de ausencia solo permite agentes de recaudación activos");
+        }
+    }
+
+
 }

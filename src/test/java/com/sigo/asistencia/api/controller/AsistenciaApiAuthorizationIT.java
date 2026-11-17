@@ -71,6 +71,9 @@ class AsistenciaApiAuthorizationIT {
     @MockBean
     private AsistenciaAccesoUseCase accesoUseCase;
 
+    @MockBean
+    private com.sigo.asistencia.application.port.in.PermutaUseCase permutaService;
+
     @Test
     void anonimoNoPuedeConsultarAsistencias() throws Exception {
         mockMvc.perform(get("/api/asistencias"))

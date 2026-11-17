@@ -23,7 +23,7 @@ public class TrabajadorController {
 
     @GetMapping("/agentes")
     public ResponseEntity<List<TrabajadorPublicResponse>> listarAgentesPorPlaza(
-            @RequestParam Long plazaId
+            @RequestParam(required = false) Long plazaId
     ) {
         return ResponseEntity.ok(
                 useCase.listarAgentesPorPlaza(plazaId)

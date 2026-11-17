@@ -17,8 +17,12 @@ public interface GestionarAsistenciaUseCase {
     record AusenciaCommand(
             Long trabajadorId,
             Long motivoId,
-            String observacion
+            String observacion,
+            Boolean excepcionPlaza
     ) {
+        public AusenciaCommand(Long trabajadorId, Long motivoId, String observacion) {
+            this(trabajadorId, motivoId, observacion, false);
+        }
     }
 
     record Command(

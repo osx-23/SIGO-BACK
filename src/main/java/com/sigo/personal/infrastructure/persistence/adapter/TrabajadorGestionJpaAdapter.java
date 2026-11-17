@@ -34,8 +34,9 @@ public class TrabajadorGestionJpaAdapter
     public List<TrabajadorUseCase.TrabajadorData> listarAgentesPorPlaza(
             Long plazaId
     ) {
-        return trabajadorRepository
-                .findAgentesByPlaza(plazaId)
+        return (plazaId == null
+                ? trabajadorRepository.findAgentesActivos()
+                : trabajadorRepository.findAgentesByPlaza(plazaId))
                 .stream()
                 .map(this::toData)
                 .toList();
