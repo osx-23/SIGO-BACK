@@ -50,7 +50,8 @@ public class AsistenciaConsultaJpaAdapter
                                         ausencia.getTrabajador().getNombreCompleto(),
                                         ausencia.getMotivo().getId(),
                                         ausencia.getMotivo().getNombre(),
-                                        ausencia.getObservacion()
+                                        ausencia.getObservacion(),
+                                        Boolean.TRUE.equals(ausencia.getExcepcionPlaza())
                                 )
                         )
                         .toList();
@@ -122,7 +123,8 @@ public class AsistenciaConsultaJpaAdapter
                                                                 ausencia.getTrabajador().getNombreCompleto(),
                                                                 ausencia.getMotivo().getId(),
                                                                 ausencia.getMotivo().getNombre(),
-                                                                ausencia.getObservacion()
+                                                                ausencia.getObservacion(),
+                                                                Boolean.TRUE.equals(ausencia.getExcepcionPlaza())
                                                         ),
                                                 Collectors.toList()
                                         )

@@ -186,7 +186,8 @@ public class AsistenciaController {
                                         new GestionarAsistenciaUseCase.AusenciaCommand(
                                                 ausencia.trabajadorId(),
                                                 ausencia.motivoId(),
-                                                ausencia.observacion()
+                                                ausencia.observacion(),
+                                                ausencia.excepcionPlaza()
                                         )
                                 )
                                 .toList(),
@@ -215,7 +216,8 @@ public class AsistenciaController {
                                         new GestionarAsistenciaUseCase.AusenciaCommand(
                                                 ausencia.trabajadorId(),
                                                 ausencia.motivoId(),
-                                                ausencia.observacion()
+                                                ausencia.observacion(),
+                                                ausencia.excepcionPlaza()
                                         )
                                 )
                                 .toList(),
@@ -252,7 +254,8 @@ public class AsistenciaController {
                                         ausencia.nombreTrabajador(),
                                         ausencia.motivoId(),
                                         ausencia.motivo(),
-                                        ausencia.observacion()
+                                        ausencia.observacion(),
+                                        ausencia.excepcionPlaza()
                                 )
                         )
                         .toList(),

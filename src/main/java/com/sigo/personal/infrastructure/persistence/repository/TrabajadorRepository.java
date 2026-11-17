@@ -109,7 +109,7 @@ public interface TrabajadorRepository
         FROM Trabajador t
         JOIN FETCH t.puesto p
         LEFT JOIN FETCH t.plaza
-        WHERE t.plaza.id = :plazaId
+        WHERE (:plazaId IS NULL OR t.plaza.id = :plazaId)
           AND t.activo = true
           AND p.nombre IN (
               'Agente de Recaudación',
