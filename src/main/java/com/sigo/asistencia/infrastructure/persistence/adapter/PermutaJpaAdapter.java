@@ -134,8 +134,9 @@ public class PermutaJpaAdapter implements PermutaUseCase {
                 }
                 Integer existentes = jdbc.queryForObject("""
                     SELECT count(*) FROM asistencia_permuta
-                    WHERE (codigo_solicitante = ? AND fecha_solicitante = ?)
-                       OR (codigo_aceptante = ? AND fecha_aceptante = ?)
+                    WHERE anulado_en IS NULL
+                      AND ((codigo_solicitante = ? AND fecha_solicitante = ?)
+                        OR (codigo_aceptante = ? AND fecha_aceptante = ?))
                     """, Integer.class, lado.getKey(), Date.valueOf(lado.getValue()),
                         lado.getKey(), Date.valueOf(lado.getValue()));
                 if (existentes != null && existentes > 0) {
@@ -160,7 +161,149 @@ public class PermutaJpaAdapter implements PermutaUseCase {
         }
     }
 
+
+    /** Modifica una permuta existente. La validación de duplicados excluye el propio registro. */
+    @Override
+    @Transactional
+    public void actualizar(Long permutaId, PermutaCommand s) {
+        if (s == null || s.codigoSolicitante() == null || s.codigoAceptante() == null ||
+                s.fechaSolicitante() == null || s.fechaAceptante() == null ||
+                s.plazaSolicitanteId() == null || s.plazaAceptanteId() == null ||
+                s.turnoSolicitanteId() == null || s.turnoAceptanteId() == null) {
+            throw new IllegalArgumentException("Completa todos los campos de la permuta");
+        }
+        // Cada corrección retiene el mismo ID y captura la versión anterior bajo bloqueo.
+        String antes = jdbc.queryForObject("""
+                SELECT to_jsonb(a)::text FROM asistencia_permuta a
+                WHERE a.id = ? AND a.anulado_en IS NULL FOR UPDATE
+                """, String.class, permutaId);
+        if (antes == null) {
+            throw new ResourceNotFoundException("La permuta no existe o ya está anulada");
+        }
+        SortedSet<String> claves = new TreeSet<>();
+        claves.add("SIGO:PERMUTA:" + s.codigoSolicitante() + ":" + s.fechaSolicitante());
+        claves.add("SIGO:PERMUTA:" + s.codigoAceptante() + ":" + s.fechaAceptante());
+        for (String clave : claves) {
+            jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(CAST(? AS text), 0))",
+                    (java.sql.ResultSet rs) -> { rs.next(); return null; }, clave);
+        }
+
+        Trabajador sol = obtenerAgente(s.codigoSolicitante());
+        Trabajador ace = obtenerAgente(s.codigoAceptante());
+        if (sol.getId().equals(ace.getId())) {
+            throw new IllegalArgumentException("Solicitante y aceptante deben ser personas distintas");
+        }
+        validarTurno(s.turnoSolicitanteId());
+        validarTurno(s.turnoAceptanteId());
+        validarPlaza(s.plazaSolicitanteId());
+        validarPlaza(s.plazaAceptanteId());
+        if (Objects.equals(s.plazaSolicitanteId(), s.plazaAceptanteId()) &&
+                Objects.equals(s.turnoSolicitanteId(), s.turnoAceptanteId()) &&
+                s.fechaSolicitante().equals(s.fechaAceptante())) {
+            throw new IllegalArgumentException("Las jornadas originales no pueden ser idénticas");
+        }
+
+        for (var lado : List.of(
+                new AbstractMap.SimpleEntry<>(sol.getCodigo(), s.fechaSolicitante()),
+                new AbstractMap.SimpleEntry<>(ace.getCodigo(), s.fechaAceptante()))) {
+            Integer existentes = jdbc.queryForObject("""
+                    SELECT count(*) FROM asistencia_permuta
+                    WHERE id <> ? AND anulado_en IS NULL
+                      AND ((codigo_solicitante = ? AND fecha_solicitante = ?)
+                        OR (codigo_aceptante = ? AND fecha_aceptante = ?))
+                    """, Integer.class, permutaId,
+                    lado.getKey(), Date.valueOf(lado.getValue()),
+                    lado.getKey(), Date.valueOf(lado.getValue()));
+            if (existentes != null && existentes > 0) {
+                throw new ConflictException("Ya existe otra permuta del agente " +
+                        lado.getKey() + " el " + lado.getValue());
+            }
+        }
+
+        String usuario = usuarioActual();
+        jdbc.update("""
+                UPDATE asistencia_permuta SET
+                    solicitante_id = ?, codigo_solicitante = ?, plaza_solicitante_id = ?,
+                    turno_solicitante_id = ?, fecha_solicitante = ?,
+                    aceptante_id = ?, codigo_aceptante = ?, plaza_aceptante_id = ?,
+                    turno_aceptante_id = ?, fecha_aceptante = ?,
+                    nombre_solicitante_historico = NULL, nombre_aceptante_historico = NULL,
+                    modificado_en = NOW(), modificado_por = ?
+                WHERE id = ? AND anulado_en IS NULL
+                """, sol.getId(), sol.getCodigo(), s.plazaSolicitanteId(),
+                s.turnoSolicitanteId(), Date.valueOf(s.fechaSolicitante()),
+                ace.getId(), ace.getCodigo(), s.plazaAceptanteId(),
+                s.turnoAceptanteId(), Date.valueOf(s.fechaAceptante()),
+                usuario, permutaId);
+        String despues = jdbc.queryForObject(
+                "SELECT to_jsonb(a)::text FROM asistencia_permuta a WHERE a.id = ?",
+                String.class, permutaId);
+        auditar(permutaId, "CORRECCION", usuario, antes, despues);
+    }
+
+    /** Anula sin borrar físicamente, conservando el registro y su auditoría. */
+    @Override
+    @Transactional
+    public void anular(Long permutaId) {
+        String antes = jdbc.queryForObject("""
+                SELECT to_jsonb(a)::text FROM asistencia_permuta a
+                WHERE a.id = ? AND a.anulado_en IS NULL FOR UPDATE
+                """, String.class, permutaId);
+        if (antes == null) {
+            throw new ResourceNotFoundException("La permuta no existe o ya está anulada");
+        }
+        String usuario = usuarioActual();
+        jdbc.update("""
+                UPDATE asistencia_permuta
+                SET anulado_en = NOW(), anulado_por = ?,
+                    modificado_en = NOW(), modificado_por = ?
+                WHERE id = ? AND anulado_en IS NULL
+                """, usuario, usuario, permutaId);
+        String despues = jdbc.queryForObject(
+                "SELECT to_jsonb(a)::text FROM asistencia_permuta a WHERE a.id = ?",
+                String.class, permutaId);
+        auditar(permutaId, "ANULACION", usuario, antes, despues);
+    }
+
+    private String usuarioActual() {
+        var autenticacion = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        return autenticacion == null ? "SISTEMA" : autenticacion.getName();
+    }
+
+    private void auditar(Long id, String accion, String usuario, String antes, String despues) {
+        jdbc.update("""
+                INSERT INTO asistencia_permuta_cambio
+                    (permuta_id, accion, usuario, registro_anterior, registro_nuevo)
+                VALUES (?, ?, ?, CAST(? AS jsonb), CAST(? AS jsonb))
+                """, id, accion, usuario, antes, despues);
+    }
+
+    /** Incluye registros vinculados aunque luego se corrija su fecha. */
+    @Override
+    @Transactional(readOnly = true)
+    public List<PermutaDetalle> deAsistencia(Long asistenciaId, Long plazaId,
+                                              Long turnoId, LocalDate fecha) {
+        Set<Long> vinculadas = new HashSet<>(jdbc.queryForList("""
+                SELECT id FROM asistencia_permuta
+                WHERE asistencia_id = ? AND anulado_en IS NULL
+                """, Long.class, asistenciaId));
+        return consultar(fecha, fecha, asistenciaId).stream()
+                .filter(p -> vinculadas.contains(p.id()) ||
+                        (Objects.equals(plazaId, p.plazaSolicitanteId()) &&
+                                Objects.equals(turnoId, p.turnoSolicitanteId()) &&
+                                fecha.equals(p.fechaSolicitante())) ||
+                        (Objects.equals(plazaId, p.plazaAceptanteId()) &&
+                                Objects.equals(turnoId, p.turnoAceptanteId()) &&
+                                fecha.equals(p.fechaAceptante())))
+                .toList();
+    }
+
     private List<PermutaDetalle> consultar(LocalDate inicio, LocalDate fin) {
+        return consultar(inicio, fin, null);
+    }
+
+    private List<PermutaDetalle> consultar(LocalDate inicio, LocalDate fin, Long asistenciaId) {
         LocalDate desde = inicio == null ? LocalDate.of(2000, 1, 1) : inicio;
         LocalDate hasta = fin == null ? LocalDate.of(2100, 12, 31) : fin;
         if (desde.isAfter(hasta)) {
@@ -182,8 +325,9 @@ public class PermutaJpaAdapter implements PermutaUseCase {
             JOIN plazas pa ON pa.id = a.plaza_aceptante_id
             JOIN turnos ts ON ts.id = a.turno_solicitante_id
             JOIN turnos ta ON ta.id = a.turno_aceptante_id
-            WHERE (a.fecha_solicitante BETWEEN ? AND ?
-                OR a.fecha_aceptante BETWEEN ? AND ?)
+            WHERE a.anulado_en IS NULL
+              AND ((a.fecha_solicitante BETWEEN ? AND ?
+                OR a.fecha_aceptante BETWEEN ? AND ?) OR a.asistencia_id = ?)
             ORDER BY a.fecha_solicitante DESC, a.id DESC
             """, (rs, row) -> new PermutaDetalle(
                 rs.getLong("id"), rs.getLong("ps_id"), rs.getString("ps"),
@@ -194,7 +338,8 @@ public class PermutaJpaAdapter implements PermutaUseCase {
                 rs.getInt("codigo_aceptante"), rs.getString("na"),
                 rs.getLong("ta_id"), rs.getString("ta").trim(),
                 rs.getDate("fecha_aceptante").toLocalDate()),
-                Date.valueOf(desde), Date.valueOf(hasta), Date.valueOf(desde), Date.valueOf(hasta));
+                Date.valueOf(desde), Date.valueOf(hasta), Date.valueOf(desde), Date.valueOf(hasta),
+                 asistenciaId);
     }
 
     @Transactional(readOnly = true)
@@ -231,7 +376,8 @@ public class PermutaJpaAdapter implements PermutaUseCase {
             throw new IllegalArgumentException("La fecha inicial supera la final");
         }
         var condiciones = new StringBuilder("""
-            WHERE ((a.fecha_solicitante BETWEEN ? AND ?)
+            WHERE a.anulado_en IS NULL
+              AND ((a.fecha_solicitante BETWEEN ? AND ?)
                 OR (a.fecha_aceptante BETWEEN ? AND ?))
             """);
         var args = new ArrayList<Object>();
