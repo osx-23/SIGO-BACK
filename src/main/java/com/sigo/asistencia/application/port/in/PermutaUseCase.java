@@ -43,6 +43,9 @@ public interface PermutaUseCase {
                                  Long plazaId, Integer codigo, Long turnoId,
                                  int pagina, int tamano);
     List<PermutaDetalle> delTurno(Long plazaId, Long turnoId, LocalDate fecha);
+    List<PermutaDetalle> deAsistencia(Long asistenciaId, Long plazaId, Long turnoId, LocalDate fecha);
+    void actualizar(Long permutaId, PermutaCommand correccion);
+    void anular(Long permutaId);
     DashboardPermutas dashboard(YearMonth mes);
     ResumenAnualPermutas resumenAnual(int anio);
 }
