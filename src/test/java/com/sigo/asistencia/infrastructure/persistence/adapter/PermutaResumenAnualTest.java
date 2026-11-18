@@ -47,7 +47,7 @@ class PermutaResumenAnualTest {
         );
         doReturn(registros).when(jdbc).query(anyString(),
                 org.mockito.ArgumentMatchers.<RowMapper<PermutaDetalle>>any(),
-                any(Date.class), any(Date.class), any(Date.class), any(Date.class));
+                any(Date.class), any(Date.class), any(Date.class), any(Date.class), isNull());
         when(jdbc.queryForList(anyString(), eq(String.class))).thenReturn(List.of("P1", "P2"));
 
         var anual = adapter.resumenAnual(2026);

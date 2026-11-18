@@ -1,6 +1,8 @@
 package com.sigo.asistencia.api.controller;
 
 import com.sigo.asistencia.application.port.in.PermutaUseCase;
+import com.sigo.asistencia.api.dto.PermutaRequest;
+import jakarta.validation.Valid;
 import com.sigo.asistencia.application.port.in.ExportarPermutasExcelUseCase;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -21,6 +23,25 @@ import java.util.List;
 public class PermutaController {
     private final PermutaUseCase service;
     private final ExportarPermutasExcelUseCase exportador;
+
+    /** Corrige los datos de una permuta sin alterar su identificador ni perder la auditoría. */
+    @PutMapping("/{id}")
+    public ResponseEntity<Void> actualizar(@PathVariable Long id,
+                                           @Valid @RequestBody PermutaRequest request) {
+        service.actualizar(id, new PermutaUseCase.PermutaCommand(
+                request.codigoSolicitante(), request.fechaSolicitante(),
+                request.turnoSolicitanteId(), request.plazaSolicitanteId(),
+                request.codigoAceptante(), request.fechaAceptante(),
+                request.turnoAceptanteId(), request.plazaAceptanteId()));
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Anulación lógica: deja evidencia, pero no se cuenta en el histórico ni en gráficos. */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> anular(@PathVariable Long id) {
+        service.anular(id);
+        return ResponseEntity.noContent().build();
+    }
 
     @GetMapping("/agentes/{codigo}")
     public PermutaUseCase.AgenteIdentificado agente(@PathVariable int codigo) {
