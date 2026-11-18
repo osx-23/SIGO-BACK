@@ -255,6 +255,7 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
         restriccionRepository.save(entity);
     }
 
+    @Override
     @Transactional(readOnly = true)
     public Propuesta generar(
             Long plazaId,
@@ -262,6 +263,20 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             int mes,
             TipoPeriodo periodo,
             Integer semana
+    ) {
+        return generar(plazaId, anio, mes, periodo, semana, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Propuesta generar(
+            Long plazaId,
+            int anio,
+            int mes,
+            TipoPeriodo periodo,
+            Integer semana,
+            LocalDate fechaDesde,
+            LocalDate fechaHasta
     ) {
         accessPort.validarGestionPlaza(
                 plazaId
@@ -276,24 +291,9 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
             throw new ProgramacionValidationException("Año o mes inválido");
         }
 
-        LocalDate desde = ym.atDay(1);
-        LocalDate hasta = ym.atEndOfMonth();
-
-        if (periodo == TipoPeriodo.SEMANA) {
-            if (semana == null || semana < 1 || semana > 5) {
-                throw new ProgramacionValidationException(
-                        "Debe seleccionar una semana entre 1 y 5"
-                );
-            }
-            int inicio = ((semana - 1) * 7) + 1;
-            if (inicio > ym.lengthOfMonth()) {
-                throw new ProgramacionValidationException(
-                        "La semana seleccionada no existe en este mes"
-                );
-            }
-            desde = ym.atDay(inicio);
-            hasta = ym.atDay(Math.min(inicio + 6, ym.lengthOfMonth()));
-        }
+        var rango = resolverRangoGeneracion(ym, periodo, semana, fechaDesde, fechaHasta);
+        LocalDate desde = rango.desde();
+        LocalDate hasta = rango.hasta();
 
         Configuracion config = obtenerConfiguracion(plazaId);
 
@@ -902,6 +902,53 @@ public class GeneradorAsignacionCasetasJpaService implements GeneradorAsignacion
                 mejorIntento.conflictos(),
                 calidadElegida
         );
+    }
+
+    /** Rango real del solver. Las fechas fuera de este intervalo no se proponen. */
+    record RangoGeneracion(LocalDate desde, LocalDate hasta) {}
+
+    static RangoGeneracion resolverRangoGeneracion(
+            YearMonth ym,
+            TipoPeriodo periodo,
+            Integer semana,
+            LocalDate fechaDesde,
+            LocalDate fechaHasta
+    ) {
+        LocalDate desde = ym.atDay(1);
+        LocalDate hasta = ym.atEndOfMonth();
+
+        if (periodo == TipoPeriodo.SEMANA) {
+            if (fechaDesde != null || fechaHasta != null) {
+                throw new ProgramacionValidationException(
+                        "El rango de fechas solo está disponible para el periodo mensual"
+                );
+            }
+            if (semana == null || semana < 1 || semana > 5) {
+                throw new ProgramacionValidationException(
+                        "Debe seleccionar una semana entre 1 y 5"
+                );
+            }
+            int inicio = ((semana - 1) * 7) + 1;
+            if (inicio > ym.lengthOfMonth()) {
+                throw new ProgramacionValidationException(
+                        "La semana seleccionada no existe en este mes"
+                );
+            }
+            desde = ym.atDay(inicio);
+            hasta = ym.atDay(Math.min(inicio + 6, ym.lengthOfMonth()));
+        } else if (fechaDesde != null || fechaHasta != null) {
+            if (fechaDesde == null || fechaHasta == null ||
+                    fechaDesde.isBefore(desde) || fechaHasta.isAfter(hasta) ||
+                    fechaDesde.isAfter(fechaHasta)) {
+                throw new ProgramacionValidationException(
+                        "Selecciona un rango válido dentro del mes consultado"
+                );
+            }
+            desde = fechaDesde;
+            hasta = fechaHasta;
+        }
+
+        return new RangoGeneracion(desde, hasta);
     }
 
     private IntentoGeneracion optimizarIntentoPostGeneracion(
