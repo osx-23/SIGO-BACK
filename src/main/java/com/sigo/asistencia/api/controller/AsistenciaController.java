@@ -3,6 +3,7 @@ package com.sigo.asistencia.api.controller;
 import com.sigo.asistencia.api.dto.AsistenciaRequest;
 import com.sigo.asistencia.api.dto.AsistenciaResponse;
 import com.sigo.asistencia.api.dto.AsistenciaUpdateRequest;
+import com.sigo.asistencia.api.dto.PermutaRequest;
 import com.sigo.asistencia.api.dto.EvidenciaResponse;
 import com.sigo.asistencia.application.port.in.AsistenciaAccesoUseCase;
 import com.sigo.asistencia.application.port.in.ConsultarAsistenciasUseCase;
@@ -63,6 +64,33 @@ public class AsistenciaController {
                             )).toList()
         );
         return ResponseEntity.ok(toResponse(creada));
+    }
+
+    /** Consulta tanto las permutas del turno como las vinculadas a esta asistencia.
+     * Permite seguir viendo una permuta aunque su fecha original haya sido corregida. */
+    @GetMapping("/{id}/permutas")
+    public ResponseEntity<List<PermutaUseCase.PermutaDetalle>> permutas(@PathVariable Long id) {
+        accesoUseCase.exigirGestion();
+        var asistencia = consultaUseCase.obtenerPorId(id);
+        return ResponseEntity.ok(permutaService.deAsistencia(
+                id, asistencia.plazaId(), asistencia.turnoId(), asistencia.fecha()));
+    }
+
+    /** Registra una permuta omitida durante el registro inicial de asistencia. */
+    @PostMapping("/{id}/permutas")
+    @Transactional
+    public ResponseEntity<Void> agregarPermuta(
+            @PathVariable Long id, @Valid @RequestBody PermutaRequest request) {
+        accesoUseCase.exigirGestion();
+        var asistencia = consultaUseCase.obtenerPorId(id);
+        permutaService.registrarDesdeAsistencia(
+                id, asistencia.plazaId(), asistencia.turnoId(), asistencia.fecha(),
+                List.of(new PermutaUseCase.PermutaCommand(
+                        request.codigoSolicitante(), request.fechaSolicitante(),
+                        request.turnoSolicitanteId(), request.plazaSolicitanteId(),
+                        request.codigoAceptante(), request.fechaAceptante(),
+                        request.turnoAceptanteId(), request.plazaAceptanteId())));
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{id}")
