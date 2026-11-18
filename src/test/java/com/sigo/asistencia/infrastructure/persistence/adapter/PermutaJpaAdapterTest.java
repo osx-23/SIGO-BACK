@@ -110,6 +110,48 @@ class PermutaJpaAdapterTest {
     }
 
     @Test
+    void corrigePermutaConservandoIdYRegistraAuditoria() {
+        prepararPersonasYTurnos();
+        when(jdbc.queryForObject(contains("FOR UPDATE"), eq(String.class), eq(91L)))
+                .thenReturn("{\"id\":91}");
+        when(jdbc.queryForObject(startsWith("SELECT to_jsonb(a)::text FROM asistencia_permuta a WHERE a.id"),
+                eq(String.class), eq(91L))).thenReturn("{\"id\":91}");
+        when(jdbc.queryForObject(contains("SELECT count(*)"), eq(Integer.class),
+                eq(91L), any(), any(), any(), any())).thenReturn(0);
+
+        servicio.actualizar(91L, cambio());
+
+        verify(jdbc).update(contains("UPDATE asistencia_permuta SET"), any(Object[].class));
+        verify(jdbc).update(contains("INSERT INTO asistencia_permuta_cambio"), any(Object[].class));
+    }
+
+    @Test
+    void noPermiteCambiarFechaSiAgenteTieneOtraPermuta() {
+        prepararPersonasYTurnos();
+        when(jdbc.queryForObject(contains("FOR UPDATE"), eq(String.class), eq(91L)))
+                .thenReturn("{\"id\":91}");
+        when(jdbc.queryForObject(contains("SELECT count(*)"), eq(Integer.class),
+                eq(91L), any(), any(), any(), any())).thenReturn(1);
+
+        assertThrows(ConflictException.class, () -> servicio.actualizar(91L, cambio()));
+        verify(jdbc, never()).update(anyString(), any(Object[].class));
+    }
+
+    @Test
+    void anulaPermutaSinBorrarlaYDejaRastro() {
+        when(jdbc.queryForObject(contains("FOR UPDATE"), eq(String.class), eq(91L)))
+                .thenReturn("{\"id\":91}");
+        when(jdbc.queryForObject(startsWith("SELECT to_jsonb(a)::text FROM asistencia_permuta a WHERE a.id"),
+                eq(String.class), eq(91L))).thenReturn("{\"anulado_en\":\"2026-11-18\"}");
+
+        servicio.anular(91L);
+
+        verify(jdbc).update(contains("SET anulado_en = NOW()"), any(Object[].class));
+        verify(jdbc).update(contains("INSERT INTO asistencia_permuta_cambio"), any(Object[].class));
+        verify(jdbc, never()).update(startsWith("DELETE FROM asistencia_permuta"), any(Object[].class));
+    }
+
+    @Test
     void rechazaPermutaQueNoPerteneceAlTurnoActual() {
         prepararPersonasYTurnos();
         assertThrows(IllegalArgumentException.class,
