@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -107,7 +108,9 @@ public class GeneradorAsignacionCasetasController {
                 request.anio(),
                 request.mes(),
                 request.periodo(),
-                request.semana()
+                request.semana(),
+                request.desde(),
+                request.hasta()
         );
     }
 
@@ -139,6 +142,8 @@ public class GeneradorAsignacionCasetasController {
             int anio,
             int mes,
             @NotNull GeneradorAsignacionCasetasUseCase.TipoPeriodo periodo,
-            Integer semana
+            Integer semana,
+            LocalDate desde,
+            LocalDate hasta
     ) {}
 }
