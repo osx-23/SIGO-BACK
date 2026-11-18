@@ -130,4 +130,15 @@ public interface GeneradorAsignacionCasetasUseCase {
             TipoPeriodo periodo,
             Integer semana
     );
+
+    /** Permite limitar una propuesta mensual a fechas específicas, sin alterar el modo semanal. */
+    Propuesta generar(
+            Long plazaId,
+            int anio,
+            int mes,
+            TipoPeriodo periodo,
+            Integer semana,
+            LocalDate fechaDesde,
+            LocalDate fechaHasta
+    );
 }
