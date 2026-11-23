@@ -100,6 +100,58 @@ class ProgramacionExcelTextoServiceTest {
         }
     }
 
+    @Test
+    void filtraHojasDeOtraPlazaAunqueElSupervisorTengaVarias() throws Exception {
+        try (XSSFWorkbook libro = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            crearHoja(libro, "P4", "PROGRAMACION OCTUBRE P4", 2396, "PRUEBA", "A");
+            crearHoja(libro, "P5", "PROGRAMACION OCTUBRE P5", 9001, "OTRA PLAZA", "B");
+            libro.write(out);
+
+            var previa = servicio.previsualizar(3L, 2026, 10, out.toByteArray());
+            assertEquals(1, previa.leidos());
+            assertEquals(1, previa.cambios().size());
+            assertEquals(2396, previa.cambios().get(0).codigoTrabajador());
+            assertTrue(previa.omitidos().stream().anyMatch(s -> s.contains("P5")));
+            assertTrue(previa.personalPendiente().isEmpty());
+        }
+    }
+
+    @Test
+    void agrupaCodigosNoRegistradosSinCrearlosAutomaticamente() throws Exception {
+        try (XSSFWorkbook libro = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            crearHoja(libro, "P4", "PROGRAMACION OCTUBRE P4", 9001,
+                    "TRABAJADOR NUEVO", "C");
+            libro.write(out);
+
+            var previa = servicio.previsualizar(3L, 2026, 10, out.toByteArray());
+            assertEquals(1, previa.leidos());
+            assertTrue(previa.cambios().isEmpty());
+            assertEquals(1, previa.personalPendiente().size());
+            var pendiente = previa.personalPendiente().get(0);
+            assertEquals(9001, pendiente.codigo());
+            assertEquals("TRABAJADOR NUEVO", pendiente.nombre());
+            assertTrue(pendiente.registrable());
+            verify(trabajadores, never()).crearUsuario(any(), any(), any(), any(), any());
+        }
+    }
+
+    private static void crearHoja(XSSFWorkbook libro, String nombreHoja, String titulo,
+                                  int codigo, String nombreTrabajador, String turno) {
+        Sheet hoja = libro.createSheet(nombreHoja);
+        hoja.createRow(1).createCell(1).setCellValue(titulo);
+        Row cabecera = hoja.createRow(4);
+        cabecera.createCell(1).setCellValue("Cod");
+        cabecera.createCell(2).setCellValue("Nombre");
+        Row fechas = hoja.createRow(5);
+        for (int dia = 1; dia <= YearMonth.of(2026, 10).lengthOfMonth(); dia++) {
+            fechas.createCell(dia + 2).setCellValue(dia);
+        }
+        Row fila = hoja.createRow(6);
+        fila.createCell(1).setCellValue(codigo);
+        fila.createCell(2).setCellValue(nombreTrabajador);
+        fila.createCell(3).setCellValue(turno);
+    }
+
     private byte[] mensual(String titulo, String d1, String d2, String d3, String d4) throws Exception {
         try (XSSFWorkbook libro = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet hoja = libro.createSheet("Hoja1");
