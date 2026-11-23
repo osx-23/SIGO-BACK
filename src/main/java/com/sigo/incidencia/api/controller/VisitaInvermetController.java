@@ -21,6 +21,7 @@ import java.sql.SQLException;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.text.Normalizer;
 
 @RestController
 @RequestMapping("/api/incidencias/visitas-invermet")
@@ -28,6 +29,11 @@ import java.util.*;
 public class VisitaInvermetController {
     private final VisitaInvermetService service;
     private final VisitaInvermetExcelService excel;
+
+    public enum TipoPersonal { CONTROLADOR, SUPERVISOR }
+
+    public record PersonalOpcion(Long id, Integer codigo, String nombreCompleto,
+                                 String puesto, String plazaCodigo) {}
 
     public record Pregunta(int numero, String pregunta, String quienRespondio, String respuesta) {}
     public record Foto(Long id, String urlArchivo) {}
@@ -51,6 +57,19 @@ public class VisitaInvermetController {
             int casetasEnPlaza, int casetasAbiertas, String datoVisita1, String datoVisita2,
             String observaciones, List<Pregunta> preguntas, List<Foto> fotos
     ) {}
+
+    /**
+     * Sugerencias de personal activo para registrar visitas.
+     * Controlador: cargos Controlador y Controlador ATF.
+     * Supervisor: cargos Supervisor y Controlador.
+     */
+    @GetMapping("/personal")
+    public List<PersonalOpcion> buscarPersonal(
+            @RequestParam TipoPersonal tipo,
+            @RequestParam String q,
+            @RequestParam(required = false) Long plazaId) {
+        return service.buscarPersonal(tipo, q, plazaId);
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -93,6 +112,52 @@ class VisitaInvermetService {
     private final JdbcTemplate jdbc;
     private final UsuarioActualUseCase usuarioActual;
     private final CloudinaryService cloudinary;
+
+    @Transactional(readOnly = true)
+    public List<VisitaInvermetController.PersonalOpcion> buscarPersonal(
+            VisitaInvermetController.TipoPersonal tipo,
+            String texto,
+            Long plazaId) {
+        var usuario = usuarioActual.requireActual();
+        Long plazaPreferida = plazaConsulta(usuario, plazaId);
+
+        String busqueda = Normalizer.normalize(texto == null ? "" : texto.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT);
+        if (busqueda.length() < 2) return List.of();
+        if (busqueda.length() > 80) throw new BusinessException("La búsqueda es demasiado larga.");
+
+        // ESCAPE '!' evita que % y _ escritos por el usuario actúen como comodines.
+        String patron = "%" + busqueda.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        return jdbc.query("""
+                select t.id, t.codigo, t.nombre_completo, p.nombre as puesto, pl.codigo as plaza_codigo
+                  from trabajadores t
+                  join puestos p on p.id = t.puesto_id
+                  left join plazas pl on pl.id = t.plaza_id
+                 where t.activo = true
+                   and (
+                        upper(p.nombre) like 'CONTROLADOR%'
+                        or (? = 'SUPERVISOR' and upper(p.nombre) like 'SUPERVISOR%')
+                   )
+                   and (
+                        translate(lower(t.nombre_completo), 'áéíóúüñ', 'aeiouun') like ? escape '!'
+                        or cast(t.codigo as text) like ? escape '!'
+                   )
+                 order by
+                   case when t.plaza_id = ? then 0 else 1 end,
+                   case when ? = 'SUPERVISOR' and upper(p.nombre) like 'SUPERVISOR%' then 0 else 1 end,
+                   t.nombre_completo
+                 limit 12
+                """,
+                (rs, i) -> new VisitaInvermetController.PersonalOpcion(
+                        rs.getLong("id"),
+                        rs.getInt("codigo"),
+                        rs.getString("nombre_completo"),
+                        rs.getString("puesto"),
+                        rs.getString("plaza_codigo")
+                ),
+                tipo.name(), patron, patron, plazaPreferida, tipo.name());
+    }
 
     @Transactional
     public VisitaInvermetController.VisitaResponse registrar(VisitaInvermetController.VisitaRequest r) {
