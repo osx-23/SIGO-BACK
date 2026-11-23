@@ -16,6 +16,8 @@ public class ProgramacionExcelTextoAdapter implements ProgramacionExcelTextoUseC
         return new VistaPrevia(o.leidos(), o.coinciden(),
                 o.cambios().stream().map(c -> new Cambio(c.trabajadorId(),
                         c.codigoTrabajador(), c.nombre(), c.fecha(), c.anterior(),
-                        c.nuevo())).toList(), o.errores(), o.omitidos());
+                        c.nuevo())).toList(), o.errores(), o.omitidos(),
+                o.personalPendiente().stream().map(p -> new PersonalPendiente(
+                        p.codigo(), p.nombre(), p.celdas(), p.registrable(), p.motivo())).toList());
     }
 }
