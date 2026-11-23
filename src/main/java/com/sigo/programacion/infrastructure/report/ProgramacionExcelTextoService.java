@@ -312,13 +312,13 @@ public class ProgramacionExcelTextoService {
                 if (!m.matches()) continue;
                 String mesTitulo = m.group(1);
                 String plazaTitulo = m.group(2);
-                if (!nombreMes(periodo.getMonthValue()).equals(mesTitulo)
-                        && !(periodo.getMonthValue() == 9 && "SETIEMBRE".equals(mesTitulo))) {
-                    throw new ProgramacionValidationException("El mes del Excel no coincide con el seleccionado");
-                }
                 if (codigoPlaza != null && !codigoPlaza.equalsIgnoreCase(plazaTitulo)) {
                     if (variasHojas) return false;
                     throw new ProgramacionValidationException("El Excel pertenece a otra plaza: " + plazaTitulo);
+                }
+                if (!nombreMes(periodo.getMonthValue()).equals(mesTitulo)
+                        && !(periodo.getMonthValue() == 9 && "SETIEMBRE".equals(mesTitulo))) {
+                    throw new ProgramacionValidationException("El mes del Excel no coincide con el seleccionado");
                 }
                 return true;
             }
