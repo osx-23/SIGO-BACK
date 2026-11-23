@@ -1,6 +1,5 @@
 package com.sigo.incidencia.api.controller;
 
-import com.sigo.incidencia.application.service.VisitaInvermetExcelService;
 import com.sigo.security.application.port.in.UsuarioActualUseCase;
 import com.sigo.shared.exception.BusinessException;
 import com.sigo.shared.exception.ForbiddenException;
