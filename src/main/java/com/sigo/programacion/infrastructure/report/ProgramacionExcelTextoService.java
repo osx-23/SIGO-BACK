@@ -112,7 +112,14 @@ public class ProgramacionExcelTextoService {
                 if (hoja.getLastRowNum() > MAX_FILAS) {
                     throw new ProgramacionValidationException("Demasiadas filas en " + hoja.getSheetName());
                 }
-                validarTitulo(hoja, formato, periodo, guardados, personas, plazaId);
+                // En libros con varias hojas/plazas se procesa solo la plaza elegida.
+                // No se confía en el cargo del usuario para asignar automáticamente otras plazas.
+                if (!validarTitulo(hoja, formato, periodo, guardados, personas, plazaId,
+                        libro.getNumberOfSheets() > 1)) {
+                    agregar(omitidos, "Hoja '" + hoja.getSheetName()
+                            + "' ignorada: pertenece a otra plaza.");
+                    continue;
+                }
                 Encabezado cabecera = encontrarEncabezado(hoja, formato, periodo);
                 if (cabecera == null) {
                     throw new ProgramacionValidationException("No se encontraron columnas Cod, Nombre y dias en "
@@ -281,10 +288,10 @@ public class ProgramacionExcelTextoService {
         }
     }
 
-    private static void validarTitulo(Sheet hoja, DataFormatter formato, YearMonth periodo,
+    private static boolean validarTitulo(Sheet hoja, DataFormatter formato, YearMonth periodo,
                                      List<ListarTurnosUseCase.Turno> guardados,
                                      Map<Integer, TrabajadorUseCase.TrabajadorData> personas,
-                                     Long plazaId) {
+                                     Long plazaId, boolean variasHojas) {
         String codigoPlaza = null;
         for (var turno : guardados) {
             if (turno.plazaCodigo() != null) { codigoPlaza = turno.plazaCodigo(); break; }
@@ -310,10 +317,15 @@ public class ProgramacionExcelTextoService {
                     throw new ProgramacionValidationException("El mes del Excel no coincide con el seleccionado");
                 }
                 if (codigoPlaza != null && !codigoPlaza.equalsIgnoreCase(plazaTitulo)) {
+                    if (variasHojas) return false;
                     throw new ProgramacionValidationException("El Excel pertenece a otra plaza: " + plazaTitulo);
                 }
+                return true;
             }
         }
+        // La ausencia de una cabecera inequívoca no autoriza a mezclar plazas.
+        // Se conserva la compatibilidad con las matrices semanales válidas.
+        return true;
     }
 
     private static String abreviatura(LocalDate fecha) {
