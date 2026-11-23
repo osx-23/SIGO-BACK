@@ -51,8 +51,13 @@ public class ProgramacionExcelTextoService {
     public record Cambio(Long trabajadorId, Integer codigoTrabajador, String nombre,
                          LocalDate fecha, String anterior, String nuevo) {}
 
+    /** Personal del Excel pendiente de alta o de revisión de plaza. No se guarda automáticamente. */
+    public record PersonalPendiente(Integer codigo, String nombre, int celdas, boolean registrable,
+                                   String motivo) {}
+
     public record VistaPrevia(int leidos, int coinciden, List<Cambio> cambios,
-                             List<String> errores, List<String> omitidos) {}
+                             List<String> errores, List<String> omitidos,
+                             List<PersonalPendiente> personalPendiente) {}
 
     private record Clave(Integer codigo, LocalDate fecha) {}
     private record Registro(int codigo, LocalDate fecha, String estado, String origen) {}
@@ -85,6 +90,14 @@ public class ProgramacionExcelTextoService {
         for (var persona : trabajadores.listarControladoresPorPlaza(plazaId)) {
             incorporar(personas, codigosRepetidos, persona);
         }
+        Map<Integer, TrabajadorUseCase.TrabajadorData> todosLosTrabajadores = new HashMap<>();
+        var catalogoGlobal = trabajadores.listarAdministracion(null);
+        if (catalogoGlobal != null) {
+            for (var persona : catalogoGlobal) {
+                if (persona.codigo() != null) todosLosTrabajadores.put(persona.codigo(), persona);
+            }
+        }
+        Map<Integer, String> nombresEnExcel = new LinkedHashMap<>();
         Map<Clave, Registro> registros = new LinkedHashMap<>();
         Set<Clave> repetidos = new HashSet<>();
         List<String> errores = new ArrayList<>();
@@ -131,6 +144,14 @@ public class ProgramacionExcelTextoService {
                                 + ": codigo no numerico, fila omitida");
                         continue;
                     }
+                    String nombreEnExcel = leer(fila.getCell(cabecera.colNombre()), formato).trim();
+                    if (!nombreEnExcel.isBlank()) {
+                        String conocido = nombresEnExcel.putIfAbsent(codigo, nombreEnExcel);
+                        if (conocido != null && !limpiar(conocido).equals(limpiar(nombreEnExcel))) {
+                            agregar(errores, hoja.getSheetName() + ", fila " + (f + 1)
+                                    + ": codigo " + codigo + " aparece con nombres diferentes");
+                        }
+                    }
                     for (var fecha : cabecera.fechas().entrySet()) {
                         String valor = TextoExcelUtils.normalizar(leer(fila.getCell(fecha.getKey()), formato));
                         if (valor.isBlank()) continue; // Vacio: nunca modifica nada.
@@ -166,6 +187,7 @@ public class ProgramacionExcelTextoService {
             throw new ProgramacionValidationException("No hay textos de turnos para importar");
         }
         List<Cambio> cambios = new ArrayList<>();
+        Map<Integer, Integer> cantidadPendiente = new LinkedHashMap<>();
         int coinciden = 0;
         for (var entry : registros.entrySet()) {
             Registro registro = entry.getValue();
@@ -174,6 +196,7 @@ public class ProgramacionExcelTextoService {
                     || !Boolean.TRUE.equals(persona.activo())) {
                 agregar(omitidos, registro.origen() + ": codigo " + registro.codigo()
                         + " no corresponde a un agente/controlador activo y unico de la plaza");
+                cantidadPendiente.merge(registro.codigo(), 1, Integer::sum);
                 continue;
             }
             String anterior = estadosSigo.get(entry.getKey());
@@ -185,8 +208,22 @@ public class ProgramacionExcelTextoService {
                         registro.fecha(), anterior, nuevo));
             }
         }
+        List<PersonalPendiente> personalPendiente = new ArrayList<>();
+        for (var item : cantidadPendiente.entrySet()) {
+            int codigo = item.getKey();
+            var global = todosLosTrabajadores.get(codigo);
+            String nombre = nombresEnExcel.getOrDefault(codigo, "");
+            boolean registrable = global == null && !nombre.isBlank() && nombre.length() >= 3
+                    && !codigosRepetidos.contains(codigo);
+            String motivo = global == null
+                    ? (registrable ? "No existe en SIGO. Puede darse de alta tras verificar su identidad."
+                                   : "Falta nombre válido o el código está duplicado; revisar antes de registrar.")
+                    : (!Boolean.TRUE.equals(global.activo()) ? "El trabajador está inactivo en SIGO."
+                       : "El código ya existe en SIGO, pero no está habilitado en la plaza seleccionada.");
+            personalPendiente.add(new PersonalPendiente(codigo, nombre, item.getValue(), registrable, motivo));
+        }
         return new VistaPrevia(leidos, coinciden, List.copyOf(cambios),
-                List.copyOf(errores), List.copyOf(omitidos));
+                List.copyOf(errores), List.copyOf(omitidos), List.copyOf(personalPendiente));
     }
 
     private static void incorporar(Map<Integer, TrabajadorUseCase.TrabajadorData> mapa,
