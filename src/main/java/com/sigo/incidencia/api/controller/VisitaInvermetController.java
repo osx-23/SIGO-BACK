@@ -119,7 +119,7 @@ class VisitaInvermetService {
             String texto,
             Long plazaId) {
         var usuario = usuarioActual.requireActual();
-        Long plazaPreferida = plazaConsulta(usuario, plazaId);
+        Long plazaPreferida = plazaId != null ? plazaId : usuario.plazaId();
 
         String busqueda = Normalizer.normalize(texto == null ? "" : texto.trim(), Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")
@@ -201,36 +201,49 @@ class VisitaInvermetService {
     @Transactional(readOnly=true)
     public List<VisitaInvermetController.VisitaResponse> listar(LocalDate inicio,LocalDate fin,Long plazaId) {
         var u=usuarioActual.requireActual();
-        Long efectiva=plazaConsulta(u,plazaId);
         LocalDate hasta=fin==null?LocalDate.now():fin, desde=inicio==null?hasta.minusDays(30):inicio;
         if (desde.isAfter(hasta) || ChronoUnit.DAYS.between(desde,hasta)>366)
             throw new BusinessException("Consulta un rango válido de hasta 366 días.");
         String sql = """
              select v.*, p.codigo as plaza_codigo from visitas_invermet v
              join plazas p on p.id=v.plaza_id where v.fecha between ? and ?
-             """ + (efectiva==null?"":" and v.plaza_id=?") + " order by v.fecha desc, v.hora_inicio desc, v.id desc";
-        if (efectiva==null) return jdbc.query(sql,(rs,i)->map(rs),desde,hasta);
-        return jdbc.query(sql,(rs,i)->map(rs),desde,hasta,efectiva);
+             """;
+        List<Object> parametros = new ArrayList<>(List.of(desde,hasta));
+        // Operadores: visitas de su plaza asignada y actas registradas por ellos en otras plazas.
+        if ("OPERADOR".equalsIgnoreCase(u.rol())) {
+            sql += " and (v.plaza_id=? or v.registrado_por_id=?)";
+            parametros.add(u.plazaId()==null ? -1L : u.plazaId());
+            parametros.add(u.id());
+        }
+        if (plazaId != null) {
+            sql += " and v.plaza_id=?";
+            parametros.add(plazaId);
+        }
+        sql += " order by v.fecha desc, v.hora_inicio desc, v.id desc";
+        return jdbc.query(sql,(rs,i)->map(rs),parametros.toArray());
     }
 
     @Transactional(readOnly=true)
     public VisitaInvermetController.VisitaResponse obtener(Long id) {
+        var usuario = usuarioActual.requireActual();
         var items=jdbc.query("""
             select v.*, p.codigo as plaza_codigo from visitas_invermet v join plazas p on p.id=v.plaza_id where v.id=?
-            """,(rs,i)->map(rs),id);
+            """,(rs,i)-> {
+                validarAcceso(usuario, rs.getLong("plaza_id"), rs.getLong("registrado_por_id"));
+                return map(rs);
+            },id);
         if(items.isEmpty())throw new ResourceNotFoundException("Visita Invermet no encontrada.");
-        var visita=items.get(0);
-        validarAcceso(usuarioActual.requireActual(),visita.plazaId());
-        return visita;
+        return items.get(0);
     }
 
     @Transactional
     public VisitaInvermetController.Foto subirFoto(Long id,MultipartFile file) {
         // Bloqueo por acta: dos subidas concurrentes no pueden exceder las cuatro imágenes.
-        var rows=jdbc.queryForList("select plaza_id from visitas_invermet where id=? for update",id);
+        var rows=jdbc.queryForList("select plaza_id,registrado_por_id from visitas_invermet where id=? for update",id);
         if(rows.isEmpty())throw new ResourceNotFoundException("Visita Invermet no encontrada.");
         long plazaId=((Number)rows.get(0).get("plaza_id")).longValue();
-        validarAcceso(usuarioActual.requireActual(),plazaId);
+        long registradoPorId=((Number)rows.get(0).get("registrado_por_id")).longValue();
+        validarAcceso(usuarioActual.requireActual(),plazaId,registradoPorId);
         Integer n=jdbc.queryForObject("select count(*) from visita_invermet_fotos where visita_id=?",Integer.class,id);
         if(n!=null && n>=4)throw new BusinessException("La visita ya tiene cuatro fotografías.");
         if(file.isEmpty() || file.getSize()>10*1024*1024)
@@ -278,22 +291,13 @@ class VisitaInvermetService {
     }
 
     private long plazaRegistro(UsuarioActualUseCase.UsuarioActual u,Long requested) {
-        if("OPERADOR".equalsIgnoreCase(u.rol())) {
-            if(u.plazaId()==null)throw new ForbiddenException("El operador no tiene plaza asignada.");
-            return u.plazaId();
-        }
-        if(requested==null)throw new BusinessException("Selecciona una plaza.");
+        if(requested==null || requested<=0)throw new BusinessException("Selecciona una plaza.");
         return requested;
     }
-    private Long plazaConsulta(UsuarioActualUseCase.UsuarioActual u,Long requested) {
-        if("OPERADOR".equalsIgnoreCase(u.rol())) {
-            if(u.plazaId()==null)throw new ForbiddenException("El operador no tiene plaza asignada.");
-            return u.plazaId();
-        }
-        return requested;
-    }
-    private void validarAcceso(UsuarioActualUseCase.UsuarioActual u,Long plazaId) {
-        if("OPERADOR".equalsIgnoreCase(u.rol()) && (u.plazaId()==null || !u.plazaId().equals(plazaId)))
+    private void validarAcceso(UsuarioActualUseCase.UsuarioActual u,Long plazaId,Long registradoPorId) {
+        if("OPERADOR".equalsIgnoreCase(u.rol())
+                && !Objects.equals(u.plazaId(),plazaId)
+                && !Objects.equals(u.id(),registradoPorId))
             throw new ForbiddenException("No tienes acceso a las visitas de otra plaza.");
     }
     private static String limpiar(String s) {return s==null?"":s.trim();}
