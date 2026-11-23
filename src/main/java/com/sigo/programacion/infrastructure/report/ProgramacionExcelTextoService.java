@@ -312,6 +312,10 @@ public class ProgramacionExcelTextoService {
                 if (!m.matches()) continue;
                 String mesTitulo = m.group(1);
                 String plazaTitulo = m.group(2);
+                if (codigoPlaza == null && variasHojas) {
+                    throw new ProgramacionValidationException(
+                            "No se pudo verificar el código de la plaza seleccionada contra el Excel multihoja");
+                }
                 if (codigoPlaza != null && !codigoPlaza.equalsIgnoreCase(plazaTitulo)) {
                     if (variasHojas) return false;
                     throw new ProgramacionValidationException("El Excel pertenece a otra plaza: " + plazaTitulo);
@@ -323,8 +327,13 @@ public class ProgramacionExcelTextoService {
                 return true;
             }
         }
-        // La ausencia de una cabecera inequívoca no autoriza a mezclar plazas.
-        // Se conserva la compatibilidad con las matrices semanales válidas.
+        // Una hoja sin cabecera de plaza no puede asignarse de forma segura
+        // cuando un libro contiene datos de varias plazas.
+        if (variasHojas) {
+            throw new ProgramacionValidationException(
+                    "La hoja '" + hoja.getSheetName()
+                    + "' no declara una plaza verificable. Revisa los encabezados del Excel multihoja.");
+        }
         return true;
     }
 
