@@ -23,6 +23,7 @@ import com.sigo.personal.application.port.in.TrabajadorUseCase;
 import com.sigo.programacion.application.port.in.AgenteProgramacionExcepcionUseCase;
 
 import com.sigo.programacion.application.port.in.ProgramacionExcelTextoUseCase;
+import com.sigo.programacion.application.port.in.RolPlazasExcelUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -65,6 +66,7 @@ public class ProgramacionController {
 
     // SIGO_IMPORTAR_TURNOS_TEXTO_V1
     private final ProgramacionExcelTextoUseCase programacionExcelTextoService;
+    private final RolPlazasExcelUseCase rolPlazasExcel;
 
     private final AgenteProgramacionExcepcionUseCase excepcionUseCase;
 
@@ -206,6 +208,47 @@ public class ProgramacionController {
      * MI HORARIO
      * ============================================================
      */
+
+    /** Rol operativo multipla​​za: AGENTES P4/P5 y bloque CONTROL por plaza. */
+    @PostMapping(value = "/turnos/importar-excel/rol/vista-previa",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    public RolPlazasExcelUseCase.VistaPrevia previsualizarRolPlazas(
+            @RequestParam Long plazaId, @RequestParam int anio, @RequestParam int mes,
+            @RequestParam("archivo") MultipartFile archivo) {
+        validarArchivoRol(archivo);
+        try {
+            return rolPlazasExcel.previsualizar(plazaId, anio, mes, archivo.getBytes());
+        } catch (java.io.IOException e) {
+            throw new com.sigo.programacion.domain.ProgramacionValidationException(
+                    "No se pudo leer el archivo Excel");
+        }
+    }
+
+    /** Confirmación explícita: relee el archivo, valida plaza y guarda en una transacción. */
+    @PostMapping(value = "/turnos/importar-excel/rol/confirmar",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    public RolPlazasExcelUseCase.Resultado confirmarRolPlazas(
+            @RequestParam Long plazaId, @RequestParam int anio, @RequestParam int mes,
+            @RequestParam("archivo") MultipartFile archivo) {
+        validarArchivoRol(archivo);
+        try {
+            return rolPlazasExcel.confirmar(plazaId, anio, mes, archivo.getBytes());
+        } catch (java.io.IOException e) {
+            throw new com.sigo.programacion.domain.ProgramacionValidationException(
+                    "No se pudo leer el archivo Excel");
+        }
+    }
+
+    private static void validarArchivoRol(MultipartFile archivo) {
+        if (archivo.isEmpty() || archivo.getSize() > 2 * 1024 * 1024
+                || archivo.getOriginalFilename() == null
+                || !archivo.getOriginalFilename().toLowerCase(java.util.Locale.ROOT).endsWith(".xlsx")) {
+            throw new com.sigo.programacion.domain.ProgramacionValidationException(
+                    "Selecciona un Excel .xlsx de máximo 2 MB");
+        }
+    }
 
     /** SIGO_IMPORTAR_TURNOS_TEXTO_V1: vista previa de A/B/C/D/V/COM/DM/LIC/-. */
     @PostMapping(value = "/turnos/importar-excel/vista-previa", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
