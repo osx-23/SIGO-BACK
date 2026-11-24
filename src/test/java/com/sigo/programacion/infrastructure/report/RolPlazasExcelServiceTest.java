@@ -53,6 +53,24 @@ class RolPlazasExcelServiceTest {
     }
 
     @Test
+    void detectaFormatoOperativoConHojasDeCualquierPlaza() throws Exception {
+        var formato = lector.detectarFormato(libroConP4YP5());
+        assertEquals("ROL_OPERATIVO", formato.formato());
+        verifyNoInteractions(guardarTurnos, asignarSecuencia, asignarLider);
+    }
+
+    @Test
+    void conservaImportadorEstandarParaLibrosSinHojaDeAgentesOperativa() throws Exception {
+        try (var libro = new XSSFWorkbook(); var salida = new ByteArrayOutputStream()) {
+            Sheet hoja = libro.createSheet("ROL MES");
+            hoja.createRow(0).createCell(0).setCellValue("Programación de turnos");
+            libro.write(salida);
+            assertEquals("TURNOS", lector.detectarFormato(salida.toByteArray()).formato());
+            verifyNoInteractions(guardarTurnos, asignarSecuencia, asignarLider);
+        }
+    }
+
+    @Test
     void reconoceCuatroSecuenciasPartTimeLideresYTurnosSoloP4() throws Exception {
         byte[] archivo = libroConP4YP5();
         var previa = lector.previsualizar(4L, 2026, 10, archivo);
