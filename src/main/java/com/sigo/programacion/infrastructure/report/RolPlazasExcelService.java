@@ -251,6 +251,7 @@ public class RolPlazasExcelService implements RolPlazasExcelUseCase {
                     "AGENTE", estado, motivo));
             if (valido) leerTurnos(fila, fmt, inicioMes, periodo, codigo, trabajador.id(),
                     guardados, cambios, avisos, visitados, contadores, hoja.getSheetName());
+            else contadores[0] += contarCeldas(fila, fmt, inicioMes, periodo);
         }
         if (primeraPartTime != null) {
             List<Integer> inicios = new ArrayList<>();
@@ -310,7 +311,17 @@ public class RolPlazasExcelService implements RolPlazasExcelUseCase {
                     valido ? "LISTO" : "REVISAR", motivo));
             if (valido) leerTurnos(fila, fmt, inicioMes, periodo, codigo, trabajador.id(),
                     guardados, cambios, avisos, visitados, contadores, hoja.getSheetName());
+            else contadores[0] += contarCeldas(fila, fmt, inicioMes, periodo);
         }
+    }
+
+    /** Incluye celdas de trabajadores no registrados en el análisis, sin guardarlas. */
+    private static int contarCeldas(Row fila, DataFormatter fmt, int primerDia, YearMonth periodo) {
+        int contadas = 0;
+        for (int dia = 1; dia <= periodo.lengthOfMonth(); dia++) {
+            if (!valor(fila.getCell(primerDia + dia - 1), fmt).isBlank()) contadas++;
+        }
+        return contadas;
     }
 
     private static void leerTurnos(Row fila, DataFormatter fmt, int primerDia,
