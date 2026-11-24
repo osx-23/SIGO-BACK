@@ -43,6 +43,38 @@ public class RolPlazasExcelService implements RolPlazasExcelUseCase {
     private final ListarLideresUseCase listarLideres;
     private final AsignarLiderUseCase asignarLider;
 
+    /**
+     * Inspecciona solo el formato del libro. No consulta ni modifica trabajadores o turnos.
+     * Se aplica a cualquier código de plaza (P1, P4, P10, etc.), sin un botón por plaza.
+     */
+    @Override
+    public FormatoDetectado detectarFormato(byte[] archivo) {
+        if (archivo == null || archivo.length == 0 || archivo.length > MAX_BYTES) {
+            throw new ProgramacionValidationException("Selecciona un Excel .xlsx de máximo 2 MB");
+        }
+        try (XSSFWorkbook libro = new XSSFWorkbook(new ByteArrayInputStream(archivo))) {
+            if (libro.getNumberOfSheets() < 1 || libro.getNumberOfSheets() > MAX_HOJAS) {
+                throw new ProgramacionValidationException("Cantidad de hojas no permitida");
+            }
+            DataFormatter formato = new DataFormatter(Locale.ROOT);
+            for (Sheet hoja : libro) {
+                if (!limpiar(hoja.getSheetName()).matches("AGENTES [A-Z0-9_-]+")) continue;
+                Row cabecera = hoja.getRow(1);
+                Row fechas = hoja.getRow(2);
+                if (cabecera != null && fechas != null
+                        && limpiar(valor(cabecera.getCell(1), formato)).startsWith("COD")
+                        && limpiar(valor(cabecera.getCell(2), formato)).startsWith("NOMBRES")) {
+                    return new FormatoDetectado("ROL_OPERATIVO");
+                }
+            }
+            return new FormatoDetectado("TURNOS");
+        } catch (ProgramacionValidationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ProgramacionValidationException("El archivo no es un Excel .xlsx válido o está dañado.");
+        }
+    }
+
     @Override
     @Transactional(readOnly = true)
     public VistaPrevia previsualizar(Long plazaId, int anio, int mes, byte[] archivo) {
