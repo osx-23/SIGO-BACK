@@ -12,6 +12,7 @@ import com.sigo.programacion.application.port.in.MiHorarioUseCase;
 import com.sigo.programacion.application.port.in.AgenteProgramacionExcepcionUseCase;
 import com.sigo.programacion.application.port.in.ProgramacionExcelTextoUseCase;
 import com.sigo.programacion.application.port.in.RolPlazasExcelUseCase;
+import com.sigo.programacion.domain.ProgramacionValidationException;
 import com.sigo.personal.application.port.in.TrabajadorUseCase;
 import com.sigo.security.infrastructure.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.time.LocalDate;
@@ -29,10 +31,13 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -233,6 +238,28 @@ class ProgramacionApiAuthorizationIT {
                                 .content("{}")
                 )
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void excelInvalidoDevuelve400ConMotivoEnLugarDe500() throws Exception {
+        when(rolPlazasExcel.previsualizar(eq(4L), eq(2026), eq(10), any(byte[].class)))
+                .thenThrow(new ProgramacionValidationException(
+                        "La estructura del Excel no corresponde a la plaza P4"));
+
+        MockMultipartFile archivo = new MockMultipartFile(
+                "archivo", "rol.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/programacion/turnos/importar-excel/rol/vista-previa")
+                        .file(archivo)
+                        .param("plazaId", "4")
+                        .param("anio", "2026")
+                        .param("mes", "10")
+                        .with(jwtRol("SUPERVISOR")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "La estructura del Excel no corresponde a la plaza P4"));
     }
 
     private RequestPostProcessor jwtRol(String rol) {
