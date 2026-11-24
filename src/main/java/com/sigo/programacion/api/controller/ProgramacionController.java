@@ -209,7 +209,22 @@ public class ProgramacionController {
      * ============================================================
      */
 
-    /** Rol operativo multipla​​za: AGENTES P4/P5 y bloque CONTROL por plaza. */
+    /** Un mismo botón para todos los supervisores: detecta el tipo de archivo sin guardar. */
+    @PostMapping(value = "/turnos/importar-excel/detectar-formato",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    public RolPlazasExcelUseCase.FormatoDetectado detectarFormatoExcel(
+            @RequestParam("archivo") MultipartFile archivo) {
+        validarArchivoRol(archivo);
+        try {
+            return rolPlazasExcel.detectarFormato(archivo.getBytes());
+        } catch (java.io.IOException e) {
+            throw new com.sigo.programacion.domain.ProgramacionValidationException(
+                    "No se pudo leer el archivo Excel");
+        }
+    }
+
+    /** Rol operativo multipla​za: detectado a partir de cualquier hoja AGENTES <plaza>. */
     @PostMapping(value = "/turnos/importar-excel/rol/vista-previa",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('SUPERVISOR')")
