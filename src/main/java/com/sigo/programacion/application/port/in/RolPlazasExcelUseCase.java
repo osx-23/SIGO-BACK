@@ -17,6 +17,10 @@ public interface RolPlazasExcelUseCase {
                        List<Semana> semanasPartTime, List<String> advertencias) {}
     record Resultado(int turnos, int secuencias, int lideres, int omitidos, String mensaje) {}
 
+    /** Clasifica el Excel sin efectuar escrituras: rol operativo con varias plazas o turnos estándar. */
+    record FormatoDetectado(String formato) {}
+    FormatoDetectado detectarFormato(byte[] archivo);
+
     VistaPrevia previsualizar(Long plazaId, int anio, int mes, byte[] archivo);
     Resultado confirmar(Long plazaId, int anio, int mes, byte[] archivo);
 }
