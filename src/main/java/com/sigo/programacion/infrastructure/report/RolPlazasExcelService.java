@@ -114,7 +114,7 @@ public class RolPlazasExcelService implements RolPlazasExcelUseCase {
             throw new ProgramacionValidationException("No se encontraron turnos para " + plaza + " en ese mes.");
         avisar(avisos, "Este rol contiene turnos y responsables, pero no códigos de casetas. Las casetas no se modifican.");
         if (periodo.isBefore(YearMonth.from(LocalDate.now()))) {
-            avisar(avisos, "Periodo histórico: los responsables se mostrarán para revisión, pero no se reemplazarán relaciones de líder actualmente vigentes.");
+            avisar(avisos, "Periodo histórico: las secuencias y líderes se reconocen en la vista previa, pero no se sustituyen relaciones operativas vigentes; solo se guardan los turnos.");
         }
         return new VistaPrevia(plaza, anio, mes, ignoradas, contadores[0], contadores[1],
                 List.copyOf(personal), List.copyOf(cambios),
@@ -133,47 +133,53 @@ public class RolPlazasExcelService implements RolPlazasExcelUseCase {
         if (!guardables.isEmpty())
             guardarTurnos.guardar(new GuardarTurnosUseCase.Command(plazaId, guardables));
 
-        // Las secuencias se aplican solo a trabajadores activos, identificados por código y nombre.
-        // Los bloques > 5 quedan pendientes, en vez de inventar una secuencia.
-        var actuales = new HashMap<Long, String>();
-        for (var s : listarSecuencias.listar(plazaId)) actuales.put(s.agenteId(), s.grupo());
+        // El grupo y líder de SIGO son relaciones vigentes, no registros mensuales.
+        // Un Excel de un mes pasado no debe sobreescribir las asignaciones actuales.
+        boolean historico = YearMonth.of(anio, mes).isBefore(YearMonth.from(LocalDate.now()));
         int gruposCambiados = 0;
-        for (var p : previa.personal()) {
-            if (!"AGENTE".equals(p.tipo()) || !"LISTO".equals(p.estado())
-                    || p.trabajadorId() == null || p.grupo() == null) continue;
-            if (!Objects.equals(actuales.get(p.trabajadorId()), p.grupo())) {
-                asignarSecuencia.asignar(new AsignarSecuenciaUseCase.Command(
-                        p.trabajadorId(), plazaId, p.grupo()));
-                gruposCambiados++;
-            }
-        }
-        // Orden de las secuencias: primero el orden del Excel, luego miembros ya
-        // existentes pero que no aparecen en el fichero, sin eliminarlos.
-        var despues = listarSecuencias.listar(plazaId);
-        for (String grupo : GRUPOS) {
-            var miembros = despues.stream().filter(p -> grupo.equals(p.grupo())).toList();
-            if (miembros.isEmpty()) continue;
-            Map<Long, Integer> ordenExcel = new HashMap<>();
+        if (!historico) {
+            // Las secuencias se aplican solo a trabajadores activos, identificados por código y nombre.
+            // Los bloques > 5 quedan pendientes, en vez de inventar una secuencia.
+            var actuales = new HashMap<Long, String>();
+            for (var s : listarSecuencias.listar(plazaId)) actuales.put(s.agenteId(), s.grupo());
             for (var p : previa.personal()) {
-                if ("LISTO".equals(p.estado()) && grupo.equals(p.grupo()) && p.trabajadorId() != null)
-                    ordenExcel.put(p.trabajadorId(), p.orden());
+                if (!"AGENTE".equals(p.tipo()) || !"LISTO".equals(p.estado())
+                        || p.trabajadorId() == null || p.grupo() == null) continue;
+                if (!Objects.equals(actuales.get(p.trabajadorId()), p.grupo())) {
+                    asignarSecuencia.asignar(new AsignarSecuenciaUseCase.Command(
+                            p.trabajadorId(), plazaId, p.grupo()));
+                    gruposCambiados++;
+                }
             }
-            var ordenados = miembros.stream().sorted(
-                    Comparator.comparingInt((ListarSecuenciasUseCase.Secuencia p) ->
-                            ordenExcel.containsKey(p.agenteId()) ? 0 : 1)
-                    .thenComparingInt(p -> ordenExcel.getOrDefault(p.agenteId(),
-                            p.orden() == null ? Integer.MAX_VALUE : p.orden()))
-                    .thenComparing(ListarSecuenciasUseCase.Secuencia::agenteId)).toList();
-            List<GuardarOrdenSecuenciaUseCase.Item> ordenFinal = new ArrayList<>();
-            for (int i = 0; i < ordenados.size(); i++)
-                ordenFinal.add(new GuardarOrdenSecuenciaUseCase.Item(ordenados.get(i).agenteId(), i + 1));
-            guardarOrden.guardar(new GuardarOrdenSecuenciaUseCase.Command(plazaId, grupo, ordenFinal));
+            // Orden de las secuencias: primero el orden del Excel, luego miembros ya
+            // existentes pero que no aparecen en el fichero, sin eliminarlos.
+            var despues = listarSecuencias.listar(plazaId);
+            for (String grupo : GRUPOS) {
+                var miembros = despues.stream().filter(p -> grupo.equals(p.grupo())).toList();
+                if (miembros.isEmpty()) continue;
+                Map<Long, Integer> ordenExcel = new HashMap<>();
+                for (var p : previa.personal()) {
+                    if ("LISTO".equals(p.estado()) && grupo.equals(p.grupo()) && p.trabajadorId() != null)
+                        ordenExcel.put(p.trabajadorId(), p.orden());
+                }
+                var ordenados = miembros.stream().sorted(
+                        Comparator.comparingInt((ListarSecuenciasUseCase.Secuencia p) ->
+                                ordenExcel.containsKey(p.agenteId()) ? 0 : 1)
+                        .thenComparingInt(p -> ordenExcel.getOrDefault(p.agenteId(),
+                                p.orden() == null ? Integer.MAX_VALUE : p.orden()))
+                        .thenComparing(ListarSecuenciasUseCase.Secuencia::agenteId)).toList();
+                List<GuardarOrdenSecuenciaUseCase.Item> ordenFinal = new ArrayList<>();
+                for (int i = 0; i < ordenados.size(); i++)
+                    ordenFinal.add(new GuardarOrdenSecuenciaUseCase.Item(ordenados.get(i).agenteId(), i + 1));
+                guardarOrden.guardar(new GuardarOrdenSecuenciaUseCase.Command(plazaId, grupo, ordenFinal));
+            }
+
         }
 
         int lideresCambiados = 0;
         // La relación agente-controlador actual no es mensual en SIGO. Un archivo
         // histórico no debe alterar quién es responsable actualmente.
-        if (!YearMonth.of(anio, mes).isBefore(YearMonth.from(LocalDate.now()))) {
+        if (!historico) {
             Map<Long, Long> liderActual = new HashMap<>();
             for (var p : listarLideres.listar(plazaId))
                 if (Boolean.TRUE.equals(p.activo())) liderActual.put(p.agenteId(), p.controladorId());
@@ -191,7 +197,7 @@ public class RolPlazasExcelService implements RolPlazasExcelUseCase {
 
         int omitidos = (int) previa.personal().stream().filter(p -> !"LISTO".equals(p.estado())).count();
         return new Resultado(guardables.size(), gruposCambiados, lideresCambiados, omitidos,
-                "Aplicados turnos y secuencias de " + previa.plazaCodigo() +
+                "Aplicados turnos" + (historico ? " históricos" : " y secuencias") + " de " + previa.plazaCodigo() +
                 ". Las casetas no se modificaron; personal sin validar se omitió.");
     }
 
